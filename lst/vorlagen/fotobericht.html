@@ -1,0 +1,106 @@
+{% extends "basis.html" %}
+{% block titel %}Fotobericht {{ e.einsatzort }} · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ e.einsatzort }}</a><span>/</span><span style="padding:6px 4px">Fotobericht</span>{% endblock %}
+{% block inhalt %}
+<div class="icon">🖼️</div>
+<h1>Fotobericht {{ e.einsatzort }}</h1>
+<p class="muted">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or 'Lieferschein folgt' }}. Antippen wählt ein Foto aus oder ab.</p>
+
+<div class="fb">
+  <div>
+    <div class="row"><button class="btn small" type="button" id="vorschlag">Vorschlag übernehmen</button>
+      <button class="btn small" type="button" id="alle-ab">Auswahl leeren</button>
+      <span class="small muted">Vorschlag: je Anlage das erste Vorher- und das letzte Nachher-Foto.</span></div>
+    {% for g in gruppen %}
+    <section class="anl" data-anlage="{{ g.anlage.id }}">
+      <div class="kopf"><h3>{{ g.anlage.name }}</h3>
+        <button class="btn small" type="button" data-alle="{{ g.anlage.id }}">alle</button>
+        <button class="btn small" type="button" data-keine="{{ g.anlage.id }}">keine</button></div>
+      <div class="ph">
+        {% for ph, label in [('vorher','Vorher'),('nachher','Nachher')] %}
+        <div><div class="lbl">{{ label }}</div><div class="thumbs">
+          {% for f in g[ph] %}<button type="button" class="th" data-id="{{ f.id }}" data-phase="{{ ph }}" aria-pressed="false" aria-label="{{ g.anlage.name }} {{ label }} auswählen">
+            <img loading="lazy" src="{{ url_for('foto', eid=e.id, fid=f.id, v=1) }}" alt=""><span class="haken">✓</span></button>
+          {% else %}<div class="empty">keine</div>{% endfor %}
+        </div></div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <aside class="side" aria-label="Versand">
+    <div class="row" style="justify-content:space-between"><b><span id="anzahl">0</span> Fotos gewählt</b><span class="small muted" id="groesse">0 MB</span></div>
+    <div class="meter" aria-hidden="true"><i id="balken" style="width:0"></i></div>
+    <div class="small muted" style="margin-bottom:14px">Grenze für die Mail: {{ ziel_mb }} MB. Die genaue Größe zeigt die Vorschau.</div>
+    <div class="field"><label for="an">An (Auftraggeber)</label><input class="inp" id="an" type="email" value="{{ an }}" placeholder="name@firma.de"></div>
+    <div class="field"><label for="betreff">Betreff</label><input class="inp" id="betreff" value="{{ betreff }}"></div>
+    <div class="field"><label for="text">Mailtext</label><textarea class="inp" id="text">{{ mailtext }}</textarea></div>
+    <div id="fehler" class="small" style="color:var(--danger);min-height:20px" role="alert"></div>
+    <form id="vorschau-form" method="post" target="_blank" action="{{ url_for('fotobericht_vorschau', eid=e.id) }}">
+      <input type="hidden" name="fotos" id="vorschau-fotos"></form>
+    <div class="row">
+      <button class="btn" type="button" id="vorschau">Vorschau (PDF)</button>
+      <button class="btn pri" type="button" id="senden">Freigeben und senden</button>
+    </div>
+    {% if not mail_eingerichtet %}<p class="small muted">Mailversand noch nicht eingerichtet: Der Bericht wird erstellt und im Postausgang abgelegt.</p>{% endif %}
+  </aside>
+</div>
+
+<script>
+(() => {
+  const KB = {{ kb_pro_foto }}, ZIEL = {{ ziel_mb }};
+  const th = [...document.querySelectorAll('.th')];
+  const gewaehlt = new Set();
+  const fehler = document.getElementById('fehler');
+  function zeigen() {
+    th.forEach(b => { const an = gewaehlt.has(b.dataset.id); b.classList.toggle('an', an); b.setAttribute('aria-pressed', an); });
+    const n = gewaehlt.size, mb = n ? (n * KB + 120) / 1024 : 0;
+    document.getElementById('anzahl').textContent = n;
+    document.getElementById('groesse').textContent = 'ca. ' + mb.toFixed(1).replace('.', ',') + ' MB';
+    const balken = document.getElementById('balken');
+    balken.style.width = Math.min(100, mb / ZIEL * 100) + '%';
+    balken.className = mb > ZIEL ? 'zu' : mb > ZIEL * 0.8 ? 'warn' : '';
+    fehler.textContent = '';
+  }
+  th.forEach(b => b.addEventListener('click', () => { gewaehlt.has(b.dataset.id) ? gewaehlt.delete(b.dataset.id) : gewaehlt.add(b.dataset.id); zeigen(); }));
+  const inAnlage = id => th.filter(b => b.closest('.anl').dataset.anlage === id);
+  document.querySelectorAll('[data-alle]').forEach(b => b.onclick = () => { inAnlage(b.dataset.alle).forEach(x => gewaehlt.add(x.dataset.id)); zeigen(); });
+  document.querySelectorAll('[data-keine]').forEach(b => b.onclick = () => { inAnlage(b.dataset.keine).forEach(x => gewaehlt.delete(x.dataset.id)); zeigen(); });
+  document.getElementById('alle-ab').onclick = () => { gewaehlt.clear(); zeigen(); };
+  document.getElementById('vorschlag').onclick = () => {
+    gewaehlt.clear();
+    document.querySelectorAll('.anl').forEach(s => {
+      const v = [...s.querySelectorAll('.th[data-phase=vorher]')], n = [...s.querySelectorAll('.th[data-phase=nachher]')];
+      if (v.length) gewaehlt.add(v[0].dataset.id);
+      if (n.length) gewaehlt.add(n[n.length - 1].dataset.id);
+    });
+    zeigen();
+  };
+  const liste = () => th.filter(b => gewaehlt.has(b.dataset.id)).map(b => b.dataset.id);
+  document.getElementById('vorschau').onclick = () => {
+    if (!gewaehlt.size) { fehler.textContent = 'Bitte mindestens ein Foto auswählen.'; return; }
+    document.getElementById('vorschau-fotos').value = JSON.stringify(liste());
+    document.getElementById('vorschau-form').submit();
+  };
+  const senden = document.getElementById('senden');
+  senden.onclick = async () => {
+    const an = document.getElementById('an').value.trim();
+    if (!gewaehlt.size) { fehler.textContent = 'Bitte mindestens ein Foto auswählen.'; return; }
+    if (!/^\S+@\S+\.\S+$/.test(an)) { fehler.textContent = 'Bitte eine vollständige E-Mail-Adresse eintragen.'; return; }
+    if (senden.dataset.sicher !== '1') { senden.dataset.sicher = '1'; senden.textContent = 'Wirklich an ' + an + ' senden?'; return; }
+    senden.disabled = true; senden.textContent = 'Wird erstellt …';
+    try {
+      const r = await fetch('{{ url_for("fotobericht_freigeben", eid=e.id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fotos: liste(), an, betreff: document.getElementById('betreff').value, text: document.getElementById('text').value }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.fehler || 'Unbekannter Fehler');
+      location.href = '{{ url_for("einsatz_seite", eid=e.id) }}';
+    } catch (ex) {
+      fehler.textContent = ex.message; senden.disabled = false; senden.dataset.sicher = ''; senden.textContent = 'Freigeben und senden';
+    }
+  };
+  zeigen();
+})();
+</script>
+{% endblock %}

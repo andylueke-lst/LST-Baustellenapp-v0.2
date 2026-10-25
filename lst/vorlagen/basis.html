@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>{% block titel %}LST Baustelle{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='stil.css') }}">
+</head>
+<body>
+{% if ich %}
+<div class="top">
+  <nav aria-label="Pfad"><a href="{{ url_for('buero') }}">🏠 Büro</a>{% block pfad %}{% endblock %}</nav>
+  <span class="small muted">{{ ich.vorname }}</span>
+  <a class="btn small" href="{{ url_for('logout') }}">Abmelden</a>
+</div>
+{% endif %}
+<main class="wrap page">
+{% with meldungen = get_flashed_messages(with_categories=true) %}
+  {% for art, text in meldungen %}<div class="callout {{ art }}" role="status">{{ text }}</div>{% endfor %}
+{% endwith %}
+{% block inhalt %}{% endblock %}
+</main>
+</body>
+</html>

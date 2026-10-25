@@ -1,0 +1,54 @@
+{% extends "basis.html" %}
+{% block titel %}{{ e.einsatzort }} · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ e.einsatzort }}</a>{% endblock %}
+{% block inhalt %}
+<div class="icon">❄️</div>
+<h1>{{ e.einsatzort }}</h1>
+<div class="props">
+  <div class="k">Kunde</div><div>{{ e.kunde }}</div>
+  <div class="k">Status</div><div>{% if e.status == 'abgeschlossen' %}<span class="tag green">Abgeschlossen</span>{% elif e.status == 'inarbeit' %}<span class="tag blue">In Arbeit</span>{% else %}<span class="tag">Vorbereitet</span>{% endif %}</div>
+  <div class="k">Zeitraum</div><div>{{ zeitraum(e.von, e.bis) }}</div>
+  <div class="k">Lieferschein</div><div>{% if e.ls %}<span class="tag green">{{ e.ls }}</span>{% else %}<span class="tag yellow">fehlt</span>{% endif %}</div>
+  <div class="k">Fotos</div><div>{{ fotos|length }}</div>
+  <div class="k">Auftraggeber</div><div>{{ (e.apKunde or {}).name }} <span class="muted">{{ (e.apKunde or {}).mail }}</span></div>
+</div>
+
+<h2>Dokumente</h2>
+<div class="list">
+{% for d in docs %}
+  <div class="item"><div><b>{{ d.datei.split('/')[-1] }}</b>
+    <div class="meta">{{ d.art|capitalize }} · {{ d.status|replace('_',' ') }}{% if d.empfaenger %} · an {{ d.empfaenger }}{% endif %}</div></div>
+    <a class="btn small" href="{{ url_for('dokument', did=d.id) }}" target="_blank" rel="noopener">Öffnen</a></div>
+{% else %}<div class="empty">Noch keine Dokumente. Sie entstehen beim Job-Abschluss auf dem iPad.</div>{% endfor %}
+</div>
+
+<div class="row" style="margin-top:16px">
+  {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>{% endif %}
+</div>
+
+<h2>Lexware-Lieferschein</h2>
+<p class="small muted">{% if lexware %}Liegt vor. Ein neues Hochladen ersetzt ihn.{% else %}Noch nicht hochgeladen. Später kommt er automatisch aus dem Notion-Projekt.{% endif %}</p>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('lexware_hochladen', eid=e.id) }}" class="row">
+  <input class="inp" style="max-width:420px" type="file" name="pdf" accept="application/pdf" required>
+  <button class="btn">Hochladen</button>
+</form>
+
+{% if docs|selectattr('art','equalto','fotodoku')|list %}
+<h2>Fotodoku nachträglich senden</h2>
+<form method="post" action="{{ url_for('fotodoku_senden', eid=e.id) }}">
+  <div class="field"><label for="fd-an">An</label><input class="inp" id="fd-an" name="an" type="email" value="{{ (e.apKunde or {}).mail }}" required></div>
+  <div class="field"><label for="fd-text">Text</label><textarea class="inp" id="fd-text" name="text">Sehr geehrte Damen und Herren,
+
+anbei die vollständige Fotodokumentation zum Einsatz {{ e.einsatzort }}.
+
+Mit freundlichen Grüßen
+LST Lüke-Strahl-Technik GmbH</textarea></div>
+  <button class="btn">Fotodoku senden</button>
+</form>
+{% endif %}
+
+{% if post %}
+<h2>Mails zu diesem Einsatz</h2>
+<div class="list">{% for p in post %}<div class="item"><div><b>{{ p.betreff }}</b><div class="meta">an {{ p.an }} · {{ p.status }}</div></div><span></span></div>{% endfor %}</div>
+{% endif %}
+{% endblock %}

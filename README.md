@@ -10,7 +10,7 @@ Büro, iPads und Handys greifen über Tailscale zu. Das Konzept liegt im Claude-
 | Stufe | Inhalt | Status |
 | --- | --- | --- |
 | 1 | Klickbarer Prototyp (Ablauf, Bedienung) | abgestimmt |
-| 2 | Dokumente: Lieferschein, Fotodoku, Fotobericht, Tagesbericht | Dokument-Erzeugung fertig, Büro-Freigabe folgt |
+| 2 | Dokumente: Lieferschein, Fotodoku, Fotobericht, Tagesbericht | fertig (Dokumente, Server, Büro-Freigabe, Postausgang) |
 | 3 | Geräte, Material, Lohnliste | offen |
 | 4 | Offline-Abgleich, Handy-Kamera | offen |
 | 5 | Notion-Anbindung (Test-Kopie) | offen |
@@ -27,6 +27,11 @@ lst/dokumente/           PDF-Erzeugung
   fotos.py               Fotodokumentation und Fotobericht (≤ 10 MB)
   tagesbericht.py        Tagesbericht mit Unterschrift
   abschluss.py           Erzeugt beim Job-Abschluss alle Dokumente
+lst/server.py            Web-Server (Flask): Anmeldung, Büro-Seiten, Schnittstelle fürs iPad
+lst/speicher.py          SQLite-Datenbank und Dateiablage unter daten/
+lst/mail.py              Mailversand mit Postausgang
+lst/vorlagen/, statisch/ Seiten und Stil im Notion-Look
+lst/demo.py              Legt Testdaten an und spielt einen Job-Abschluss durch
 beispiele/               Skript für Beispiel-Dokumente
 prototyp/                Prototyp aus Stufe 1 (eine HTML-Datei)
 ```
@@ -54,3 +59,35 @@ Lexware-Belegen. Sonst greift DejaVu Sans.
 pip install -r requirements.txt
 python3 beispiele/erzeuge_beispiele.py <lexware-lieferschein.pdf> <ordner-mit-fotos>
 ```
+
+## Server starten
+
+```
+pip install -r requirements.txt
+python3 -m lst.demo <lexware-lieferschein.pdf> <ordner-mit-fotos>   # nur zum Testen
+python3 -m lst.server                                              # http://localhost:8080
+```
+
+Anmeldung mit Name und PIN. Im Test haben alle die PIN 1234, Andy und Tina sehen das Büro.
+Daten liegen in `daten/` (änderbar über `LST_DATEN`), Port über `LST_PORT`.
+
+### Büro
+
+- **Freigaben**: abgeschlossene Einsätze, deren Fotobericht noch nicht raus ist.
+- **Fotobericht**: Fotos nach Anlage wählen (Vorschlag: erstes Vorher, letztes Nachher),
+  Größenanzeige, PDF-Vorschau, „Freigeben und senden“ mit Rückfrage.
+- **Postausgang**: Mails, die nicht gesendet werden konnten oder warten, bis der Versand
+  eingerichtet ist. „Jetzt senden“ versucht es erneut.
+- **Einsatz**: Dokumente öffnen, Lexware-Lieferschein hochladen, Fotodoku nachträglich senden.
+
+### Mailversand einrichten
+
+`daten/geheim.json` (wird beim ersten Start angelegt, nicht im Git) um einen Block ergänzen:
+
+```json
+"mail": {"host": "…", "port": 587, "benutzer": "…", "passwort": "…",
+         "absender": "LST Lüke-Strahl-Technik <…>", "antwort_an": "post@lueke-strahlt.de",
+         "bcc": "post@lueke-strahlt.de", "verbindung": "starttls"}
+```
+
+Ohne diesen Block werden alle Mails als `.eml` im Postausgang abgelegt.

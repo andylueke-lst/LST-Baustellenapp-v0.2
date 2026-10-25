@@ -1,0 +1,20 @@
+{% extends "basis.html" %}
+{% block titel %}Anmelden · LST Baustelle{% endblock %}
+{% block inhalt %}
+<div style="max-width:460px">
+  <div class="icon">🧰</div>
+  <h1>LST Baustelle</h1>
+  <p class="muted">Bitte mit Namen und PIN anmelden.</p>
+  {% if fehler %}<div class="callout fehler" role="alert">{{ fehler }}</div>{% endif %}
+  <form method="post">
+    <div class="field"><label for="wer">Wer bist du?</label>
+      <select class="inp" id="wer" name="wer" required>
+        <option value="">bitte wählen</option>
+        {% for m in leute %}<option value="{{ m.id }}">{{ m.vorname }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label for="pin">PIN</label>
+      <input class="inp" id="pin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" required></div>
+    <button class="btn pri" type="submit">Anmelden</button>
+  </form>
+</div>
+{% endblock %}

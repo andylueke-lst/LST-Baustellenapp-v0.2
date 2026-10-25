@@ -1,0 +1,51 @@
+{% extends "basis.html" %}
+{% block titel %}Büro · LST Baustelle{% endblock %}
+{% block inhalt %}
+<div class="icon">🗂️</div>
+<h1>Büro</h1>
+<p class="muted">Freigaben, Postausgang und Einsätze.</p>
+
+{% if not mail_eingerichtet %}
+<div class="callout hinweis">Der Mailversand ist noch nicht eingerichtet. Mails werden im Postausgang gesammelt und können später gesendet werden.</div>
+{% endif %}
+
+<h2>Freigaben <span class="tag">{{ freigaben|length }}</span></h2>
+<div class="list">
+{% for f in freigaben %}
+  <div class="item">
+    <div><b>{{ f.e.einsatzort }}</b> <span class="tag yellow">Fotobericht wartet</span>
+      <div class="meta">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }} · {{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div></div>
+    <a class="btn pri small" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">Fotos auswählen</a>
+  </div>
+{% else %}<div class="empty">Keine offenen Freigaben.</div>{% endfor %}
+</div>
+
+<h2>Postausgang <span class="tag">{{ post|length }}</span></h2>
+<div class="list">
+{% for p in post %}
+  <div class="item">
+    <div><b>{{ p.betreff }}</b> {% if p.status == 'fehler' %}<span class="tag red">Fehler</span>{% else %}<span class="tag yellow">wartet</span>{% endif %}
+      <div class="meta">an {{ p.an }}{% if p.fehler %} · {{ p.fehler }}{% endif %}</div></div>
+    <form method="post" action="{{ url_for('postausgang_senden', pid=p.id) }}"><button class="btn small">Jetzt senden</button></form>
+  </div>
+{% else %}<div class="empty">Alles versendet.</div>{% endfor %}
+</div>
+
+<h2>In Arbeit</h2>
+<div class="list">
+{% for e in laufend %}
+  <div class="item"><div><b>{{ e.einsatzort }}</b><div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }}</div></div>
+  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
+{% else %}<div class="empty">Gerade läuft kein Einsatz.</div>{% endfor %}
+</div>
+
+<h2>Abgeschlossen</h2>
+<div class="list">
+{% for e in fertig %}
+  <div class="item"><div><b>{{ e.einsatzort }}</b>
+    {% if e.abschluss and e.abschluss.ohneKunde %}<span class="tag yellow">Unterschrift ausstehend</span>{% else %}<span class="tag green">Unterschrieben</span>{% endif %}
+    <div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or '' }}</div></div>
+  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
+{% else %}<div class="empty">Noch nichts abgeschlossen.</div>{% endfor %}
+</div>
+{% endblock %}
