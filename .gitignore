@@ -1,0 +1,6 @@
+ausgabe/
+__pycache__/
+*.pyc
+.DS_Store
+daten/
+*.db

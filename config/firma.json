@@ -1,0 +1,47 @@
+{
+  "firma": "LST Lüke-Strahl-Technik GmbH",
+  "kurzname": "LST",
+  "fusszeile": [
+    "LST Lüke-Strahl-Technik GmbH | Am Hinkelstein 53a | 64665 Alsbach-Hähnlein | Tel.: 06251 826 33 00 | post@lueke-strahlt.de | www.lueke-strahlt.de",
+    "USt-IdNr.: DE815714957 | Darmstadt | Alsbach-Hähnlein | Andreas Lüke",
+    "LST Lüke-Strahl-Technik GmbH | Sparkasse Wolfach | IBAN: DE69 6645 2776 0000 0780 65 | BIC: SOLADES1WOF"
+  ],
+  "schlusstext": [
+    "Vielen Dank für Ihren Auftrag.",
+    "Gerne stehen Ihnen Herr Lüke und sein Team für Rückfragen zur Verfügung."
+  ],
+  "briefpapier": {
+    "erstseite": "assets/briefpapier-erstseite.pdf",
+    "folgeseite": "assets/briefpapier-folgeseite.pdf",
+    "erstseite_ausschnitte": [[0, 742, 595, 842], [410, 697, 595, 742]],
+    "folgeseite_ausschnitte": [[0, 742, 595, 842]]
+  },
+  "lexware": {
+    "kopf_hoehe": 180,
+    "fuss_hoehe": 82,
+    "seitenzahl_feld": [500, 2, 560, 18],
+    "seitenzahl_x_rechts": 546,
+    "seitenzahl_y": 7,
+    "arbeitsnachweis_erkennung": "Arbeitsnachweis"
+  },
+  "schriften": {
+    "normal": [
+      "/System/Library/Fonts/Supplemental/Verdana.ttf",
+      "/Library/Fonts/Verdana.ttf",
+      "/usr/share/fonts/truetype/msttcorefonts/Verdana.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+    ],
+    "fett": [
+      "/System/Library/Fonts/Supplemental/Verdana Bold.ttf",
+      "/Library/Fonts/Verdana Bold.ttf",
+      "/usr/share/fonts/truetype/msttcorefonts/Verdana_Bold.ttf",
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    ]
+  },
+  "fotos": {
+    "kante_px": 1400,
+    "jpeg_qualitaet": 80,
+    "bericht_ziel_mb": 10,
+    "bericht_max_mb": 15
+  }
+}
