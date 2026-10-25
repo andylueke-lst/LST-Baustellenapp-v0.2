@@ -166,16 +166,10 @@ def zusammenfuegen(lexware_pdf: bytes | None, daten: dict) -> tuple[bytes, dict]
     n_lex = len(ziel.pages)
     info["lexware_seiten"] = n_lex
 
-    # Hintergrund für die App-Seite: letzte Lexware-Seite, nur Kopf und Fuß.
-    # Eigene Kopie als Quelle, damit spätere Änderungen an den Lexware-Seiten die Vorlage nicht berühren.
-    quelle = pikepdf.open(io.BytesIO(lexware_pdf))
-    vorlage = ziel.copy_foreign(pikepdf.Page(quelle.pages[n_lex - 1]).as_form_xobject())
-    app = pikepdf.open(io.BytesIO(arbeitsnachweis(daten)))
+    # App-Seite(n) auf dem Briefpapier mit Spruch, wie die Lexware-Seiten, Fußzeile identisch.
+    app = pikepdf.open(io.BytesIO(basis.mit_briefpapier(arbeitsnachweis(daten), immer_erstseite=True, wie_lexware=True)))
     for seite in app.pages:
         ziel.pages.append(seite)
-        neu = ziel.pages[-1]
-        basis.unterlegen(ziel, neu, vorlage,
-                         [[0, 0, 596, lx["fuss_hoehe"]], [0, 842 - lx["kopf_hoehe"], 596, 842]], "LexwareVorlage")
     gesamt = len(ziel.pages)
     info["seiten"] = gesamt
 

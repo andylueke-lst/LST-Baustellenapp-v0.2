@@ -12,6 +12,13 @@ from . import basis, fotos, lieferschein
 from .lieferschein import STRAHLMITTEL
 
 
+def voller_name(m) -> str:
+    """Mitarbeiter als 'Vorname Nachname' für Dokumente. Akzeptiert auch nur einen Text."""
+    if isinstance(m, dict):
+        return " ".join(x for x in (m.get("vorname", ""), m.get("nachname", "")) if x).strip()
+    return str(m or "")
+
+
 def _minuten(t: str | None) -> int | None:
     if not t:
         return None
@@ -60,7 +67,7 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
     fd_hash = basis.pruefsumme(fd_pdf)
 
     # ---- Lieferschein, Seite Arbeitsnachweis
-    ma = stamm.get("mitarbeiter", {})
+    ma = {k: voller_name(v) for k, v in stamm.get("mitarbeiter", {}).items()}
     arten = sorted({t["bericht"].get("sm") for t in tage if t["bericht"].get("sm")})
     grund = all(t["bericht"].get("grund", True) for t in tage)
     kg = sum(float(t["bericht"].get("kg") or 0) for t in tage if not t["bericht"].get("grund", True))

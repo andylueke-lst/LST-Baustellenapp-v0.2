@@ -221,50 +221,91 @@ def _form_aus_seite(ziel: pikepdf.Pdf, quelle: pikepdf.Page):
     return ziel.copy_foreign(quelle.as_form_xobject())
 
 
-def fusszeile_zeichnen(c: canvas.Canvas, seite: int, gesamt: int, links_unten: str = ""):
-    """Fußzeile im Stil der Lexware-Belege: drei zentrierte Zeilen, rechts die Seitenzahl."""
+def _umbruch_mit_bindestrich(text: str, font: str, groesse: float, breite: float) -> list[str]:
+    """Bricht wie Lexware: an Leerzeichen, notfalls nach einem Bindestrich im Wort."""
+    zeilen, zeile = [], ""
+    for wort in text.split(" "):
+        probe = (zeile + " " + wort).strip()
+        if pdfmetrics.stringWidth(probe, font, groesse) <= breite:
+            zeile = probe
+            continue
+        teile = [m.end() for m in re.finditer("-", wort)]
+        geteilt = False
+        for pos in reversed(teile):
+            vorn = (zeile + " " + wort[:pos]).strip()
+            if pdfmetrics.stringWidth(vorn, font, groesse) <= breite:
+                zeilen.append(vorn)
+                zeile = wort[pos:]
+                geteilt = True
+                break
+        if not geteilt:
+            if zeile:
+                zeilen.append(zeile)
+            zeile = wort
+    if zeile:
+        zeilen.append(zeile)
+    return zeilen
+
+
+def fusszeile_zeichnen(c: canvas.Canvas, seite: int, gesamt: int, links_unten: str = "", wie_lexware=False):
+    """Fußzeile im Stil der Lexware-Belege: zentrierte Zeilen, rechts die Seitenzahl.
+    wie_lexware: gleicher Umbruch und Zeilenabstand wie auf den Lexware-Seiten."""
     f = schriften()
     cfg = config()
     c.setFillColorRGB(*TEXT)
-    y = 46
-    for zeile in cfg["fusszeile"]:
-        groesse = 7
-        while pdfmetrics.stringWidth(zeile, f["normal"], groesse) > BREITE - 40 and groesse > 6:
-            groesse -= 0.25
-        c.setFont(f["normal"], groesse)
-        c.drawCentredString(BREITE / 2, y, zeile)
-        y -= 9.5
+    if wie_lexware:
+        zeilen = [z for zeile in cfg["fusszeile"] for z in _umbruch_mit_bindestrich(zeile, f["normal"], 7.25, 456)]
+        y = 46
+        for z in zeilen:
+            c.setFont(f["normal"], 7.25)
+            c.drawCentredString(BREITE / 2, y, z)
+            y -= 8.4
+    else:
+        y = 46
+        for zeile in cfg["fusszeile"]:
+            groesse = 7
+            while pdfmetrics.stringWidth(zeile, f["normal"], groesse) > BREITE - 40 and groesse > 6:
+                groesse -= 0.25
+            c.setFont(f["normal"], groesse)
+            c.drawCentredString(BREITE / 2, y, zeile)
+            y -= 9.5
     c.setFont(f["normal"], 7)
-    c.drawRightString(config()["lexware"]["seitenzahl_x_rechts"], config()["lexware"]["seitenzahl_y"],
+    c.drawRightString(cfg["lexware"]["seitenzahl_x_rechts"], cfg["lexware"]["seitenzahl_y"],
                       f"Seite {seite}/{gesamt}")
     if links_unten:
         c.setFillColorRGB(*GRAU)
         c.setFont(f["normal"], 6)
-        c.drawString(RAND_L, config()["lexware"]["seitenzahl_y"], links_unten)
+        c.drawString(RAND_L, cfg["lexware"]["seitenzahl_y"], links_unten)
 
 
-def mit_briefpapier(inhalt_pdf: bytes, links_unten: str = "", fusszeile=True) -> bytes:
+def mit_briefpapier(inhalt_pdf: bytes, links_unten: str = "", fusszeile=True, immer_erstseite=False,
+                    wie_lexware=False) -> bytes:
     """Legt das Briefpapier unter jede Seite (Erstseite mit Spruch, Folgeseiten nur Logo)
     und ergänzt Fußzeile und Seitenzahlen."""
     cfg = config()
     bp = cfg["briefpapier"]
     gesamt = len(pikepdf.open(io.BytesIO(inhalt_pdf)).pages)
     if fusszeile:
-        inhalt_pdf = _ueberlagern(inhalt_pdf, lambda c, i: fusszeile_zeichnen(c, i + 1, gesamt, links_unten))
+        inhalt_pdf = _ueberlagern(inhalt_pdf, lambda c, i: fusszeile_zeichnen(c, i + 1, gesamt, links_unten, wie_lexware))
     ziel = pikepdf.open(io.BytesIO(inhalt_pdf))
     erst = pikepdf.open(ROOT / bp["erstseite"])
     folge = pikepdf.open(ROOT / bp["folgeseite"])
     f_erst = _form_aus_seite(ziel, erst.pages[0])
     f_folge = _form_aus_seite(ziel, folge.pages[0])
     for i, seite in enumerate(ziel.pages):
-        form, aus = (f_erst, bp["erstseite_ausschnitte"]) if i == 0 else (f_folge, bp["folgeseite_ausschnitte"])
-        unterlegen(ziel, seite, form, aus, "LSTBriefpapier")
+        form, aus = (f_erst, bp["erstseite_ausschnitte"]) if i == 0 or immer_erstseite else (f_folge, bp["folgeseite_ausschnitte"])
+        if wie_lexware and form is f_erst:
+            # Logo und Spruch so setzen wie auf den Lexware-Seiten (dort etwas anders skaliert)
+            for k, teil in enumerate(bp["lexware_angleichung"]):
+                unterlegen(ziel, seite, form, [teil["ausschnitt"]], f"LSTBriefpapier{k}", teil["matrix"])
+        else:
+            unterlegen(ziel, seite, form, aus, "LSTBriefpapier")
     out = io.BytesIO()
     ziel.save(out, compress_streams=True)
     return out.getvalue()
 
 
-def unterlegen(pdf: pikepdf.Pdf, seite: pikepdf.Page, form, ausschnitte, name: str):
+def unterlegen(pdf: pikepdf.Pdf, seite: pikepdf.Page, form, ausschnitte, name: str, matrix=None):
     res = seite.obj.get(pikepdf.Name.Resources)
     if res is None:
         seite.obj[pikepdf.Name.Resources] = res = pikepdf.Dictionary()
@@ -277,6 +318,8 @@ def unterlegen(pdf: pikepdf.Pdf, seite: pikepdf.Page, form, ausschnitte, name: s
         ops = f"q {clip} W n /{name} Do Q\n"
     else:
         ops = f"q /{name} Do Q\n"
+    if matrix:
+        ops = "q " + " ".join(str(v) for v in matrix) + " cm " + ops + "Q\n"
     seite.contents_add(pikepdf.Stream(pdf, ops.encode()), prepend=True)
 
 

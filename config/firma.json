@@ -13,13 +13,72 @@
   "briefpapier": {
     "erstseite": "assets/briefpapier-erstseite.pdf",
     "folgeseite": "assets/briefpapier-folgeseite.pdf",
-    "erstseite_ausschnitte": [[0, 742, 595, 842], [410, 697, 595, 742]],
-    "folgeseite_ausschnitte": [[0, 742, 595, 842]]
+    "erstseite_ausschnitte": [
+      [
+        0,
+        742,
+        595,
+        842
+      ],
+      [
+        410,
+        697,
+        595,
+        742
+      ]
+    ],
+    "folgeseite_ausschnitte": [
+      [
+        0,
+        742,
+        595,
+        842
+      ]
+    ],
+    "lexware_angleichung": [
+      {
+        "ausschnitt": [
+          0,
+          742,
+          595,
+          842
+        ],
+        "matrix": [
+          0.937,
+          0,
+          0,
+          0.937,
+          20.0,
+          31.5
+        ]
+      },
+      {
+        "ausschnitt": [
+          410,
+          697,
+          595,
+          742
+        ],
+        "matrix": [
+          1.121,
+          0,
+          0,
+          1.121,
+          -86.0,
+          -109.3
+        ]
+      }
+    ]
   },
   "lexware": {
     "kopf_hoehe": 180,
     "fuss_hoehe": 82,
-    "seitenzahl_feld": [500, 2, 560, 18],
+    "seitenzahl_feld": [
+      500,
+      2,
+      560,
+      18
+    ],
     "seitenzahl_x_rechts": 546,
     "seitenzahl_y": 7,
     "arbeitsnachweis_erkennung": "Arbeitsnachweis"

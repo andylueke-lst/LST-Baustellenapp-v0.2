@@ -62,7 +62,8 @@ def beispiel_einsatz(fotos: list[Path]) -> tuple[dict, dict]:
          "ls": None, "reinigungsart": "Reinigung Wärmetauscher und Kühltürme", "von": "2026-10-12", "bis": "2026-10-16",
          "team": {"vor": "m1", "fach": "m2"}, "geraete": {"strahl": ["s1"]},
          "anlagen": [{"id": a, "name": n} for a, n in anl], "fotos": foto_liste, "tage": tage}
-    stamm = {"mitarbeiter": {"m1": "Matthias", "m2": "Faro"},
+    stamm = {"mitarbeiter": {"m1": {"vorname": "Matthias", "nachname": "Nachname"},
+                             "m2": {"vorname": "Faro", "nachname": "Nachname"}},
              "strahlgeraete": {"s1": {"name": "Loki", "typ": "loki"}},
              "typen": {"loki": {"felder": [
                  {"key": "air", "label": "Air", "werte": [str(x) for x in range(1, 8)]},
@@ -93,11 +94,12 @@ def main():
     (AUSGABE / name).write_bytes(pdf)
     print(f"{'fotobericht':12s} {len(pdf) / 1048576:5.2f} MB  {name}  {info}")
 
+    stamm = beispiel_einsatz(fotos)[1]
     t = e["tage"][1]
     tb = tagesbericht.tagesbericht({
         "nummer": "TB" + basis.nummer_ziffern(e["ls"]) + "-2", "tag_nr": 2, "datum": t["datum"],
         "einsatzort": e["einsatzort"], "kunde": e["kunde"], "ls": e["ls"], "text": t["bericht"]["text"],
-        "mitarbeiter": ["Matthias", "Faro"], "strahlmittel": "CaCO3 ultrafein (Grundmenge)",
+        "mitarbeiter": [abschluss.voller_name(stamm["mitarbeiter"][m]) for m in ("m1", "m2")], "strahlmittel": "CaCO3 ultrafein (Grundmenge)",
         "einstellungen": "Loki: Air 5, Media 3, Düse schmal", "fotos_anzahl": 3,
         "unterschrift": {"name": "Rebmann", "zeit": "13.10.2026, 16:25 Uhr", "bild": unterschrift_png()}})
     name = basis.dateiname("2026-10-13", e["kunde"], e["einsatzort"], "Tagesbericht",

@@ -210,11 +210,11 @@ function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):nul
 function seed(){
   const t=today();
   const ma=[
-    {id:'m1',name:'Matthias',rolle:'technik',team:'Vorarbeiter'},
-    {id:'m2',name:'Faro',rolle:'mitarbeiter',team:'Facharbeiter'},
-    {id:'m3',name:'Arthur',rolle:'mitarbeiter',team:'Facharbeiter'},
-    {id:'m4',name:'Andy',rolle:'admin',team:'Vorarbeiter'},
-    {id:'m5',name:'Tina',rolle:'admin',team:'Facharbeiter'}];
+    {id:'m1',name:'Matthias',nachname:'',rolle:'technik',team:'Vorarbeiter'},
+    {id:'m2',name:'Faro',nachname:'',rolle:'mitarbeiter',team:'Facharbeiter'},
+    {id:'m3',name:'Arthur',nachname:'',rolle:'mitarbeiter',team:'Facharbeiter'},
+    {id:'m4',name:'Andy',nachname:'Lüke',rolle:'admin',team:'Vorarbeiter'},
+    {id:'m5',name:'Tina',nachname:'',rolle:'admin',team:'Facharbeiter'}];
   const anl=(...n)=>n.map(x=>({id:uid(),name:x}));
   const e1={id:'e1',art:'kunde',status:'vorbereitet',einsatzort:'Frischemarkt Weststadt',kunde:'Kältetechnik Muster GmbH',adresse:'Beispielweg 4, 64283 Darmstadt',apOrt:{name:'Herr Beispiel',tel:'06151 000000',mail:'markt.weststadt@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,1),bis:addDays(t,2),ls:'LS260071',reinigungsart:'Wärmetauscher',technisch:'2 V-Tauscher und 4 Tischtauscher auf dem Dach. Zugang über Treppenhaus, Wasser in der Heizungszentrale, Kompressor vor dem Gebäude.',anlagen:anl('V-Tauscher 1','V-Tauscher 2','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3','Tischtauscher 4'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
   const e2={id:'e2',art:'kunde',status:'vorbereitet',einsatzort:'Kühlhaus Hafenstraße',kunde:'Kühlhaus Hafenstraße GmbH',adresse:'Hafenstraße 12, 68159 Mannheim',apOrt:{name:'Frau Kühl',tel:'0621 000000',mail:'technik@example.com'},apKunde:{name:'Frau Kühl',mail:'technik@example.com'},von:addDays(t,5),bis:addDays(t,5),ls:null,reinigungsart:'Intensivreinigung',technisch:'3 Verdampfer in der Kühlzelle, Arbeiten nur mit Rollgerüst.',anlagen:anl('Verdampfer 1','Verdampfer 2','Verdampfer 3'),zusatz:[{id:uid(),name:'Rollgerüst (Halle)'},{id:uid(),name:'Heizlüfter (Miete)'}],team:{vor:'m1',fach:'m3'},geraete:{fahrzeug:'f1',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
@@ -259,6 +259,7 @@ let ui={tab:'heute',anlage:null,phase:'vorher',wiz:0};
 const me=()=>S.mitarbeiter.find(m=>m.id===S.user);
 const isAdmin=()=>me()?.rolle==='admin';
 const ma=id=>S.mitarbeiter.find(m=>m.id===id);
+const vollName=id=>{const m=ma(id);return m?[m.name,m.nachname].filter(Boolean).join(' '):''};
 const E=id=>S.einsaetze.find(e=>e.id===id);
 const fz=id=>S.fahrzeuge.find(f=>f.id===id);
 const kp=id=>S.kompressoren.find(k=>k.id===id);
@@ -435,7 +436,7 @@ function dayActions(e,tag){if(!tag||e.status==='abgeschlossen')return'';const i=
   const b=[];if(!tag.unterschrift)b.push(`<button class="btn${last?'':' pri'}" data-a="tagsign" data-i="${i}">✍️ Tagesbericht abschließen</button>`);
   if(last)b.push(`<button class="btn" data-a="neuertag">Neuer Tag (Tag ${e.tage.length+1} beginnen)</button>`,'<button class="btn pri" data-a="wizard">Job abschließen</button>');
   return b.length?`<div class="fab">${b.join('')}</div>`:''}
-function tagPage(e,t,i){const s=t.bericht;const team=Object.keys(t.zeiten).map(id=>ma(id)?.name).filter(Boolean);const nf=e.fotos.filter(f=>f.tag===i).length;
+function tagPage(e,t,i){const s=t.bericht;const team=Object.keys(t.zeiten).map(id=>vollName(id)).filter(Boolean);const nf=e.fotos.filter(f=>f.tag===i).length;
   const einst=e.geraete.strahl.map(sid=>{const g=sg(sid);const v=s.einst[sid]||{};return `${esc(g.name)}: ${S.typen[g.typ].felder.map(f=>`${f.label} ${v[f.key]??'–'}`).join(', ')}`}).join('<br>');
   return `<div class="paper"><div class="lh"><b>LÜKE</b><i>Strahltechnik</i></div><div><b>Tagesbericht Tag ${i+1} – ${fDY(t.datum)}</b></div>
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Lieferschein</span><span>${esc(e.ls||'folgt')}</span></div>
@@ -557,7 +558,7 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
   <div><b>Lieferschein ${esc(e.ls||'(folgt)')} – Arbeitsnachweis</b></div>
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
   <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
-  <div class="g"><span>Vorarbeiter</span><span>${esc(ma(e.team.vor)?.name||'–')}</span><span>Facharbeiter</span><span>${esc(ma(e.team.fach)?.name||'–')}</span>
+  <div class="g"><span>Vorarbeiter</span><span>${esc(vollName(e.team.vor)||'–')}</span><span>Facharbeiter</span><span>${esc(vollName(e.team.fach)||'–')}</span>
   <span>Strahlmittel</span><span>${[...smArt].filter(Boolean).map(k=>esc(S.strahlmittel[k])).join(', ')||'–'}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span></div>
   ${zeiten}
   <div style="margin-top:12px">Fotodokumentation ${fd} (${e.fotos.length} Fotos): ${seen?'☒':'☐'} vom Kunden vor Ort eingesehen</div>
