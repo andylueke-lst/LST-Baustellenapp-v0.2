@@ -509,10 +509,11 @@ function tHeute(e){const open=offenerTag(e);const tag=selTag(e);
   if(e.status==='abgeschlossen')top=`<div class="callout ok" style="margin-bottom:16px"><span>✅</span><div>Einsatz abgeschlossen am ${fDY(e.abschluss?.datum)}. ${e.ergebnis==='unterschrieben'?'Lieferschein unterschrieben.':'Unterschrift ausstehend, Lieferschein im Büro zur Unterschrift versenden.'}</div></div>${e.lsHtml?`<div style="margin-bottom:24px;overflow-x:auto">${e.lsHtml}</div>`:''}`;
   else if(!open)top=`<div class="callout" style="margin-bottom:16px"><span>🌅</span><div>Tag ${e.tage.length} ist erledigt. Unten geht es mit „Neuer Tag“ weiter oder mit „Job abschließen“ zum Lieferschein.</div></div>`;
   if(!tag)return top+reiseList(e);
-  const lk=locked(e,tag);const keys=Object.keys(tag.zeiten);const team=keys.length?keys:[e.team.vor,e.team.fach].filter(Boolean);
+  const lk=locked(e,tag);const team=tagTeam(e,tag);
   return top+reiseList(e)+dayTabs(e)+`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h2>Tag ${e.tage.indexOf(tag)+1} · ${fD(tag.datum)}</h2><button class="btn small" data-a="zeigen">🖼️ Fotos zeigen</button></div>
   ${homeOpen(e,tag)?`<div class="callout warn small" style="margin-bottom:12px">${e.status==='abgeschlossen'?'Job abgeschlossen.':'Tagesbericht unterschrieben.'} Ankunft Büro/Hotel, Feierabend und die Pause können hier noch nachgetragen werden.</div>`:lk?'<div class="callout small" style="margin-bottom:12px">🔒 Unterschrieben. Dieser Tag kann nicht mehr geändert werden.</div>':tag.fertig?'<div class="callout small" style="margin-bottom:12px">Tag erledigt. Änderungen sind möglich, bis er unterschrieben ist.</div>':''}
-  <div class="times">${team.map((mid,ix)=>zeitBox(e,tag,mid,ix,lk)).join('')}</div>
+  ${dabeiZeile(e,tag,lk)}
+  <div class="times">${team.map((mid,ix)=>zeitBox(e,tag,mid,ix,lk,team[0])).join('')}</div>
   ${e.status!=='abgeschlossen'?`<div class="fab"><button class="btn" data-a="tab" data-t="fotos">📷 Fotos</button><button class="btn" data-a="tab" data-t="bericht">📝 Tagesbericht</button></div>${dayActions(e,tag)}`:''}`}
 function dayActions(e,tag){if(!tag||e.status==='abgeschlossen')return'';const i=e.tage.indexOf(tag);const last=i===e.tage.length-1;
   if(!tag.fertig)return `<div class="fab"><button class="btn" data-a="tagende">Neuer Tag</button><button class="btn" data-a="tagsign" data-i="${i}">✍️ Tagesbericht abschließen</button><button class="btn pri" data-a="wizard">Job abschließen</button></div><p class="small muted">„Neuer Tag“ speichert heute ohne Unterschrift, morgen geht es im selben Einsatz weiter. „Tagesbericht abschließen“ lässt den Kunden diesen Tag unterschreiben. „Job abschließen“ führt zu Abbau-Check, Kundenansicht und Lieferschein.</p>`;
@@ -535,17 +536,32 @@ function signDay(e,i){const t=e.tage[i];
     initSign();el.querySelector('#ds-clr').onclick=initSign;el.querySelector('#ds-c').onclick=closeSheet;
     el.querySelector('#ds-ok').onclick=()=>{const n=el.querySelector('#ds-name').value.trim();if(!n){el.querySelector('#ds-err').textContent='Bitte den Namen des Unterzeichners eintragen.';return}if(!sigDirty){el.querySelector('#ds-err').textContent='Bitte im Feld unterschreiben lassen.';return}
       t.unterschrift=$('#sign').toDataURL('image/png');t.signName=n;t.signTs=Date.now();t.fertig=true;save();closeSheet();render();toast(`Tagesbericht Tag ${i+1} unterschrieben`)}})}
-function zeitBox(e,tag,mid,ix,lk){const dis=lk?' disabled':'';const live=!tag.fertig&&!lk;const z=tag.zeiten[mid]||(tag.zeiten[mid]={start:'buero',ende:'buero',p:{},pause:null,pauseOk:false});const L=labels(z);const A=adj(z);const c=calc(z);const he=homeOpen(e,tag);const ph=pauseHint(z,c);
+/* Team je Tag: Wer an einem Tag dabei ist, steht in tag.zeiten. Vorarbeiter (falls dabei) zuerst. */
+function tagTeam(e,tag){const ids=Object.keys(tag.zeiten);return ids.includes(e.team.vor)?[e.team.vor,...ids.filter(x=>x!==e.team.vor)]:ids}
+function dabeiZeile(e,tag,lk){const ids=Object.keys(tag.zeiten);const leute=S.mitarbeiter.filter(m=>m.aktiv!==false||ids.includes(m.id));
+  return `<div class="field" style="margin-bottom:14px"><label>An diesem Tag dabei</label><div class="pickrow">${leute.map(m=>`<button class="pick${ids.includes(m.id)?' on':''}" data-a="dabei" data-m="${m.id}" aria-pressed="${ids.includes(m.id)}"${lk?' disabled':''}>${esc(m.name)}</button>`).join('')}</div></div>`}
+function leereZeiten(e,mid){const vt=[...e.tage].reverse().find(t=>t!==offenerTag(e)&&t.zeiten[mid]);return {start:vt&&vt.zeiten[mid].ende==='hotel'?'hotel':'buero',ende:'buero',p:{},pause:null,pauseOk:false}}
+function teamSheet(e,tag,titel){const auswahl=new Set(Object.keys(tag.zeiten));
+  const zeigen=()=>sheet(`<h2>${esc(titel)}</h2><p class="small muted" style="margin-top:0">Vorgeschlagen ist das Team vom letzten Tag. Antippen fügt hinzu oder nimmt raus.</p>
+  <div class="pickrow">${S.mitarbeiter.filter(m=>m.aktiv!==false).map(m=>`<button class="pick${auswahl.has(m.id)?' on':''}" data-tm="${m.id}" aria-pressed="${auswahl.has(m.id)}">${esc(m.name)}</button>`).join('')}</div>
+  <div id="tm-err" class="small" style="color:var(--danger);min-height:20px;margin-top:8px" role="alert"></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn pri" id="tm-ok">Übernehmen</button></div>`,el=>{
+    el.querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{const id=b.dataset.tm;auswahl.has(id)?auswahl.delete(id):auswahl.add(id);zeigen()});
+    el.querySelector('#tm-ok').onclick=()=>{if(!auswahl.size){el.querySelector('#tm-err').textContent='Mindestens eine Person muss dabei sein.';return}
+      Object.keys(tag.zeiten).forEach(id=>{if(!auswahl.has(id))delete tag.zeiten[id]});auswahl.forEach(id=>{if(!tag.zeiten[id])tag.zeiten[id]=leereZeiten(e,id)});
+      save();closeSheet();render();toast('Heute dabei: '+tagTeam(e,tag).map(id=>ma(id)?.name).join(', '))}});
+  zeigen()}
+function zeitBox(e,tag,mid,ix,lk,lead){const dis=lk?' disabled':'';const live=!tag.fertig&&!lk;const z=tag.zeiten[mid]||(tag.zeiten[mid]={start:'buero',ende:'buero',p:{},pause:null,pauseOk:false});const L=labels(z);const A=adj(z);const c=calc(z);const he=homeOpen(e,tag);const ph=pauseHint(z,c);
   const rows=[1,2,3,4,5,6].filter(k=>L[k]).map(k=>`<div class="trow"><span class="n">${k}</span><span>${L[k]}</span><button class="tval${z.p[k]?'':' empty'}" data-a="tedit" data-m="${mid}" data-k="${k}" aria-label="${L[k]} ändern"${k>=5&&he?'':dis}>${z.p[k]||'–:–'}${A[k]>=1440?'<span class="small muted" style="font-weight:400"> +1</span>':''}</button>${live||(he&&k>=5)?`<button class="btn small" data-a="tnow" data-m="${mid}" data-k="${k}">Jetzt</button>`:'<span></span>'}</div>`).join('');
   const d=(x,y)=>A[x]!=null&&A[y]!=null?Math.max(0,A[y]-A[x]):0;const parts=[[L[1]?d(1,2):0,'var(--faint)'],[d(2,3),'var(--warn)'],[d(3,4),'var(--ok)'],[d(4,5),'var(--warn)'],[L[6]?d(5,6):0,'var(--faint)']];const all=parts.reduce((s2,x)=>s2+x[0],0)||1;
-  return `<section class="box"><div class="row" style="justify-content:space-between"><h3>${esc(ma(mid)?.name)} <span class="small muted" style="font-weight:400">${ix===0?'Vorarbeiter':'Facharbeiter'}</span>${nightOk(z)?' <span class="tag purple">Nachtschicht</span>':''}</h3></div>
+  return `<section class="box"><div class="row" style="justify-content:space-between"><h3>${esc(ma(mid)?.name)} <span class="small muted" style="font-weight:400">${ix===0?(Object.keys(tag.zeiten).length>1?'Vorarbeiter':'allein'):'Facharbeiter'}</span>${nightOk(z)?' <span class="tag purple">Nachtschicht</span>':''}</h3></div>
   <div class="row small" style="margin:8px 0;gap:12px"><span class="muted">Beginn</span><span class="seg"><button class="${z.start==='buero'?'on':''}" data-a="zmode" data-m="${mid}" data-w="start" data-v="buero"${dis}>Büro</button><button class="${z.start==='hotel'?'on':''}" data-a="zmode" data-m="${mid}" data-w="start" data-v="hotel"${dis}>Hotel</button></span><span class="muted">Ende</span><span class="seg"><button class="${z.ende==='buero'?'on':''}" data-a="zmode" data-m="${mid}" data-w="ende" data-v="buero"${dis}>Büro</button><button class="${z.ende==='hotel'?'on':''}" data-a="zmode" data-m="${mid}" data-w="ende" data-v="hotel"${dis}>Hotel</button></span></div>
   ${rows}
   <div class="trow"><span class="n">⏸</span><span>Pause${pOk(z)?'':' <span class="small muted">Vorschlag</span>'}</span><button class="tval${pOk(z)?'':' empty'}" data-a="pause" data-m="${mid}"${he?'':dis}>${c.pause} min</button>${pOk(z)?'<span></span>':z.p[4]?`<button class="btn small pri" data-a="pok" data-m="${mid}"${he?'':dis}>Bestätigen</button>`:'<span class="small muted" style="text-align:center">nach Abfahrt</span>'}</div>
   ${ph?`<div class="callout warn small" style="margin-top:8px">${ph}</div>`:''}${orderHint(z)?`<div class="callout err small" style="margin-top:8px">${orderHint(z)}</div>`:''}
   <div class="bar" aria-hidden="true">${parts.map(([v,col])=>v>0?`<i style="width:${v/all*100}%;background:${col}"></i>`:'').join('')}</div>
   <div class="sum"><div><span>Rüsten</span><b>${fMin(c.ruest)}</b></div><div><span>Fahrt</span><b>${fMin(c.fahrt)}</b></div><div><span>Vor Ort</span><b>${fMin(c.ort)}</b></div><div><span>Gesamt</span><b>${fMin(c.gesamt)}</b></div></div>
-  ${ix>0?`<button class="btn small" style="margin-top:12px" data-a="zcopy" data-m="${mid}"${dis}>Zeiten von ${esc(ma(e.team.vor)?.name)} übernehmen</button>`:''}</section>`}
+  ${ix>0?`<button class="btn small" style="margin-top:12px" data-a="zcopy" data-m="${mid}" data-src="${lead}"${dis}>Zeiten von ${esc(ma(lead)?.name)} übernehmen</button>`:''}</section>`}
 
 function tFotos(e){if(!ui.anlage||!e.anlagen.find(a=>a.id===ui.anlage))ui.anlage=e.anlagen[0]?.id||null;
   const tag=offenerTag(e);
@@ -562,7 +578,7 @@ function tFotos(e){if(!ui.anlage||!e.anlagen.find(a=>a.id===ui.anlage))ui.anlage
 
 function tBericht(e){const tag=selTag(e);if(!tag)return'<div class="empty">Noch kein Tag begonnen.</div>';
   const b=tag.bericht;const fertig=locked(e,tag);
-  const team=[e.team.vor,e.team.fach].filter(Boolean);const miss=team.flatMap(m=>{const z=tag.zeiten[m];return z?calc(z).missing.map(x=>`${ma(m).name}: ${x}`):[`${ma(m).name}: keine Zeiten`]});
+  const team=tagTeam(e,tag);const miss=team.flatMap(m=>{const z=tag.zeiten[m];return z?calc(z).missing.map(x=>`${ma(m).name}: ${x}`):[`${ma(m).name}: keine Zeiten`]});
   const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const ty=S.typen[s.typ];b.einst[sid]=b.einst[sid]||{};
     return `<div class="box"><h3 style="margin-bottom:8px">${esc(s.name)}</h3>${ty.felder.map(fd=>`<div class="field" style="margin-bottom:10px"><label>${esc(fd.label)}</label><div class="pickrow">${fd.werte.map(w=>`<button class="pick${String(b.einst[sid][fd.key])===w?' on':''}" data-a="einst" data-s="${sid}" data-k="${fd.key}" data-v="${w}"${fertig?' disabled':''}>${esc(w)}</button>`).join('')}</div></div>`).join('')}</div>`}).join('');
   return dayTabs(e)+`<h2 style="margin-bottom:12px">Tagesbericht Tag ${e.tage.indexOf(tag)+1} · ${fD(tag.datum)}</h2>
@@ -632,16 +648,22 @@ function initSign(){const c=$('#sign');if(!c)return;const r=c.getBoundingClientR
   c.onpointerup=c.onpointercancel=()=>{down=false}}
 
 /* ---------- Seite 3 des Lieferscheins (App-Seite) ---------- */
+/* Wer war an welchen Tagen dabei – für Lieferschein. Alle Tage → ohne Zusatz. */
+function tageText(nr){const r=[];let a=null,b=null;nr.forEach(n=>{if(a!==null&&n===b+1){b=n}else{if(a!==null)r.push(a===b?`${a}`:`${a}–${b}`);a=b=n}});if(a!==null)r.push(a===b?`${a}`:`${a}–${b}`);return 'Tag '+r.join(', ')}
+function mitarbeiterZeilen(e){const tl=e.tage;const ids=[];tl.forEach(t=>tagTeam(e,t).forEach(id=>{if(!ids.includes(id))ids.push(id)}));
+  if(!ids.length)[e.team.vor,e.team.fach].filter(Boolean).forEach(id=>ids.push(id));
+  const vor=ids.includes(e.team.vor)?e.team.vor:ids[0];ids.sort((a,b)=>(a===vor?-1:b===vor?1:0));
+  return ids.map(id=>{const nr=tl.map((t,i)=>t.zeiten[id]?i+1:0).filter(Boolean);return {rolle:id===vor?'Vorarbeiter':'Facharbeiter',name:vollName(id),tage:tl.length>1&&nr.length<tl.length?tageText(nr):''}})}
 function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund=true;let kg=0;
   tl.forEach(t=>{smArt.add(t.bericht.sm);if(!t.bericht.grund){grund=false;kg+=+t.bericht.kg||0}});
   const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const last=[...tl].reverse().find(t=>t.bericht.einst[sid]&&Object.keys(t.bericht.einst[sid]).length);const v=last?.bericht.einst[sid]||{};return `${esc(s.name)}: ${S.typen[s.typ].felder.map(f=>`${f.label} ${v[f.key]??'–'}`).join(', ')}`}).join('<br>');
   const fd='FD'+(e.ls||'LS------').slice(2);const seen=sig?sig.eingesehen:e.sig?.eingesehen;
-  const zeiten=(sig?sig.zeiten:e.zeitenAufLs)?`<div style="margin-top:12px"><b>Arbeitszeiten vor Ort</b><table><tr><th>Tag</th><th>Ankunft</th><th>Abfahrt</th><th>vor Ort</th></tr>${tl.map(t=>{const z=t.zeiten[e.team.vor];if(!z)return'';const c=calc(z);return `<tr><td>${fDY(t.datum)}</td><td>${z.p[3]||'–'}</td><td>${z.p[4]||'–'}</td><td>${fMin(c.ort)} h</td></tr>`}).join('')}</table></div>`:'';
+  const zeiten=(sig?sig.zeiten:e.zeitenAufLs)?`<div style="margin-top:12px"><b>Arbeitszeiten vor Ort</b><table><tr><th>Tag</th><th>Ankunft</th><th>Abfahrt</th><th>vor Ort</th></tr>${tl.map(t=>{const z=t.zeiten[tagTeam(e,t)[0]];if(!z)return'';const c=calc(z);return `<tr><td>${fDY(t.datum)}</td><td>${z.p[3]||'–'}</td><td>${z.p[4]||'–'}</td><td>${fMin(c.ort)} h</td></tr>`}).join('')}</table></div>`:'';
   return `<div class="paper"><div class="lh"><b>LÜKE</b><i>Strahltechnik</i></div>
   <div><b>Lieferschein ${esc(e.ls||'(folgt)')} – Arbeitsnachweis</b></div>
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
   <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
-  <div class="g"><span>Vorarbeiter</span><span>${esc(vollName(e.team.vor)||'–')}</span><span>Facharbeiter</span><span>${esc(vollName(e.team.fach)||'–')}</span>
+  <div class="g">${mitarbeiterZeilen(e).map(r=>`<span>${r.rolle}</span><span>${esc(r.name)}${r.tage?` <span style="color:#666">(${r.tage})</span>`:''}</span>`).join('')}
   <span>Strahlmittel</span><span>${[...smArt].filter(Boolean).map(k=>esc(S.strahlmittel[k])).join(', ')||'–'}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span></div>
   ${zeiten}
   <div style="margin-top:12px">Fotodokumentation ${fd} (${e.fotos.length} Fotos): ${seen?'☒':'☐'} vom Kunden vor Ort eingesehen</div>
@@ -708,7 +730,8 @@ function confirmSheet(title,text,okLabel,ok){sheet(`<h2>${esc(title)}</h2><p>${t
 
 /* ---------- Aktionen ---------- */
 function newDay(e){const prev=curTag(e);const d={datum:today(),fertig:false,zeiten:{},bericht:{text:'',sm:prev?.bericht.sm||'ultrafein',grund:true,kg:null,einst:JSON.parse(JSON.stringify(prev?.bericht.einst||{})),bes:''}};
-  [e.team.vor,e.team.fach].filter(Boolean).forEach(m=>{const pz=prev?.zeiten[m];d.zeiten[m]={start:pz?.ende==='hotel'?'hotel':'buero',ende:'buero',p:{},pause:null,pauseOk:false}});e.tage.push(d)}
+  const vorschlag=prev&&Object.keys(prev.zeiten).length?tagTeam(e,prev):[e.team.vor,e.team.fach].filter(Boolean);
+  vorschlag.forEach(m=>{const pz=prev?.zeiten[m];d.zeiten[m]={start:pz?.ende==='hotel'?'hotel':'buero',ende:'buero',p:{},pause:null,pauseOk:false}});e.tage.push(d);return d}
 async function sha(text){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(b)].slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('')}catch(err){return uid()}}
 async function finish(e,sig){
   const ids=e.fotos.map(f=>f.id).join(',');sig.hash=await sha(e.ls+ids+e.einsatzort);
@@ -798,7 +821,7 @@ document.addEventListener('click',async ev=>{
   case 'fremdfz':fremdFzSheet(e);break;
   case 'tu':e.tagesUnterschrift=b.dataset.v==='1';save();render();break;
   case 'starten':e.status='inarbeit';e.start={kompH:kp(e.geraete.kompressor)?.h,km:fz(e.geraete.fahrzeug)?.km};newDay(e);save();ui.tab='heute';render();toast('Einsatz gestartet, Tag 1');break;
-  case 'neuertag':ui.day=null;newDay(e);save();render();break;
+  case 'neuertag':{ui.day=null;const d=newDay(e);save();render();teamSheet(e,d,`Tag ${e.tage.length}: Wer ist heute dabei?`);break}
   case 'tnow':{const z=selTag(e).zeiten[b.dataset.m];const t=nowQ();const err=orderErr(z,b.dataset.k,t);if(err){sheet(`<h2>Zeit nicht plausibel</h2><p>${esc(err)}</p><p class="small muted">Bitte zuerst die andere Zeit über das Rad korrigieren.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" id="oe-ok">Verstanden</button></div>`,el=>{el.querySelector('#oe-ok').onclick=closeSheet});break}z.p[b.dataset.k]=t;save();render();break}
   case 'tedit':{const z=selTag(e).zeiten[b.dataset.m];if(await setTime(z,b.dataset.k)){save();render()}break}
   case 'pause':{const z=selTag(e).zeiten[b.dataset.m];const P=[0,15,30,45,60,75,90,105,120];let cur=calc(z).pause;
@@ -809,7 +832,12 @@ document.addEventListener('click',async ev=>{
     break}
   case 'pok':{const z=selTag(e).zeiten[b.dataset.m];z.pause=calc(z).pause;z.pauseOk=true;save();render();toast(`Pause ${z.pause} min bestätigt`);break}
   case 'zmode':{const z=selTag(e).zeiten[b.dataset.m];z[b.dataset.w]=b.dataset.v;if(b.dataset.w==='start'&&b.dataset.v==='hotel')delete z.p[1];if(b.dataset.w==='ende'&&b.dataset.v==='hotel')delete z.p[6];save();render();break}
-  case 'zcopy':{const t=selTag(e);t.zeiten[b.dataset.m]=JSON.parse(JSON.stringify(t.zeiten[e.team.vor]));save();render();toast('Zeiten übernommen');break}
+  case 'zcopy':{const t=selTag(e);t.zeiten[b.dataset.m]=JSON.parse(JSON.stringify(t.zeiten[b.dataset.src]));save();render();toast('Zeiten übernommen');break}
+  case 'dabei':{const t=selTag(e);const id=b.dataset.m;
+    if(!t.zeiten[id]){t.zeiten[id]=leereZeiten(e,id);save();render();toast(`${ma(id)?.name} ist an diesem Tag dabei`);break}
+    if(Object.keys(t.zeiten).length===1){toast('Mindestens eine Person muss an diesem Tag dabei sein.');break}
+    const z=t.zeiten[id];const weg=()=>{delete t.zeiten[id];save();render();toast(`${ma(id)?.name} an diesem Tag nicht dabei`)};
+    if(Object.values(z.p).some(Boolean))confirmSheet('Nicht dabei?',`Für ${esc(ma(id)?.name)} sind an diesem Tag schon Zeiten eingetragen. Wirklich herausnehmen? Die Zeiten werden gelöscht.`,'Herausnehmen',weg);else weg();break}
   case 'zeigen':showMode(e);break;
   case 'anl':ui.anlage=b.dataset.id;render();break;
   case 'phase':ui.phase=b.dataset.v;render();break;
@@ -860,7 +888,8 @@ document.addEventListener('input',ev=>{const t=ev.target;const e=V.id?E(V.id):nu
   if(t.dataset.cn&&e){e.check[t.dataset.cn].n=t.value;save()}
   if(t.dataset.in){const i=S.intern.find(x=>x.id===V.id);if(i){i.notiz=t.value;save()}}});
 document.addEventListener('change',async ev=>{const t=ev.target;const e=V.id?E(V.id):null;
-  if(t.dataset.f&&e){e.team[t.dataset.f]=t.value||null;const ct=offenerTag(e);if(ct&&t.value&&!ct.zeiten[t.value])ct.zeiten[t.value]={start:'buero',ende:'buero',p:{},pause:null,pauseOk:false};save();render()}
+  if(t.dataset.f&&e){const alt=e.team[t.dataset.f];e.team[t.dataset.f]=t.value||null;const ct=offenerTag(e);
+    if(ct){if(alt&&alt!==t.value&&ct.zeiten[alt]&&!Object.values(ct.zeiten[alt].p).some(Boolean)&&Object.keys(ct.zeiten).length>1)delete ct.zeiten[alt];if(t.value&&!ct.zeiten[t.value])ct.zeiten[t.value]=leereZeiten(e,t.value)}save();render()}
   if(t.id==='cam-in'&&e&&t.files.length){const files=[...t.files];toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');const tg=Math.max(0,e.tage.length-1);
     let last=null;for(const f of files){const blob=await shrink(f);const id=uid();await putBlob(id,blob);last={id,anlage:ui.anlage,phase:ui.phase,tag:tg,ts:Date.now()};e.fotos.push(last)}save();render();if(last)postShot(e,last,files.length)}});
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#layer').innerHTML)closeSheet();if(ev.key==='Enter'&&ev.target.id==='lg-pin')document.querySelector('[data-a=login]').click()});

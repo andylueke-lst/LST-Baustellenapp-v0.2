@@ -50,8 +50,12 @@ def arbeitsnachweis(daten: dict, oben: float = 188) -> bytes:
 
     s.abstand(8)
     s.text("Mitarbeiter:", 9)
-    s.feld("Vorarbeiter:", daten.get("vorarbeiter") or "–")
-    s.feld("Facharbeiter:", daten.get("facharbeiter") or "–")
+    zeilen = daten.get("mitarbeiter")
+    if zeilen is None:   # ältere Form
+        zeilen = [{"rolle": "Vorarbeiter", "name": daten.get("vorarbeiter") or "–", "tage": ""},
+                  {"rolle": "Facharbeiter", "name": daten.get("facharbeiter") or "–", "tage": ""}]
+    for z in zeilen or [{"rolle": "Vorarbeiter", "name": "–", "tage": ""}]:
+        s.feld(z["rolle"] + ":", z["name"] + (f" ({z['tage']})" if z.get("tage") else ""))
 
     s.abstand(8)
     sm = daten.get("strahlmittel") or {}

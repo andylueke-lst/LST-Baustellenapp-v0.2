@@ -36,6 +36,48 @@ def _vor_ort(z: dict) -> str | None:
     return f"{m // 60}:{m % 60:02d} h"
 
 
+def _tag_team(e: dict, t: dict) -> list[str]:
+    """Wer an einem Tag dabei war (Schlüssel der Zeiten), Vorarbeiter zuerst."""
+    ids = list(t.get("zeiten", {}).keys())
+    vor = (e.get("team") or {}).get("vor")
+    return [vor] + [x for x in ids if x != vor] if vor in ids else ids
+
+
+def _tage_text(nr: list[int]) -> str:
+    teile, a, b = [], None, None
+    for n in nr:
+        if a is not None and n == b + 1:
+            b = n
+            continue
+        if a is not None:
+            teile.append(f"{a}" if a == b else f"{a}–{b}")
+        a = b = n
+    if a is not None:
+        teile.append(f"{a}" if a == b else f"{a}–{b}")
+    return "Tag " + ", ".join(teile)
+
+
+def mitarbeiter_zeilen(e: dict, ma: dict) -> list[dict]:
+    """Mitarbeiter für den Lieferschein. Wer nicht an allen Tagen dabei war, bekommt die Tage dazu."""
+    tage = e.get("tage") or []
+    ids: list[str] = []
+    for t in tage:
+        for i in _tag_team(e, t):
+            if i not in ids:
+                ids.append(i)
+    if not ids:
+        ids = [x for x in ((e.get("team") or {}).get("vor"), (e.get("team") or {}).get("fach")) if x]
+    vor = (e.get("team") or {}).get("vor")
+    vor = vor if vor in ids else (ids[0] if ids else None)
+    ids.sort(key=lambda i: i != vor)
+    aus = []
+    for i in ids:
+        nr = [n + 1 for n, t in enumerate(tage) if i in t.get("zeiten", {})]
+        aus.append({"rolle": "Vorarbeiter" if i == vor else "Facharbeiter", "name": ma.get(i) or i,
+                    "tage": _tage_text(nr) if len(tage) > 1 and 0 < len(nr) < len(tage) else ""})
+    return aus
+
+
 def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | None, sig: dict,
                       heute: str | None = None) -> dict:
     """Liefert {'fotodoku': (dateiname, bytes, info), 'lieferschein': (...)}.
@@ -82,7 +124,7 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
     if sig.get("zeiten_auf_ls"):
         zeiten = []
         for t in tage:
-            z = t["zeiten"].get(e["team"]["vor"])
+            z = t["zeiten"].get(_tag_team(e, t)[0]) if t["zeiten"] else None
             if z:
                 zeiten.append({"datum": t["datum"], "ankunft": z["p"].get("3"), "abfahrt": z["p"].get("4"),
                                "vor_ort": _vor_ort(z)})
@@ -92,7 +134,7 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
         "ls": ls, "einsatzort": e["einsatzort"], "adresse": e.get("adresse", ""), "kunde": e.get("kunde"),
         "tage": [{"datum": t["datum"], "text": t["bericht"].get("text"), "bes": t["bericht"].get("bes"),
                   "unterschrieben": bool(t.get("unterschrift"))} for t in tage],
-        "vorarbeiter": ma.get(e["team"].get("vor")), "facharbeiter": ma.get(e["team"].get("fach")),
+        "mitarbeiter": mitarbeiter_zeilen(e, ma),
         "strahlmittel": {"arten": arten, "grundmenge": grund, "kg": kg},
         "geraete": geraete, "zeiten": zeiten,
         "fotodoku": {"nummer": fd_nr, "anzahl": len(e["fotos"]), "eingesehen": bool(sig.get("eingesehen")),
