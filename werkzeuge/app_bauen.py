@@ -162,6 +162,7 @@ button.chip{cursor:pointer;font:inherit}
 
 def bauen():
     s = QUELLE.read_text(encoding="utf-8")
+    s = s[s.index("<title>"):]   # Kopf des Prototyps (charset, viewport) ersetzt KOPF
     for alt, neu in ERSETZUNGEN:
         n = s.count(alt)
         if n != 1:
