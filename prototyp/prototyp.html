@@ -200,7 +200,7 @@ const nowQ=()=>{const d=new Date();let m=d.getHours()*60+Math.round(d.getMinutes
 const num=v=>v===''||v==null||isNaN(+v)?null:+v;
 
 /* ---------- Speicher: Zustand in localStorage, Fotos in IndexedDB ---------- */
-const KEY='lst-baustelle-prototyp-v1';
+const KEY='lst-baustelle-prototyp-v2';try{localStorage.removeItem('lst-baustelle-prototyp-v1')}catch(e){}
 const mem=new Map(); let idb=null;
 function openDB(){return new Promise(res=>{try{const r=indexedDB.open('lst-fotos',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{idb=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
 function putBlob(id,blob){mem.set(id,blob);if(!idb)return Promise.resolve();return new Promise(res=>{try{const tx=idb.transaction('f','readwrite');tx.objectStore('f').put(blob,id);tx.oncomplete=res;tx.onerror=res}catch(e){res()}})}
