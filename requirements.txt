@@ -3,3 +3,4 @@ reportlab>=4.0
 pypdf>=4.0
 pikepdf>=8.0
 Pillow>=10.0
+waitress>=3.0

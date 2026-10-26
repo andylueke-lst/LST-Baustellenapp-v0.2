@@ -10,6 +10,11 @@
 {% if ich %}
 <div class="top">
   <nav aria-label="Pfad"><a href="{{ url_for('buero') }}">🏠 Büro</a>{% block pfad %}{% endblock %}</nav>
+  {% if ich.rolle == 'admin' %}<nav class="menue" aria-label="Bereiche">
+    <a href="{{ url_for('einsatz_neu') }}">＋ Einsatz</a>
+    <a href="{{ url_for('notion_seite') }}">Notion</a>
+    <a href="{{ url_for('mitarbeiter_seite') }}">Mitarbeiter</a>
+    <a href="/app/">iPad-Ansicht</a></nav>{% endif %}
   <span class="small muted">{{ ich.vorname }}</span>
   <a class="btn small" href="{{ url_for('logout') }}">Abmelden</a>
 </div>

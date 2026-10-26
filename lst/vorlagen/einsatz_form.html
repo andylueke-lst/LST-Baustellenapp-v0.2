@@ -1,0 +1,60 @@
+{% extends "basis.html" %}
+{% block titel %}{{ 'Einsatz bearbeiten' if e.id else 'Neuer Einsatz' }} · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><span style="padding:6px 4px">{{ e.einsatzort or 'Neuer Einsatz' }}</span>{% endblock %}
+{% block inhalt %}
+<div class="icon">📋</div>
+<h1>{{ 'Einsatz bearbeiten' if e.id else 'Neuer Einsatz' }}</h1>
+<p class="muted">Bis die Notion-Anbindung steht, werden Einsätze hier angelegt. Danach kommen sie automatisch aus den Notion-Projekten.</p>
+{% if e.status == 'inarbeit' %}<div class="callout hinweis">Der Einsatz läuft bereits. Änderungen hier nur, wenn nötig – hat das iPad gleichzeitig etwas geändert, gilt der Stand vom iPad.</div>{% endif %}
+<form method="post">
+  <h2>Kunde und Einsatzort</h2>
+  <div class="grid2">
+    <div class="field"><label for="einsatzort">Einsatzort *</label><input class="inp" id="einsatzort" name="einsatzort" value="{{ e.einsatzort }}" required placeholder="z. B. Aldi Ebersbach"></div>
+    <div class="field"><label for="kunde">Kunde (Auftraggeber) *</label><input class="inp" id="kunde" name="kunde" value="{{ e.kunde }}" required placeholder="z. B. Epta Deutschland GmbH"></div>
+  </div>
+  <div class="field"><label for="adresse">Adresse Einsatzort</label><input class="inp" id="adresse" name="adresse" value="{{ e.adresse }}"></div>
+  <div class="grid2">
+    <div class="field"><label for="ort_name">AP Einsatzort</label><input class="inp" id="ort_name" name="ort_name" value="{{ e.apOrt.name }}"></div>
+    <div class="field"><label for="ort_tel">Telefon</label><input class="inp" id="ort_tel" name="ort_tel" value="{{ e.apOrt.tel }}" inputmode="tel"></div>
+    <div class="field"><label for="ort_mail">E-Mail Einsatzort (für den Lieferschein, optional)</label><input class="inp" id="ort_mail" name="ort_mail" type="email" value="{{ e.apOrt.mail }}"></div>
+    <div></div>
+    <div class="field"><label for="k_name">AP beim Kunden</label><input class="inp" id="k_name" name="k_name" value="{{ e.apKunde.name }}"></div>
+    <div class="field"><label for="k_mail">E-Mail AP beim Kunden (Fotobericht)</label><input class="inp" id="k_mail" name="k_mail" type="email" value="{{ e.apKunde.mail }}"></div>
+  </div>
+
+  <h2>Auftrag</h2>
+  <div class="grid2">
+    <div class="field"><label for="von">Von *</label><input class="inp" id="von" name="von" type="date" value="{{ e.von }}" required></div>
+    <div class="field"><label for="bis">Bis *</label><input class="inp" id="bis" name="bis" type="date" value="{{ e.bis }}" required></div>
+    <div class="field"><label for="reinigungsart">Reinigungsart</label><input class="inp" id="reinigungsart" name="reinigungsart" value="{{ e.reinigungsart or 'Wärmetauscher' }}"></div>
+    <div class="field"><label for="ls">Lieferschein-Nr. (falls schon da)</label><input class="inp" id="ls" name="ls" value="{{ e.ls or '' }}" placeholder="LS260XXX"></div>
+  </div>
+  <div class="field"><label for="technisch">Technische Daten / Hinweise vor Ort</label><textarea class="inp" id="technisch" name="technisch" rows="3">{{ e.technisch }}</textarea></div>
+  <div class="grid2">
+    <div class="field"><label for="anlagen">Anlagen (eine pro Zeile) *</label><textarea class="inp" id="anlagen" name="anlagen" rows="6" required placeholder="V-Tauscher 1&#10;V-Tauscher 2&#10;Tischtauscher 1">{{ e.anlagen|map(attribute='name')|join('\n') }}</textarea></div>
+    <div class="field"><label for="zusatz">Zusatzmaterial (eine Position pro Zeile)</label><textarea class="inp" id="zusatz" name="zusatz" rows="6" placeholder="Rollgerüst (Halle)">{{ e.zusatz|map(attribute='name')|join('\n') }}</textarea></div>
+  </div>
+
+  <h2>Team und Geräte</h2>
+  <div class="grid2">
+    <div class="field"><label for="vor">Vorarbeiter</label><select class="inp" id="vor" name="vor"><option value="">–</option>
+      {% for m in leute %}<option value="{{ m.id }}"{% if e.team.vor == m.id %} selected{% endif %}>{{ m.vorname }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="fach">Facharbeiter (2. Mann)</label><select class="inp" id="fach" name="fach"><option value="">–</option>
+      {% for m in leute %}<option value="{{ m.id }}"{% if e.team.fach == m.id %} selected{% endif %}>{{ m.vorname }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="fahrzeug">Fahrzeug</label><select class="inp" id="fahrzeug" name="fahrzeug">
+      {% for f in fahrzeuge %}<option value="{{ f.id }}"{% if e.geraete.fahrzeug == f.id %} selected{% endif %}>{{ f.kz }} · {{ f.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="kompressor">Kompressor</label><select class="inp" id="kompressor" name="kompressor">
+      {% for k in kompressoren %}<option value="{{ k.id }}"{% if e.geraete.kompressor == k.id %} selected{% endif %}>{{ k.kz }} · {{ k.name }}</option>{% endfor %}</select></div>
+  </div>
+  <label class="check-row"><input type="checkbox" name="zeitenAufLs"{% if e.zeitenAufLs %} checked{% endif %}> Arbeitszeiten auf den Lieferschein</label>
+  <label class="check-row"><input type="checkbox" name="tagesUnterschrift"{% if e.tagesUnterschrift %} checked{% endif %}> Tagesberichte unterschreiben lassen</label>
+  <div class="row" style="margin-top:16px">
+    <button class="btn pri">Speichern</button>
+    <a class="btn" href="{{ url_for('einsatz_seite', eid=e.id) if e.id else url_for('buero') }}">Abbrechen</a>
+  </div>
+</form>
+{% if e.id and e.status == 'vorbereitet' %}
+<form method="post" action="{{ url_for('einsatz_loeschen', eid=e.id) }}" style="margin-top:24px" onsubmit="return confirm('Einsatz {{ e.einsatzort }} wirklich löschen?')">
+  <button class="btn" style="color:var(--danger,#d44c47)">Einsatz löschen</button></form>
+{% endif %}
+{% endblock %}

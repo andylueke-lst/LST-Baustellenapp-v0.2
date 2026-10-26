@@ -63,6 +63,42 @@ def db():
 def einrichten():
     with db() as c:
         c.executescript(SCHEMA)
+    vorbelegen()
+
+
+# Stammdaten für den ersten Start. Später im Büro pflegbar (Mitarbeiter schon jetzt).
+STANDARD = {
+    "mitarbeiter": [
+        {"id": "m4", "vorname": "Andy", "nachname": "Lüke", "rolle": "admin", "team": "Vorarbeiter", "aktiv": True},
+        {"id": "m5", "vorname": "Tina", "nachname": "", "rolle": "admin", "team": "Facharbeiter", "aktiv": True},
+        {"id": "m1", "vorname": "Matthias", "nachname": "", "rolle": "technik", "team": "Vorarbeiter", "aktiv": True},
+        {"id": "m2", "vorname": "Faro", "nachname": "", "rolle": "mitarbeiter", "team": "Facharbeiter", "aktiv": True},
+        {"id": "m3", "vorname": "Arthur", "nachname": "", "rolle": "mitarbeiter", "team": "Facharbeiter", "aktiv": True},
+    ],
+    "fahrzeuge": [
+        {"id": "f1", "kz": "DA LS 26", "name": "Sprinter alt", "km": None, "eigen": True, "saecke": {}},
+        {"id": "f2", "kz": "DA LS 62", "name": "Sprinter neu", "km": None, "eigen": True, "saecke": {}},
+    ],
+    "kompressoren": [{"id": "k1", "kz": "DA LS 2626", "name": "Kompressor LST", "h": None, "eigen": True, "aktiv": True}],
+    "strahlgeraete": [{"id": "s1", "name": "Loki", "typ": "loki"}],
+    "geraetetypen": {"loki": {"name": "Loki", "felder": [
+        {"key": "air", "label": "Air", "werte": [str(x) for x in range(1, 8)]},
+        {"key": "media", "label": "Media", "werte": [str(x) for x in range(1, 8)]},
+        {"key": "duese", "label": "Düse", "werte": ["breit", "schmal", "rund"]}]}},
+    "strahlmittel": {"ultrafein": "CaCO3 ultrafein", "fein": "CaCO3 fein", "sonst": "sonstiges"},
+    "checkliste": ["Strahlgerät und Düsen", "Luft: Schläuche, Kupplungen", "Strom: Kabel, Verteiler",
+                   "Wasser: Schläuche, Verbinder, Kupplungen", "Absperrung und Sicherung", "Licht", "Werkzeugkiste",
+                   "Müll und Restmaterial mitgenommen"],
+    "intern": [], "maengel": [], "tanken": [], "reisetage": [],
+}
+
+
+def vorbelegen():
+    with db() as c:
+        da = {r["schluessel"] for r in c.execute("SELECT schluessel FROM stammdaten").fetchall()}
+        for k, v in STANDARD.items():
+            if k not in da:
+                c.execute("INSERT INTO stammdaten VALUES (?,?)", (k, json.dumps(v, ensure_ascii=False)))
 
 
 def geheim() -> dict:
@@ -132,6 +168,22 @@ def foto_speichern(einsatz_id: str, daten: bytes, anlage_id: str, phase: str, ta
         c.execute("INSERT OR REPLACE INTO fotos (id,einsatz_id,anlage_id,phase,tag,datei,erstellt) VALUES (?,?,?,?,?,?,?)",
                   (fid, einsatz_id, anlage_id, phase, tag, str(original.relative_to(DATEN)), time.time()))
     return fid
+
+
+def fotos_abgleichen(einsatz_id: str, liste: list[dict]):
+    """Die Fotoliste des iPads ist maßgeblich: Was dort fehlt, ist gelöscht (Papierkorb);
+    umgehängte Fotos bekommen Anlage und Phase vom iPad. Noch nicht hochgeladene Fotos
+    in der Liste werden übergangen, sie kommen mit eigener Anfrage."""
+    neu = {f["id"]: f for f in liste if f.get("id")}
+    with db() as c:
+        for r in c.execute("SELECT id, anlage_id, phase, geloescht FROM fotos WHERE einsatz_id=?", (einsatz_id,)).fetchall():
+            f = neu.get(r["id"])
+            if not f:
+                if not r["geloescht"]:
+                    c.execute("UPDATE fotos SET geloescht=1 WHERE id=?", (r["id"],))
+            elif (f.get("anlage"), f.get("phase"), 0) != (r["anlage_id"], r["phase"], r["geloescht"]):
+                c.execute("UPDATE fotos SET anlage_id=?, phase=?, geloescht=0 WHERE id=?",
+                          (f.get("anlage"), f.get("phase"), r["id"]))
 
 
 def foto_datei(einsatz_id: str, fid: str, vorschau=False) -> Path:

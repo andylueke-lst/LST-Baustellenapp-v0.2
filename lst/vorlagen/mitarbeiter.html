@@ -1,0 +1,43 @@
+{% extends "basis.html" %}
+{% block titel %}Mitarbeiter · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><span style="padding:6px 4px">Mitarbeiter</span>{% endblock %}
+{% block inhalt %}
+<div class="icon">👷</div>
+<h1>Mitarbeiter</h1>
+<p class="muted">In der App erscheinen Vornamen, auf Lieferschein und Tagesbericht der volle Name. Wer ausscheidet, wird auf „inaktiv“ gesetzt, nicht gelöscht – seine Zeiten bleiben erhalten.</p>
+
+<form method="post">
+<div style="overflow-x:auto">
+<table class="tab">
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Aktiv</th></tr></thead>
+  <tbody>
+  {% for m in leute %}
+  <tr>
+    <td><input class="inp" name="vorname_{{ m.id }}" value="{{ m.vorname }}" required aria-label="Vorname"></td>
+    <td><input class="inp" name="nachname_{{ m.id }}" value="{{ m.nachname }}" aria-label="Nachname"></td>
+    <td><select class="inp" name="rolle_{{ m.id }}" aria-label="Rolle">
+      {% for r, l in [('admin','Admin'),('technik','Technik'),('mitarbeiter','Mitarbeiter')] %}<option value="{{ r }}"{% if m.rolle == r %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></td>
+    <td><select class="inp" name="team_{{ m.id }}" aria-label="Im Team meist">
+      {% for t in ['Vorarbeiter','Facharbeiter'] %}<option{% if (m.team or 'Facharbeiter') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
+    <td><input class="inp" type="email" name="mail_{{ m.id }}" value="{{ m.mail or '' }}" aria-label="E-Mail"></td>
+    <td><input class="inp" name="pin_{{ m.id }}" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"
+        placeholder="{{ 'vergeben' if m.pin_hash else 'fehlt' }}" aria-label="Neue PIN"></td>
+    <td><input type="checkbox" name="aktiv_{{ m.id }}"{% if m.aktiv != false %} checked{% endif %} aria-label="Aktiv" style="width:22px;height:22px"></td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td><input class="inp" name="vorname_neu" placeholder="Neu: Vorname" aria-label="Vorname neuer Mitarbeiter"></td>
+    <td><input class="inp" name="nachname_neu" placeholder="Nachname" aria-label="Nachname neuer Mitarbeiter"></td>
+    <td><select class="inp" name="rolle_neu" aria-label="Rolle"><option value="mitarbeiter">Mitarbeiter</option><option value="technik">Technik</option><option value="admin">Admin</option></select></td>
+    <td><select class="inp" name="team_neu" aria-label="Im Team meist"><option>Facharbeiter</option><option>Vorarbeiter</option></select></td>
+    <td><input class="inp" type="email" name="mail_neu" aria-label="E-Mail"></td>
+    <td><input class="inp" name="pin_neu" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="PIN" aria-label="PIN"></td>
+    <td></td>
+  </tr>
+  </tbody>
+</table>
+</div>
+<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<button class="btn pri">Speichern</button>
+</form>
+{% endblock %}

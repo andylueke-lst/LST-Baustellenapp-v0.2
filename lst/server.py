@@ -10,18 +10,20 @@ import functools
 import io
 import json
 import os
-from datetime import date
+from datetime import date, timedelta
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session,
                    url_for)
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import mail, speicher
+from . import mail, notion, speicher
 from .dokumente import abschluss as dok_abschluss
 from .dokumente import basis, fotos, lieferschein
 
 app = Flask(__name__, template_folder="vorlagen", static_folder="statisch")
 app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
+app.permanent_session_lifetime = timedelta(days=60)   # iPads bleiben angemeldet
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
 
 # ---------------------------------------------------------------- Anmeldung
@@ -62,12 +64,17 @@ def login():
     fehler = ""
     if request.method == "POST":
         m = next((x for x in leute if x["id"] == request.form.get("wer")), None)
-        if m and m.get("pin_hash") and check_password_hash(m["pin_hash"], request.form.get("pin", "")):
+        if m and not m.get("pin_hash"):
+            fehler = f"Für {m['vorname']} ist noch keine PIN vergeben. Das geht im Büro unter „Mitarbeiter“."
+        elif m and check_password_hash(m["pin_hash"], request.form.get("pin", "")):
             session.clear()
+            session.permanent = True
             session["uid"] = m["id"]
             speicher.protokoll("anmeldung", m["id"])
-            return redirect(request.args.get("weiter") or url_for("buero"))
-        fehler = "Name oder PIN stimmt nicht."
+            ziel = request.args.get("weiter") or (url_for("buero") if m.get("rolle") == "admin" else "/app")
+            return redirect(ziel if ziel.startswith("/") else "/")
+        else:
+            fehler = "Name oder PIN stimmt nicht."
     return render_template("login.html", leute=leute, fehler=fehler)
 
 
@@ -80,7 +87,8 @@ def logout():
 # ---------------------------------------------------------------- Büro
 @app.route("/")
 def start():
-    return redirect(url_for("buero"))
+    m = ich()
+    return redirect(url_for("buero") if m and m.get("rolle") == "admin" else "/app")
 
 
 def _fotos_von(eid: str) -> list[dict]:
@@ -104,6 +112,7 @@ def buero():
     alle = speicher.einsaetze()
     return render_template("buero.html", freigaben=_offene_freigaben(),
                            laufend=[e for e in alle if e.get("status") == "inarbeit"],
+                           geplant=sorted([e for e in alle if e.get("status") == "vorbereitet"], key=lambda e: e.get("von", "")),
                            fertig=[e for e in alle if e.get("status") == "abgeschlossen"][:15],
                            post=mail.postausgang(nur_offen=True))
 
@@ -123,6 +132,157 @@ def einsatz_seite(eid):
     lex = speicher.pfad("dokumente", eid, "lexware.pdf")
     return render_template("einsatz.html", e=e, docs=docs, fotos=_fotos_von(eid), lexware=lex.exists(),
                            post=[p for p in mail.postausgang() if p["einsatz_id"] == eid])
+
+
+# ---------------------------------------------------------------- Büro: Mitarbeiter und Einsätze anlegen
+@app.route("/buero/mitarbeiter", methods=["GET", "POST"])
+@anmeldung(admin=True)
+def mitarbeiter_seite():
+    leute = speicher.stamm("mitarbeiter", [])
+    if request.method == "POST":
+        f = request.form
+        fehler = []
+        for m in leute:
+            i = m["id"]
+            m["vorname"] = f.get(f"vorname_{i}", m["vorname"]).strip() or m["vorname"]
+            m["nachname"] = f.get(f"nachname_{i}", "").strip()
+            m["rolle"] = f.get(f"rolle_{i}", m.get("rolle"))
+            m["team"] = f.get(f"team_{i}", m.get("team"))
+            m["mail"] = f.get(f"mail_{i}", "").strip()
+            m["aktiv"] = bool(f.get(f"aktiv_{i}"))
+            pin = f.get(f"pin_{i}", "").strip()
+            if pin:
+                if pin.isdigit() and 4 <= len(pin) <= 6:
+                    m["pin_hash"] = generate_password_hash(pin)
+                    speicher.protokoll("pin_gesetzt", session.get("uid"), mitarbeiter=i)
+                else:
+                    fehler.append(m["vorname"])
+        if f.get("vorname_neu", "").strip():
+            ids = {m["id"] for m in leute}
+            n = 1
+            while f"m{n}" in ids:
+                n += 1
+            neu = {"id": f"m{n}", "vorname": f["vorname_neu"].strip(), "nachname": f.get("nachname_neu", "").strip(),
+                   "rolle": f.get("rolle_neu", "mitarbeiter"), "team": f.get("team_neu", "Facharbeiter"),
+                   "mail": f.get("mail_neu", "").strip(), "aktiv": True}
+            pin = f.get("pin_neu", "").strip()
+            if pin.isdigit() and 4 <= len(pin) <= 6:
+                neu["pin_hash"] = generate_password_hash(pin)
+            leute.append(neu)
+        if not any(m.get("rolle") == "admin" and m.get("aktiv") and m.get("pin_hash") for m in leute):
+            flash("Mindestens ein aktiver Admin mit PIN muss bleiben. Nichts gespeichert.", "fehler")
+            return redirect(url_for("mitarbeiter_seite"))
+        speicher.stamm_setzen("mitarbeiter", leute)
+        flash("Gespeichert." + (f" PIN nicht geändert bei {', '.join(fehler)}: bitte 4 bis 6 Ziffern." if fehler else ""),
+              "hinweis" if fehler else "ok")
+        return redirect(url_for("mitarbeiter_seite"))
+    return render_template("mitarbeiter.html", leute=leute)
+
+
+def _leerer_einsatz() -> dict:
+    return {"id": "", "art": "kunde", "status": "vorbereitet", "einsatzort": "", "kunde": "", "adresse": "",
+            "apOrt": {"name": "", "tel": "", "mail": ""}, "apKunde": {"name": "", "mail": ""}, "von": "", "bis": "",
+            "ls": None, "reinigungsart": "Wärmetauscher", "technisch": "", "anlagen": [], "zusatz": [],
+            "team": {"vor": None, "fach": None}, "geraete": {"fahrzeug": "f2", "kompressor": "k1", "strahl": ["s1"]},
+            "tage": [], "trash": [], "zeitenAufLs": False, "tagesUnterschrift": False}
+
+
+def _zeilen(text: str, alt: list[dict]) -> list[dict]:
+    """Eine Zeile je Anlage; bestehende behalten ihre id, damit Fotos dranbleiben."""
+    namen = [z.strip() for z in (text or "").splitlines() if z.strip()]
+    frei = list(alt)
+    aus = []
+    for n in namen:
+        treffer = next((a for a in frei if a["name"] == n), None)
+        if treffer:
+            frei.remove(treffer)
+            aus.append(treffer)
+        else:
+            aus.append({"id": speicher.neue_id(), "name": n})
+    return aus
+
+
+@app.route("/buero/einsatz/neu", methods=["GET", "POST"])
+@app.route("/buero/einsatz/<eid>/bearbeiten", methods=["GET", "POST"])
+@anmeldung(admin=True)
+def einsatz_neu(eid=None):
+    e = _einsatz_oder_404(eid) if eid else _leerer_einsatz()
+    if e.get("status") == "abgeschlossen":
+        flash("Ein abgeschlossener Einsatz lässt sich nicht mehr bearbeiten.", "hinweis")
+        return redirect(url_for("einsatz_seite", eid=eid))
+    if request.method == "POST":
+        f = request.form
+        if not e["id"]:
+            e["id"] = speicher.neue_id()
+        e.update({"einsatzort": f["einsatzort"].strip(), "kunde": f["kunde"].strip(), "adresse": f.get("adresse", "").strip(),
+                  "apOrt": {"name": f.get("ort_name", "").strip(), "tel": f.get("ort_tel", "").strip(),
+                            "mail": f.get("ort_mail", "").strip()},
+                  "apKunde": {"name": f.get("k_name", "").strip(), "mail": f.get("k_mail", "").strip()},
+                  "von": f["von"], "bis": max(f["von"], f["bis"]), "reinigungsart": f.get("reinigungsart", "").strip(),
+                  "ls": f.get("ls", "").strip().upper() or e.get("ls"), "technisch": f.get("technisch", "").strip(),
+                  "anlagen": _zeilen(f.get("anlagen"), e.get("anlagen", [])),
+                  "zusatz": _zeilen(f.get("zusatz"), e.get("zusatz", [])),
+                  "team": {"vor": f.get("vor") or None, "fach": f.get("fach") or None},
+                  "zeitenAufLs": bool(f.get("zeitenAufLs")), "tagesUnterschrift": bool(f.get("tagesUnterschrift"))})
+        e["geraete"] = {**e.get("geraete", {}), "fahrzeug": f.get("fahrzeug"), "kompressor": f.get("kompressor")}
+        e.pop("anlagenPruefen", None)
+        if not e["anlagen"]:
+            flash("Bitte mindestens eine Anlage eintragen.", "fehler")
+            return render_template("einsatz_form.html", e=e, **_auswahl())
+        speicher.einsatz_speichern(e)
+        speicher.protokoll("einsatz_gespeichert", session.get("uid"), e["id"])
+        flash(f"Einsatz {e['einsatzort']} gespeichert. Er erscheint auf dem iPad unter „Vorbereitet“.", "ok")
+        return redirect(url_for("einsatz_seite", eid=e["id"]))
+    return render_template("einsatz_form.html", e=e, **_auswahl())
+
+
+def _auswahl():
+    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)],
+            "fahrzeuge": speicher.stamm("fahrzeuge", []),
+            "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)]}
+
+
+@app.route("/buero/einsatz/<eid>/loeschen", methods=["POST"])
+@anmeldung(admin=True)
+def einsatz_loeschen(eid):
+    e = _einsatz_oder_404(eid)
+    if e.get("status") != "vorbereitet":
+        flash("Nur vorbereitete Einsätze lassen sich löschen.", "fehler")
+        return redirect(url_for("einsatz_seite", eid=eid))
+    with speicher.db() as c:
+        c.execute("DELETE FROM einsaetze WHERE id=?", (eid,))
+    speicher.protokoll("einsatz_geloescht", session.get("uid"), eid, einsatzort=e.get("einsatzort"))
+    flash(f"Einsatz {e['einsatzort']} gelöscht.", "ok")
+    return redirect(url_for("buero"))
+
+
+@app.route("/buero/notion")
+@anmeldung(admin=True)
+def notion_seite():
+    liste, fehler = [], ""
+    if notion.eingerichtet():
+        try:
+            vorhanden = {(e.get("notion") or {}).get("id"): e for e in speicher.einsaetze()}
+            for p in notion.projekte_abfragen():
+                k = notion.kurzinfo(p)
+                k["einsatz"] = vorhanden.get(p["id"])
+                liste.append(k)
+        except notion.NotionFehler as ex:
+            fehler = str(ex)
+    return render_template("notion.html", liste=liste, fehler=fehler, eingerichtet=notion.eingerichtet(),
+                           schreiben=bool(notion.einstellungen().get("schreiben")))
+
+
+@app.route("/buero/notion/<pid>/uebernehmen", methods=["POST"])
+@anmeldung(admin=True)
+def notion_uebernehmen(pid):
+    try:
+        e, hinweis = notion.uebernehmen(pid)
+    except notion.NotionFehler as ex:
+        flash(str(ex), "fehler")
+        return redirect(url_for("notion_seite"))
+    flash(f"{e['einsatzort']} übernommen. {hinweis} Bitte Anlagen prüfen.", "ok")
+    return redirect(url_for("einsatz_seite", eid=e["id"]))
 
 
 @app.route("/buero/einsatz/<eid>/fotobericht")
@@ -154,7 +314,8 @@ def _quelle(eid):
 def _einsatz_mit_fotos(e: dict) -> dict:
     """Ergänzt den Einsatz um die Fotos aus der Datenbank (Form wie im Prototyp)."""
     e = dict(e)
-    e["fotos"] = [{"id": f["id"], "anlage": f["anlage_id"], "phase": f["phase"]} for f in _fotos_von(e["id"])]
+    e["fotos"] = [{"id": f["id"], "anlage": f["anlage_id"], "phase": f["phase"], "tag": f["tag"] or 0,
+                   "ts": int(f["erstellt"] * 1000), "up": 1} for f in _fotos_von(e["id"])]
     return e
 
 
@@ -262,6 +423,31 @@ def foto(eid, fid):
     return send_file(p, mimetype="image/jpeg", max_age=86400)
 
 
+# ---------------------------------------------------------------- App fürs iPad (Oberfläche)
+APP = speicher.ROOT / "lst" / "app"
+
+
+@app.route("/app")
+@app.route("/app/")
+def app_seite():
+    r = send_file(APP / "index.html", mimetype="text/html", max_age=0)
+    r.headers["Cache-Control"] = "no-cache"
+    return r
+
+
+@app.route("/app/<datei>")
+def app_datei(datei):
+    erlaubt = {"sw.js": "text/javascript", "manifest.webmanifest": "application/manifest+json",
+               "icon-180.png": "image/png", "icon-512.png": "image/png"}
+    if datei not in erlaubt:
+        abort(404)
+    r = send_file(APP / datei, mimetype=erlaubt[datei], max_age=0)
+    if datei == "sw.js":
+        r.headers["Service-Worker-Allowed"] = "/"
+        r.headers["Cache-Control"] = "no-cache"
+    return r
+
+
 # ---------------------------------------------------------------- Schnittstelle für iPad und Handy
 @app.route("/api/einsatz", methods=["POST"])
 @anmeldung()
@@ -269,8 +455,97 @@ def api_einsatz_speichern():
     e = request.get_json(force=True)
     if not e.get("id"):
         return jsonify(fehler="id fehlt"), 400
-    e.pop("fotos", None)  # Fotos laufen über eigene Anfragen
+    alt = speicher.einsatz(e["id"]) or {}
+    liste = e.pop("fotos", None)
+    for k in ("trash", "lsHtml", "sync_abschluss", "serverDocs"):
+        e.pop(k, None)
+    # Abschluss und Lexware-Nummer bestimmt der Server, nicht das iPad
+    if alt.get("status") == "abgeschlossen":
+        e["status"], e["abschluss"] = "abgeschlossen", alt.get("abschluss")
+    elif e.get("status") == "abgeschlossen":
+        e["status"] = "inarbeit"
+        e.pop("abschluss", None)
+    if alt.get("ls") and not e.get("ls"):
+        e["ls"] = alt["ls"]
     speicher.einsatz_speichern(e)
+    if liste is not None:
+        speicher.fotos_abgleichen(e["id"], liste)
+    return jsonify(ok=True)
+
+
+# ---------------------------------------------------------------- iPad: Anmeldung und Gesamtstand
+def _fuer_app(m: dict) -> dict:
+    return {"id": m["id"], "name": m.get("vorname", ""), "nachname": m.get("nachname", ""),
+            "rolle": m.get("rolle", "mitarbeiter"),
+            "team": m.get("team") or ("Vorarbeiter" if m.get("rolle") == "technik" else "Facharbeiter")}
+
+
+@app.route("/api/leute")
+def api_leute():
+    return jsonify([{"id": m["id"], "name": m.get("vorname", ""), "pin": bool(m.get("pin_hash"))}
+                    for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)])
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    d = request.get_json(force=True)
+    m = next((x for x in speicher.stamm("mitarbeiter", []) if x["id"] == d.get("wer") and x.get("aktiv", True)), None)
+    if m and not m.get("pin_hash"):
+        return jsonify(fehler=f"Für {m['vorname']} ist noch keine PIN vergeben."), 403
+    if not m or not check_password_hash(m["pin_hash"], str(d.get("pin", ""))):
+        speicher.protokoll("anmeldung_fehlgeschlagen", d.get("wer"))
+        return jsonify(fehler="PIN stimmt nicht."), 403
+    session.clear()
+    session.permanent = True
+    session["uid"] = m["id"]
+    speicher.protokoll("anmeldung", m["id"], geraet="ipad")
+    return jsonify(ok=True, ich=_fuer_app(m))
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify(ok=True)
+
+
+LISTEN = ("maengel", "tanken", "reisetage", "fahrzeuge", "kompressoren", "intern")
+
+
+@app.route("/api/stand")
+@anmeldung()
+def api_stand():
+    """Alles, was das iPad zum Arbeiten braucht. Abgeschlossene Einsätze nur der letzten 30 Tage."""
+    grenze = (date.today() - timedelta(days=30)).isoformat()
+    es = []
+    for e in speicher.einsaetze():
+        if e.get("status") == "abgeschlossen" and (e.get("abschluss") or {}).get("datum", "9999") < grenze:
+            continue
+        es.append(_einsatz_mit_fotos(e))
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    aus = {"ich": _fuer_app(ich()), "mitarbeiter": [_fuer_app(m) for m in leute], "einsaetze": es,
+           "strahlgeraete": speicher.stamm("strahlgeraete", []), "typen": speicher.stamm("geraetetypen", {}),
+           "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}
+    for k in LISTEN:
+        aus[k] = speicher.stamm(k, [])
+    return jsonify(aus)
+
+
+@app.route("/api/listen", methods=["POST"])
+@anmeldung()
+def api_listen():
+    """Mängel, Tankvorgänge, Reisetage, Fahrzeuge, Kompressoren und interne Aufträge vom iPad.
+    Zusammengeführt nach id, damit zwei iPads sich nicht gegenseitig überschreiben."""
+    d = request.get_json(force=True)
+    for k in LISTEN:
+        if not isinstance(d.get(k), list):
+            continue
+        alt = {x["id"]: x for x in speicher.stamm(k, []) if isinstance(x, dict) and x.get("id")}
+        for x in d[k]:
+            if isinstance(x, dict) and x.get("id"):
+                alt[x["id"]] = {**alt.get(x["id"], {}), **x}
+        for wid in (d.get("geloescht") or {}).get(k, []):
+            alt.pop(wid, None)
+        speicher.stamm_setzen(k, list(alt.values()))
     return jsonify(ok=True)
 
 
@@ -345,7 +620,17 @@ def main():
     speicher.einrichten()
     app.secret_key = speicher.geheim()["sitzung"]
     port = int(os.environ.get("LST_PORT", 8080))
-    app.run(host=os.environ.get("LST_HOST", "127.0.0.1"), port=port, debug=bool(os.environ.get("LST_DEBUG")))
+    host = os.environ.get("LST_HOST", "127.0.0.1")
+    if os.environ.get("LST_DEBUG"):
+        app.run(host=host, port=port, debug=True)
+        return
+    try:
+        from waitress import serve   # Server für den Dauerbetrieb auf dem Mac mini
+    except ImportError:
+        app.run(host=host, port=port, threaded=True)
+    else:
+        print(f"LST Baustelle läuft auf http://{host}:{port}", flush=True)
+        serve(app, host=host, port=port, threads=8, max_request_body_size=app.config["MAX_CONTENT_LENGTH"])
 
 
 speicher.einrichten()

@@ -10,9 +10,13 @@
   <div class="k">Zeitraum</div><div>{{ zeitraum(e.von, e.bis) }}</div>
   <div class="k">Lieferschein</div><div>{% if e.ls %}<span class="tag green">{{ e.ls }}</span>{% else %}<span class="tag yellow">fehlt</span>{% endif %}</div>
   <div class="k">Fotos</div><div>{{ fotos|length }}</div>
+  {% if e.notion %}<div class="k">Notion</div><div><a href="{{ e.notion.url }}" target="_blank" rel="noopener">{{ e.notion.projektname }}</a> <span class="muted small">geholt {{ datum(e.notion.geholt) }}</span></div>{% endif %}
+  <div class="k">Anlagen</div><div>{{ e.anlagen|map(attribute='name')|join(', ') }}</div>
   <div class="k">Auftraggeber</div><div>{{ (e.apKunde or {}).name }} <span class="muted">{{ (e.apKunde or {}).mail }}</span></div>
 </div>
 
+{% if e.anlagenPruefen and e.status == 'vorbereitet' %}<div class="callout hinweis">Die Anlagen wurden aus den technischen Daten vorgeschlagen. Bitte unter „Bearbeiten“ prüfen und speichern.</div>{% endif %}
+{% if e.technisch %}<h2>Technische Daten</h2><div class="small" style="white-space:pre-line">{{ e.technisch }}</div>{% endif %}
 <h2>Dokumente</h2>
 <div class="list">
 {% for d in docs %}
@@ -23,7 +27,8 @@
 </div>
 
 <div class="row" style="margin-top:16px">
-  {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>{% endif %}
+  {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>
+  {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>{% endif %}
 </div>
 
 <h2>Lexware-Lieferschein</h2>

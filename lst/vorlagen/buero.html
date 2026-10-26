@@ -31,6 +31,14 @@
 {% else %}<div class="empty">Alles versendet.</div>{% endfor %}
 </div>
 
+<h2>Vorbereitet <a class="btn small" href="{{ url_for('einsatz_neu') }}" style="margin-left:8px">＋ Neuer Einsatz</a></h2>
+<div class="list">
+{% for e in geplant %}
+  <div class="item"><div><b>{{ e.einsatzort }}</b><div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.anlagen|length }} Anlagen{% if e.ls %} · {{ e.ls }}{% endif %}</div></div>
+  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
+{% else %}<div class="empty">Kein Einsatz vorbereitet.</div>{% endfor %}
+</div>
+
 <h2>In Arbeit</h2>
 <div class="list">
 {% for e in laufend %}

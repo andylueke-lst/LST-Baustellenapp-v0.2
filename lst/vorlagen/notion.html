@@ -1,0 +1,28 @@
+{% extends "basis.html" %}
+{% block titel %}Notion · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><span style="padding:6px 4px">Notion</span>{% endblock %}
+{% block inhalt %}
+<div class="icon">🔗</div>
+<h1>Projekte aus Notion</h1>
+<p class="muted">Bestätigte Projekte (Status 13–15) der letzten 7 und nächsten 60 Tage. „Übernehmen“ legt einen vorbereiteten Einsatz an oder aktualisiert ihn, solange er noch nicht läuft. Die App liest nur, sie schreibt {{ 'in die Test-Kopie' if schreiben else 'noch nichts' }} nach Notion.</p>
+{% if not eingerichtet %}
+<div class="callout hinweis">Notion ist noch nicht eingerichtet. Schlüssel der Integration und Datenquelle in <code>geheim.json</code> eintragen (siehe README, Abschnitt Notion).</div>
+{% elif fehler %}
+<div class="callout fehler" role="alert">{{ fehler }}</div>
+{% endif %}
+<div class="list">
+{% for p in liste %}
+  <div class="item">
+    <div><b>{{ p.name }}</b>
+      {% if p.einsatz %}<span class="tag {{ 'green' if p.einsatz.status == 'vorbereitet' else 'blue' }}">{{ 'übernommen' if p.einsatz.status == 'vorbereitet' else ('läuft' if p.einsatz.status == 'inarbeit' else 'abgeschlossen') }}</span>{% endif %}
+      <div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}{% if p.reinigungsart %} · {{ p.reinigungsart }}{% endif %}</div></div>
+    <div class="row">
+      {% if p.url %}<a class="btn small" href="{{ p.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}
+      {% if not p.einsatz or p.einsatz.status == 'vorbereitet' %}
+      <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small {{ '' if p.einsatz else 'pri' }}">{{ 'Aktualisieren' if p.einsatz else 'Übernehmen' }}</button></form>
+      {% else %}<a class="btn small" href="{{ url_for('einsatz_seite', eid=p.einsatz.id) }}">Öffnen</a>{% endif %}
+    </div>
+  </div>
+{% else %}{% if eingerichtet and not fehler %}<div class="empty">Keine bestätigten Projekte im Zeitraum.</div>{% endif %}{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LST Baustelle">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="/app/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/app/icon-180.png">
+<title>LST Baustelle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: Notion-artige Arbeitsfläche – schmale Kopfleiste, Board auf dem Start, Seiten mit Eigenschaften unter dem Titel; große Touch-Ziele für Handschuhe */
+:root{
+  --bg:#ffffff; --bg2:#f7f7f5; --fg:#37352f; --muted:#787774; --faint:#9b9a97;
+  --line:rgba(55,53,47,.12); --hover:rgba(55,53,47,.06); --accent:#2383e2; --accent-fg:#ffffff;
+  --danger:#d44c47; --ok:#448361; --warn:#cb912f;
+  --t-gray:#e3e2e0; --t-gray-fg:#32302c; --t-green:#dbeddb; --t-green-fg:#1c3829;
+  --t-blue:#d3e5ef; --t-blue-fg:#183347; --t-yellow:#fdecc8; --t-yellow-fg:#402c1b;
+  --t-red:#ffe2dd; --t-red-fg:#5d1715; --t-purple:#e8deee; --t-purple-fg:#412454;
+  --t-orange:#fadec9; --t-orange-fg:#49290e; --t-brown:#eee0da; --t-brown-fg:#442a1e;
+  --paper:#ffffff; --paper-fg:#222222; --brand:#5b7dbf; --brand2:#8ab81f;
+  --shade:rgba(15,15,15,.45); --shadow:0 0 0 1px rgba(15,15,15,.05),0 3px 6px rgba(15,15,15,.1),0 9px 24px rgba(15,15,15,.2);
+  --font:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,"Apple Color Emoji",Arial,sans-serif;
+  --mono:"SFMono-Regular",Menlo,Consolas,monospace;
+  --r:6px; --tap:48px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#191919; --bg2:#202020; --fg:#d4d4d4; --muted:#9b9b9b; --faint:#7f7f7f;
+  --line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.06); --accent:#3b8fe0; --accent-fg:#ffffff;
+  --danger:#e06b65; --ok:#5fa47b; --warn:#d9a54a;
+  --t-gray:#373737; --t-gray-fg:#e6e6e6; --t-green:#2b593f; --t-green-fg:#e3f1e7;
+  --t-blue:#28456c; --t-blue-fg:#e1ecf7; --t-yellow:#89632a; --t-yellow-fg:#fbf0d9;
+  --t-red:#6e3630; --t-red-fg:#fbe4e1; --t-purple:#492f64; --t-purple-fg:#efe5f6;
+  --t-orange:#854c1d; --t-orange-fg:#fbe9da; --t-brown:#603b2c; --t-brown-fg:#f3e6df;
+  --shade:rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#191919; --bg2:#202020; --fg:#d4d4d4; --muted:#9b9b9b; --faint:#7f7f7f;
+  --line:rgba(255,255,255,.12); --hover:rgba(255,255,255,.06); --accent:#3b8fe0; --accent-fg:#ffffff;
+  --danger:#e06b65; --ok:#5fa47b; --warn:#d9a54a;
+  --t-gray:#373737; --t-gray-fg:#e6e6e6; --t-green:#2b593f; --t-green-fg:#e3f1e7;
+  --t-blue:#28456c; --t-blue-fg:#e1ecf7; --t-yellow:#89632a; --t-yellow-fg:#fbf0d9;
+  --t-red:#6e3630; --t-red-fg:#fbe4e1; --t-purple:#492f64; --t-purple-fg:#efe5f6;
+  --t-orange:#854c1d; --t-orange-fg:#fbe9da; --t-brown:#603b2c; --t-brown-fg:#f3e6df;
+  --shade:rgba(0,0,0,.6); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{text-wrap:balance;margin:0;font-weight:700}
+h1{font-size:32px;line-height:1.2}
+h2{font-size:22px;line-height:1.3}
+h3{font-size:17px}
+.wrap{max-width:1080px;margin:0 auto}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;gap:8px;min-height:52px;border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px)));padding-inline:max(16px,env(safe-area-inset-left,0px))}
+.crumb{display:flex;align-items:center;gap:4px;min-width:0;flex:1;font-size:14px;color:var(--muted)}
+.crumb button{background:none;border:0;padding:6px 8px;border-radius:var(--r);color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.crumb button:hover{background:var(--hover)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);padding:4px 8px;border-radius:var(--r)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:var(--tap);padding:0 18px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg);font-size:16px;font-weight:500}
+.btn:hover{background:var(--hover)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.pri:hover{filter:brightness(1.07)}
+.btn.danger{color:var(--danger)}
+.btn.small{min-height:36px;padding:0 12px;font-size:14px}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--hover)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.stack{display:flex;flex-direction:column;gap:12px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.num{font-variant-numeric:tabular-nums}
+.tag{display:inline-flex;align-items:center;font-size:13px;line-height:1;padding:4px 7px;border-radius:4px;white-space:nowrap;background:var(--t-gray);color:var(--t-gray-fg)}
+.tag.green{background:var(--t-green);color:var(--t-green-fg)}.tag.blue{background:var(--t-blue);color:var(--t-blue-fg)}
+.tag.yellow{background:var(--t-yellow);color:var(--t-yellow-fg)}.tag.red{background:var(--t-red);color:var(--t-red-fg)}
+.tag.purple{background:var(--t-purple);color:var(--t-purple-fg)}.tag.orange{background:var(--t-orange);color:var(--t-orange-fg)}
+.tag.brown{background:var(--t-brown);color:var(--t-brown-fg)}
+.page{padding-top:32px}
+.icon{font-size:44px;line-height:1;margin-bottom:8px}
+.props{display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr);margin:16px 0 8px;font-size:15px}
+.props>div{padding:7px 4px;min-height:36px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.props>.k{color:var(--muted)}
+.hr{height:1px;background:var(--line);margin:20px 0}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:16px 0 20px;overflow-x:auto}
+.tabs button{background:none;border:0;padding:12px 14px;font-size:15px;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;min-height:var(--tap)}
+.tabs button.on{color:var(--fg);border-bottom-color:var(--fg);font-weight:600}
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-top:24px}
+.col h3{font-size:14px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 2px}
+.card{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(15,15,15,.04)}
+.card:hover{background:var(--hover)}
+.card b{display:block;font-weight:600;font-size:15px}
+.card .meta{font-size:13px;color:var(--muted);margin-top:2px}
+.card .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.card.live{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.empty{font-size:14px;color:var(--faint);padding:8px 2px}
+.toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;min-height:var(--tap)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;background:var(--bg);padding:0 16px;min-height:44px;font-size:15px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--t-blue);color:var(--t-blue-fg);font-weight:600}
+.callout{display:flex;gap:10px;background:var(--bg2);border-radius:var(--r);padding:12px 14px;font-size:15px}
+.callout.warn{background:var(--t-yellow);color:var(--t-yellow-fg)}
+.callout.err{background:var(--t-red);color:var(--t-red-fg)}
+.callout.ok{background:var(--t-green);color:var(--t-green-fg)}
+.box{border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.times{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.trow{display:grid;grid-template-columns:28px minmax(0,1fr) auto auto;gap:8px;align-items:center;min-height:52px;border-bottom:1px solid var(--line)}
+.trow:last-of-type{border-bottom:0}
+.trow .n{width:24px;height:24px;border-radius:50%;background:var(--bg2);color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:center}
+.tval{background:none;border:1px solid transparent;border-radius:var(--r);min-width:72px;min-height:44px;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.tval:hover{background:var(--hover);border-color:var(--line)}
+.tval.empty{color:var(--faint);font-weight:400;font-size:16px}
+.sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.sum div{background:var(--bg2);border-radius:var(--r);padding:8px 10px}
+.sum span{display:block;font-size:12px;color:var(--muted)}
+.sum b{font-size:18px;font-variant-numeric:tabular-nums}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:12px;background:var(--bg2)}
+.bar i{display:block}
+.pickrow{display:flex;gap:8px;flex-wrap:wrap}
+.pick{min-height:44px;padding:0 14px;border-radius:var(--r);border:1px solid var(--line);background:var(--bg);font-size:15px}
+.pick.on{background:var(--t-blue);color:var(--t-blue-fg);border-color:transparent;font-weight:600}
+.cam{position:sticky;top:calc(52px + env(safe-area-inset-top,0px));z-index:4;background:var(--bg);padding:12px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.anl{margin-top:20px}
+.anl h3{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ph{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ph>div{min-width:0}
+.ph .lbl{font-size:13px;color:var(--muted);margin-bottom:6px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.th{position:relative;aspect-ratio:4/3;border-radius:4px;overflow:hidden;background:var(--bg2);border:0;padding:0;max-width:100%}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:14px;color:var(--muted)}
+.inp{min-height:var(--tap);border:1px solid var(--line);border-radius:var(--r);background:var(--bg);padding:8px 12px;font-size:16px;width:100%}
+textarea.inp{min-height:110px;resize:vertical}
+.check{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.check.extra .t::before{content:"Zusatz";font-size:11px;font-weight:600;letter-spacing:.04em;background:var(--t-orange);color:var(--t-orange-fg);padding:2px 6px;border-radius:3px;margin-right:8px;vertical-align:2px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 20px}
+.steps span{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--bg2);color:var(--muted)}
+.steps span.on{background:var(--t-blue);color:var(--t-blue-fg);font-weight:600}
+.steps span.done{background:var(--t-green);color:var(--t-green-fg)}
+.paper{background:var(--paper);color:var(--paper-fg);border:1px solid var(--line);border-radius:4px;padding:28px 34px;max-width:640px;font-family:Verdana,Geneva,sans-serif;font-size:12px;line-height:1.6}
+.paper .lh{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;border-bottom:1.5px solid var(--brand2);padding-bottom:6px;margin-bottom:22px}
+.paper .lh b{color:var(--brand);font-size:22px;letter-spacing:.04em;font-family:var(--font)}
+.paper .lh i{color:var(--brand);font-style:normal;font-size:11px;font-family:var(--font)}
+.paper .g{display:grid;grid-template-columns:120px minmax(0,1fr);gap:2px 10px;margin-top:10px}
+.paper .g span:nth-child(odd){color:#666}
+.paper .ft{border-top:1px solid #ccc;margin-top:24px;padding-top:6px;font-size:9.5px;color:#777;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.paper img.sig{height:56px;display:block;border-bottom:1px solid #999}
+.paper table{border-collapse:collapse;margin-top:6px}
+.paper td,.paper th{border-bottom:1px solid #ddd;padding:3px 10px 3px 0;text-align:left;font-weight:normal}
+.lexpage{border:1px dashed var(--line);border-radius:4px;padding:18px;max-width:640px;color:var(--muted);font-size:14px}
+canvas.sign{width:100%;height:200px;border:1px solid var(--line);border-radius:var(--r);background:var(--paper);touch-action:none;display:block}
+.overlay{position:fixed;inset:0;z-index:20;background:var(--shade);display:flex;align-items:flex-end;justify-content:center;padding-inline:max(0px,env(safe-area-inset-left,0px)) max(0px,env(safe-area-inset-right,0px))}
+.sheet{background:var(--bg);width:100%;max-width:560px;border-radius:12px 12px 0 0;box-shadow:var(--shadow);padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:88vh;overflow:auto}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:12px}}
+.sheet h2{font-size:18px;margin-bottom:12px}
+.wheels{display:flex;gap:8px;justify-content:center;margin:8px 0 16px}
+.wheel{position:relative;flex:1;max-width:160px;height:220px;overflow:hidden}
+.wheel .list{height:220px;overflow-y:scroll;scroll-snap-type:y mandatory;scrollbar-width:none;padding:88px 0;box-sizing:border-box}
+.wheel .list::-webkit-scrollbar{display:none}
+.wheel .it{height:44px;line-height:44px;text-align:center;font-size:20px;scroll-snap-align:center;color:var(--faint);font-variant-numeric:tabular-nums}
+.wheel .it.sel{color:var(--fg);font-weight:600}
+.wheel .band{position:absolute;left:0;right:0;top:88px;height:44px;border-radius:8px;background:var(--hover);pointer-events:none}
+.show{position:fixed;inset:0;z-index:30;background:#000;color:#fff;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.show .head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:12px}
+.show .pair{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px;min-height:0}
+.show figure{margin:0;display:flex;flex-direction:column;min-height:0;gap:6px}
+.show figure div{flex:1;min-height:0;background:#111;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#888}
+.show figure img{max-width:100%;max-height:100%;object-fit:contain}
+.show .nav{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:12px}
+.show .nav button{background:#222;color:#fff;border:0;border-radius:8px;min-height:52px;padding:0 22px;font-size:16px}
+.show .exit{background:#222;color:#bbb;border:0;border-radius:8px;min-height:44px;padding:0 14px;font-size:13px;user-select:none;-webkit-user-select:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:15px;box-shadow:var(--shadow)}
+.fab{display:flex;gap:8px;flex-wrap:wrap;margin-top:28px;padding-top:16px;border-top:1px solid var(--line)}
+@media (max-width:560px){.chip .lbl,.top .who{display:none}h1{font-size:26px}.props{grid-template-columns:110px minmax(0,1fr)}.sum{grid-template-columns:repeat(2,minmax(0,1fr))}.ph{grid-template-columns:1fr}.show .pair{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+.chip.ok .dot{background:var(--ok)}.chip.warn .dot{background:var(--warn)}.chip.err .dot{background:var(--danger)}
+button.chip{cursor:pointer;font:inherit}
+</style>
+</head>
+<body>
+
+
+<div id="app"></div>
+<div id="layer"></div>
+
+<script>
+(()=>{
+'use strict';
+/* ---------- Hilfsfunktionen ---------- */
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4);
+const WT=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today=()=>isoDate(new Date());
+const addDays=(iso,n)=>{const d=new Date(iso+'T12:00');d.setDate(d.getDate()+n);return isoDate(d)};
+const fD=iso=>{if(!iso)return'–';const d=new Date(iso+'T12:00');return `${WT[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth()+1)}.`};
+const fDY=iso=>{if(!iso)return'–';const d=new Date(iso+'T12:00');return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`};
+const yymmdd=iso=>iso.slice(2,4)+iso.slice(5,7)+iso.slice(8,10);
+const toMin=t=>{if(!t)return null;const[a,b]=t.split(':');return +a*60+ +b};
+const fMin=m=>m==null||isNaN(m)?'–':`${Math.floor(m/60)}:${pad(Math.abs(m%60))}`;
+const nowQ=()=>{const d=new Date();let m=d.getHours()*60+Math.round(d.getMinutes()/15)*15;if(m>=1440)m=1425;return `${pad(Math.floor(m/60))}:${pad(m%60)}`};
+const num=v=>v===''||v==null||isNaN(+v)?null:+v;
+
+/* ---------- Speicher: Zustand in localStorage, Fotos in IndexedDB ---------- */
+const KEY='lst-baustelle-app-v1';
+const mem=new Map(); let idb=null;
+function openDB(){return new Promise(res=>{try{const r=indexedDB.open('lst-fotos',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{idb=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
+function putBlob(id,blob){mem.set(id,blob);if(!idb)return Promise.resolve();return new Promise(res=>{try{const tx=idb.transaction('f','readwrite');tx.objectStore('f').put(blob,id);tx.oncomplete=res;tx.onerror=res}catch(e){res()}})}
+function getBlob(id){if(mem.has(id))return Promise.resolve(mem.get(id));if(!idb)return Promise.resolve(null);return new Promise(res=>{try{const r=idb.transaction('f').objectStore('f').get(id);r.onsuccess=()=>{if(r.result)mem.set(id,r.result);res(r.result||null)};r.onerror=()=>res(null)}catch(e){res(null)}})}
+const urls=new Map();
+async function imgUrl(id){if(urls.has(id))return urls.get(id);const b=await getBlob(id);if(!b)return null;const u=URL.createObjectURL(b);urls.set(id,u);return u}
+function save0(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(){save0();zaehlen();chip();syncBald()}
+function load(){try{const s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
+
+/* ---------- Testdaten ---------- */
+function seed(){
+  const t=today();
+  const ma=[
+    {id:'m1',name:'Matthias',nachname:'',rolle:'technik',team:'Vorarbeiter'},
+    {id:'m2',name:'Faro',nachname:'',rolle:'mitarbeiter',team:'Facharbeiter'},
+    {id:'m3',name:'Arthur',nachname:'',rolle:'mitarbeiter',team:'Facharbeiter'},
+    {id:'m4',name:'Andy',nachname:'Lüke',rolle:'admin',team:'Vorarbeiter'},
+    {id:'m5',name:'Tina',nachname:'',rolle:'admin',team:'Facharbeiter'}];
+  const anl=(...n)=>n.map(x=>({id:uid(),name:x}));
+  const e1={id:'e1',art:'kunde',status:'vorbereitet',einsatzort:'Frischemarkt Weststadt',kunde:'Kältetechnik Muster GmbH',adresse:'Beispielweg 4, 64283 Darmstadt',apOrt:{name:'Herr Beispiel',tel:'06151 000000',mail:'markt.weststadt@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,1),bis:addDays(t,2),ls:'LS260071',reinigungsart:'Wärmetauscher',technisch:'2 V-Tauscher und 4 Tischtauscher auf dem Dach. Zugang über Treppenhaus, Wasser in der Heizungszentrale, Kompressor vor dem Gebäude.',anlagen:anl('V-Tauscher 1','V-Tauscher 2','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3','Tischtauscher 4'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
+  const e2={id:'e2',art:'kunde',status:'vorbereitet',einsatzort:'Kühlhaus Hafenstraße',kunde:'Kühlhaus Hafenstraße GmbH',adresse:'Hafenstraße 12, 68159 Mannheim',apOrt:{name:'Frau Kühl',tel:'0621 000000',mail:'technik@example.com'},apKunde:{name:'Frau Kühl',mail:'technik@example.com'},von:addDays(t,5),bis:addDays(t,5),ls:null,reinigungsart:'Intensivreinigung',technisch:'3 Verdampfer in der Kühlzelle, Arbeiten nur mit Rollgerüst.',anlagen:anl('Verdampfer 1','Verdampfer 2','Verdampfer 3'),zusatz:[{id:uid(),name:'Rollgerüst (Halle)'},{id:uid(),name:'Heizlüfter (Miete)'}],team:{vor:'m1',fach:'m3'},geraete:{fahrzeug:'f1',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
+  const e3={id:'e3',art:'kunde',status:'inarbeit',einsatzort:'Logistikzentrum Süd',kunde:'Kältetechnik Muster GmbH',adresse:'Industriestraße 30, 64653 Lorsch',apOrt:{name:'Herr Lager',tel:'06251 000000',mail:'lager.sued@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,-1),bis:addDays(t,1),ls:'LS260068',reinigungsart:'Wärmetauscher',technisch:'1 Lamellenrückkühler und 3 Tischtauscher, Südseite ebenerdig. Wasseranschluss am Tor 3.',anlagen:anl('Lamellenrückkühler','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},start:{kompH:3412.5,km:41210},tagesUnterschrift:false,zeitenAufLs:false,fotos:[],trash:[],
+    tage:[{datum:addDays(t,-1),fertig:true,zeiten:{m1:{start:'buero',ende:'hotel',p:{1:'06:30',2:'07:00',3:'08:45',4:'16:30',5:'16:45'},pause:45},m2:{start:'buero',ende:'hotel',p:{1:'06:30',2:'07:00',3:'08:45',4:'16:30',5:'16:45'},pause:45}},bericht:{text:'Aufbau, Lamellenrückkühler gereinigt, Tischtauscher 1 begonnen.',sm:'ultrafein',grund:true,kg:null,einst:{s1:{air:'5',media:'3',duese:'schmal'}},bes:''}},
+      {datum:t,fertig:false,zeiten:{m1:{start:'hotel',ende:'buero',p:{2:'07:15',3:'07:45'},pause:null,pauseOk:false},m2:{start:'hotel',ende:'buero',p:{2:'07:15',3:'07:45'},pause:null,pauseOk:false}},bericht:{text:'',sm:'ultrafein',grund:true,kg:null,einst:{s1:{air:'5',media:'3',duese:'schmal'}},bes:''}}]};
+  const e4={id:'e4',art:'kunde',status:'abgeschlossen',ergebnis:'unterschrieben',einsatzort:'Großmarkt Nord',kunde:'Kältetechnik Muster GmbH',adresse:'Nordring 2, 60388 Frankfurt',apOrt:{name:'Herr Nord',tel:'',mail:''},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,-9),bis:addDays(t,-8),ls:'LS260064',reinigungsart:'Wärmetauscher',technisch:'',anlagen:anl('V-Tauscher 1'),zusatz:[],team:{vor:'m1',fach:'m3'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false,abschluss:{datum:addDays(t,-8),name:'Nord'}};
+  const e5={id:'e5',art:'kunde',status:'abgeschlossen',ergebnis:'ausstehend',einsatzort:'Rechenzentrum West',kunde:'Rechenzentrum West GmbH',adresse:'Am Netz 1, 65760 Eschborn',apOrt:{name:'',tel:'',mail:''},apKunde:{name:'',mail:''},von:addDays(t,-16),bis:addDays(t,-15),ls:'LS260060',reinigungsart:'Wärmetauscher',technisch:'',anlagen:anl('Rückkühler 1'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f1',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false,abschluss:{datum:addDays(t,-15),ohneKunde:true}};
+  return {v:1,user:null,mitarbeiter:ma,
+    fahrzeuge:[{id:'f1',kz:'DA LS 26',name:'Sprinter alt',km:184230,eigen:true,saecke:{ultrafein:4,fein:1}},{id:'f2',kz:'DA LS 62',name:'Sprinter neu',km:41210,eigen:true,saecke:{ultrafein:7,fein:2}}],
+    kompressoren:[{id:'k1',kz:'DA LS 2626',name:'Kompressor LST',h:3412.5,eigen:true,aktiv:true}],
+    strahlgeraete:[{id:'s1',name:'Loki',typ:'loki'}],
+    typen:{loki:{name:'Loki',felder:[{key:'air',label:'Air',werte:['1','2','3','4','5','6','7']},{key:'media',label:'Media',werte:['1','2','3','4','5','6','7']},{key:'duese',label:'Düse',werte:['breit','schmal','rund']}]}},
+    strahlmittel:{ultrafein:'CaCO3 ultrafein',fein:'CaCO3 fein',sonst:'sonstiges'},
+    checkliste:['Strahlgerät und Düsen','Luft: Schläuche, Kupplungen','Strom: Kabel, Verteiler','Wasser: Schläuche, Verbinder, Kupplungen','Absperrung und Sicherung','Licht','Werkzeugkiste','Müll und Restmaterial mitgenommen'],
+    einsaetze:[e3,e1,e2,e4,e5],
+    intern:[{id:'i1',titel:'Wasserkupplung am Verteiler tauschen',beschreibung:'Aus Mängelmeldung: Kupplung tropft. Ersatz liegt in Halle, Regal C2.',datum:t,zust:'m1',status:'offen'},{id:'i2',titel:'Sprinter DA LS 26 beladen',beschreibung:'Für Kühlhaus Hafenstraße: Rollgerüst und 6 Säcke ultrafein laden.',datum:addDays(t,4),zust:null,status:'offen'},{id:'i3',titel:'Kompressor Ölstand prüfen',beschreibung:'Vor dem nächsten Einsatz kontrollieren und nachfüllen.',datum:addDays(t,-2),zust:'m1',status:'erledigt'}],
+    maengel:[],tanken:[],reisetage:[],seeded:false};
+}
+
+/* ---------- Testfotos erzeugen (nur für die Vorschau) ---------- */
+function fakePhoto(label,phase){return new Promise(res=>{const c=document.createElement('canvas');c.width=800;c.height=600;const g=c.getContext('2d');
+  const dirty=phase==='vorher';g.fillStyle=dirty?'#4a4436':'#8d9aa3';g.fillRect(0,0,800,600);
+  for(let x=0;x<800;x+=9){g.fillStyle=dirty?`rgba(30,25,15,${.4+Math.random()*.4})`:`rgba(220,230,235,${.35+Math.random()*.3})`;g.fillRect(x,40,4,520)}
+  if(dirty){for(let i=0;i<70;i++){g.fillStyle=`rgba(20,18,10,${Math.random()*.5})`;g.beginPath();g.arc(Math.random()*800,Math.random()*600,10+Math.random()*50,0,7);g.fill()}}
+  g.fillStyle='rgba(0,0,0,.55)';g.fillRect(0,520,800,80);g.fillStyle='#fff';g.font='600 30px sans-serif';g.fillText(`Testfoto · ${label} · ${phase}`,24,570);
+  c.toBlob(b=>res(b),'image/jpeg',.8)})}
+async function ensureSeedPhotos(){return;
+  const e=S.einsaetze.find(x=>x.id==='e3');if(!e)return;
+  if(!S.seeded){S.seeded=true;
+    const plan=[[0,'vorher'],[0,'vorher'],[0,'nachher'],[0,'nachher'],[1,'vorher'],[1,'vorher'],[1,'nachher'],[2,'vorher']];
+    plan.forEach(([ai,ph])=>e.fotos.push({id:uid(),anlage:e.anlagen[ai].id,phase:ph,tag:0,ts:Date.now(),seed:true}));save()}
+  let n=0;
+  for(const f of [...e.fotos,...e.trash].filter(x=>x.seed)){if(await getBlob(f.id))continue;const a=e.anlagen.find(x=>x.id===f.anlage);const b=await fakePhoto(a?a.name:'Anlage',f.phase);if(b){await putBlob(f.id,b);n++}}
+  if(n)render();
+}
+
+/* ---------- Zustand ---------- */
+function leer(){return {v:1,user:null,mitarbeiter:[],leute:[],fahrzeuge:[],kompressoren:[],strahlgeraete:[],typen:{},strahlmittel:{ultrafein:'CaCO3 ultrafein',fein:'CaCO3 fein',sonst:'sonstiges'},checkliste:[],einsaetze:[],intern:[],maengel:[],tanken:[],reisetage:[],sync:{},weg:{},pins:{}}}
+let S=load()||leer();['reisetage','maengel','tanken','intern','einsaetze','fahrzeuge','kompressoren'].forEach(k=>{S[k]=S[k]||[]});S.pins=S.pins||{};S.weg=S.weg||{};
+/* ---------- Abgleich mit dem Server ----------
+   Alles wird zuerst auf dem iPad gespeichert (localStorage, Fotos in IndexedDB) und dann
+   im Hintergrund zum Server geschickt. Ohne Netz wartet es und geht später raus. */
+const SY={busy:false,offline:false,err:'',offen:0,last:0,again:false};
+const sk=()=>(S.sync=S.sync||{});
+async function api(path,opt={}){let r;try{r=await fetch(path,{credentials:'same-origin',cache:'no-store',...opt})}catch(err){const e2=new Error('Keine Verbindung zum Büro');e2.netz=true;throw e2}
+  let d=null;try{d=await r.json()}catch(err){}
+  if(r.status===401){const e2=new Error('Bitte neu anmelden');e2.auth=true;throw e2}
+  if(!r.ok)throw new Error((d&&d.fehler)||('Fehler '+r.status));return d}
+const jpost=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+function fuerServer(e){const c=JSON.parse(JSON.stringify(e));delete c.lsHtml;delete c.sync_abschluss;delete c.serverDocs;
+  c.fotos=(c.fotos||[]).map(f=>({id:f.id,anlage:f.anlage,phase:f.phase,tag:f.tag||0,ts:f.ts}));return c}
+async function stempel(o){return sha(JSON.stringify(o))}
+function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,geloescht:S.weg||{}}}
+function zaehlen(){let n=0;for(const e of S.einsaetze){n+=(e.fotos||[]).filter(f=>!f.up).length;if(e.sync_abschluss)n++}SY.offen=n}
+let syncT=null;function syncBald(ms=1500){clearTimeout(syncT);syncT=setTimeout(syncen,ms)}
+async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.busy=true;SY.again=false;chip();
+  try{
+    for(const e of S.einsaetze){
+      const body=fuerServer(e);const h=await stempel(body);
+      if(sk()['e:'+e.id]!==h){await jpost('/api/einsatz',body);sk()['e:'+e.id]=h;save0()}
+      for(const f of e.fotos||[]){if(f.up)continue;const b=await getBlob(f.id);if(!b){f.up=-1;save0();continue}
+        const fd=new FormData();fd.append('foto',b,f.id+'.jpg');fd.append('id',f.id);fd.append('anlage',f.anlage||'');fd.append('phase',f.phase||'vorher');fd.append('tag',f.tag||0);
+        await api(`/api/einsatz/${encodeURIComponent(e.id)}/foto`,{method:'POST',body:fd});f.up=1;save0();zaehlen();chip()}
+      if(e.sync_abschluss&&(e.fotos||[]).every(f=>f.up)){
+        const r=await jpost(`/api/einsatz/${encodeURIComponent(e.id)}/abschluss`,e.sync_abschluss);
+        delete e.sync_abschluss;e.serverDocs={lieferschein:r.lieferschein,fotodoku:r.fotodoku};save0();
+        toast('Lieferschein und Fotodoku sind im Büro angekommen');if(V.id===e.id)render()}
+    }
+    const L=listen();const hl=await stempel(L);if(sk().listen!==hl){await jpost('/api/listen',L);sk().listen=hl;S.weg={};save0()}
+    SY.offline=false;SY.err='';SY.last=Date.now();
+  }catch(err){SY.offline=!!err.netz;SY.err=err.message;if(err.auth){S.user=null;save0();V={name:'login'};render();toast('Bitte neu anmelden. Deine Eingaben sind gespeichert.')}}
+  finally{SY.busy=false;zaehlen();chip();if(SY.again)syncBald(300)}}
+/* Server-Stand übernehmen. Was auf dem iPad geändert und noch nicht übertragen ist, bleibt. */
+async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}catch(err){SY.offline=!!err.netz;SY.err=err.message;chip();if(err.auth){S.user=null;save0();V={name:'login'};render()}return}
+  ['mitarbeiter','strahlgeraete','typen','strahlmittel','checkliste'].forEach(k=>{if(d[k]!=null)S[k]=d[k]});
+  const lokalL=await stempel(listen());const listenUnveraendert=sk().listen===lokalL;
+  for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern']){const srv=d[k]||[];
+    if(listenUnveraendert)S[k]=srv;else{const m=new Map(srv.map(x=>[x.id,x]));(S[k]||[]).forEach(x=>m.set(x.id,x));S[k]=[...m.values()]}}
+  if(listenUnveraendert)sk().listen=await stempel(listen());
+  const neu=[];
+  for(const se of d.einsaetze){const le=E(se.id);
+    if(!le){se.trash=[];neu.push(se);sk()['e:'+se.id]=await stempel(fuerServer(se));continue}
+    const unveraendert=sk()['e:'+le.id]===await stempel(fuerServer(le));
+    if(unveraendert&&!le.sync_abschluss){const lokaleFotos=new Map((le.fotos||[]).map(f=>[f.id,f]));
+      se.fotos=se.fotos.map(f=>({...(lokaleFotos.get(f.id)||{}),...f}));(le.fotos||[]).filter(f=>!f.up).forEach(f=>se.fotos.push(f));
+      se.trash=le.trash||[];if(le.lsHtml)se.lsHtml=le.lsHtml;if(le.serverDocs)se.serverDocs=le.serverDocs;neu.push(se);sk()['e:'+se.id]=await stempel(fuerServer(se))}
+    else{if(se.ls&&!le.ls)le.ls=se.ls;if(se.status==='abgeschlossen'&&!le.sync_abschluss){le.status='abgeschlossen';le.abschluss=se.abschluss}neu.push(le)}}
+  for(const e of S.einsaetze){if(d.einsaetze.some(x=>x.id===e.id))continue;
+    if(e.sync_abschluss||sk()['e:'+e.id]!==await stempel(fuerServer(e)))neu.push(e);else delete sk()['e:'+e.id]}
+  S.einsaetze=neu;if(d.ich)S.ich=d.ich;save0();zaehlen();render();syncBald(200)}
+function chip(){const c=document.getElementById('sync');if(!c)return;let t,cls;
+  if(SY.busy){t=SY.offen?`Überträgt … (${SY.offen})`:'Überträgt …';cls=''}
+  else if(SY.offline){t=SY.offen?`Offline · ${SY.offen} wartet`:'Offline · gespeichert';cls='warn'}
+  else if(SY.err){t='Fehler: '+SY.err;cls='err'}
+  else{t=SY.offen?`${SY.offen} wartet`:'Alles im Büro';cls='ok'}
+  c.className='chip '+cls;c.querySelector('.lbl').textContent=t;c.title=SY.last?'Zuletzt abgeglichen '+new Date(SY.last).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}):''}
+window.addEventListener('online',()=>{SY.offline=false;holen()});
+window.addEventListener('offline',()=>{SY.offline=true;chip()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')holen()});
+setInterval(()=>{if(document.visibilityState==='visible')holen()},120000);
+async function leuteLaden(){try{const l=await api('/api/leute');S.leute=l;save0();if(!S.user)render()}catch(err){SY.offline=!!err.netz}}
+async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
+
+let V={name:'login'};           // aktuelle Ansicht
+let ui={tab:'heute',anlage:null,phase:'vorher',wiz:0};
+const me=()=>S.mitarbeiter.find(m=>m.id===S.user)||S.ich||{id:S.user,name:'',rolle:'mitarbeiter'};
+const isAdmin=()=>me()?.rolle==='admin';
+const ma=id=>S.mitarbeiter.find(m=>m.id===id);
+const vollName=id=>{const m=ma(id);return m?[m.name,m.nachname].filter(Boolean).join(' '):''};
+const E=id=>S.einsaetze.find(e=>e.id===id);
+const fz=id=>S.fahrzeuge.find(f=>f.id===id);
+const kp=id=>S.kompressoren.find(k=>k.id===id);
+const sg=id=>S.strahlgeraete.find(s=>s.id===id);
+const curTag=e=>e.tage[e.tage.length-1];
+const offenerTag=e=>{const t=curTag(e);return t&&!t.fertig?t:null};
+const selTag=e=>{if(!e.tage.length)return null;if(ui.day==null||ui.day>=e.tage.length)return curTag(e);return e.tage[ui.day]};
+const locked=(e,t)=>e.status==='abgeschlossen'||!!t?.unterschrift;
+const homeOpen=(e,t)=>!!t&&(!!t.unterschrift||(e.status==='abgeschlossen'&&t===curTag(e)));
+function missingDay(e,t,closing){const i=e.tage.indexOf(t);const out=[];const ids=Object.keys(t.zeiten);
+  if(!ids.length)out.push({txt:`Tag ${i+1}: keine Zeiten erfasst`,tab:'heute',day:i});
+  ids.forEach(id=>{const z=t.zeiten[id];const L=labels(z);const miss=[1,2,3,4,5,6].filter(k=>L[k]&&(!closing||k<=4)&&!z.p[k]);const n=ma(id)?.name||'?';
+    if(miss.length)out.push({txt:`Tag ${i+1}, ${n}: ${miss.map(k=>L[k]+(closing&&k===4?' (voraussichtliche Zeit)':'')).join(', ')} fehlt`,tab:'heute',day:i});
+    if(!closing&&!pOk(z))out.push({txt:`Tag ${i+1}, ${n}: Pause nicht bestätigt`,tab:'heute',day:i});
+    const se=seqErr(z);if(se)out.push({txt:`Tag ${i+1}, ${n}: ${se}`,tab:'heute',day:i})});
+  if(!(t.bericht.text||'').trim())out.push({txt:`Tag ${i+1}: Arbeitsbericht fehlt`,tab:'bericht',day:i});
+  return out}
+function missingJob(e){const out=[];if(!e.tage.length)out.push({txt:'Es wurde noch kein Tag erfasst',tab:'heute'});
+  e.tage.forEach((t,i)=>out.push(...missingDay(e,t,i===e.tage.length-1||!!t.unterschrift)));
+  e.anlagen.forEach(a=>{const has=ph=>e.fotos.some(f=>f.anlage===a.id&&f.phase===ph);const m=['vorher','nachher'].filter(ph=>!has(ph));if(m.length)out.push({txt:`${a.name}: ${m.length===2?'Vorher- und Nachher-Foto fehlen':(m[0]==='vorher'?'Vorher':'Nachher')+'-Foto fehlt'}`,tab:'fotos',anlage:a.id})});
+  return out}
+function gateSheet(e,items,title){sheet(`<h2>${esc(title)}</h2><p class="small muted" style="margin-top:0">Erst wenn alles vollständig ist, geht es weiter. Antippen führt direkt zur Stelle.</p>
+  <div class="stack" style="gap:4px">${items.map((it,k)=>`<button class="btn small ghost" style="justify-content:flex-start;text-align:left;height:auto;padding:8px 10px" data-g="${k}">${it.tab==='fotos'?'📷':it.tab==='bericht'?'📝':'⏱️'} ${esc(it.txt)}</button>`).join('')}</div>
+  <p class="small muted">Eine Anlage, die nicht gereinigt wurde, kann unter Fotos gelöscht werden.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" id="gs-c">Verstanden</button></div>`,el=>{
+    el.querySelector('#gs-c').onclick=closeSheet;
+    el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{const it=items[+b.dataset.g];closeSheet();V={name:'einsatz',id:e.id};ui.tab=it.tab;if(it.day!=null)ui.day=it.day;if(it.anlage)ui.anlage=it.anlage;render();scrollTo(0,0)})})}
+function dayTabs(e){if(!e.tage.length)return'';const sel=selTag(e);return `<div class="pickrow" style="margin-bottom:16px" role="tablist" aria-label="Tage">${e.tage.map((t,i)=>`<button class="pick${t===sel?' on':''}" role="tab" aria-selected="${t===sel}" data-a="day" data-i="${i}">Tag ${i+1} · ${fD(t.datum)}<span class="small" style="margin-left:6px;font-weight:400">${t.unterschrift||e.status==='abgeschlossen'?'unterschrieben':t.fertig?'erledigt':'heute'}</span></button>`).join('')}</div>`}
+
+/* ---------- Toast ---------- */
+let toastT;function toast(msg){let t=$('.toast');if(!t){t=document.createElement('div');t.className='toast';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true},2600)}
+
+/* ---------- Bottom Sheet + Auswahlrad ---------- */
+function sheet(html,onMount){const L=$('#layer');L.innerHTML=`<div class="overlay" data-close="1"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;
+  const ov=L.firstElementChild;ov.addEventListener('click',ev=>{if(ev.target===ov)closeSheet()});onMount&&onMount(ov.firstElementChild)}
+function closeSheet(){$('#layer').innerHTML=''}
+function wheelPick({title,cols,ok='Übernehmen'}){return new Promise(res=>{
+  sheet(`<h2>${esc(title)}</h2><div class="wheels">${cols.map((c,i)=>`<div class="wheel"><div class="band"></div><div class="list" data-w="${i}">${c.labels.map(l=>`<div class="it">${esc(l)}</div>`).join('')}</div></div>`).join('<div style="align-self:center;font-size:22px;font-weight:600">:</div>'.repeat(cols.length>1&&cols[0].sep?1:0))}</div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" data-x="cancel">Abbrechen</button><button class="btn pri" data-x="ok">${esc(ok)}</button></div>`,el=>{
+    const lists=[...el.querySelectorAll('.list')];
+    lists.forEach((l,i)=>{const upd=()=>{const k=Math.round(l.scrollTop/44);[...l.children].forEach((c,j)=>c.classList.toggle('sel',j===k))};
+      l.addEventListener('scroll',()=>requestAnimationFrame(upd));[...l.children].forEach((c,j)=>c.addEventListener('click',()=>l.scrollTo({top:j*44,behavior:'smooth'})));
+      requestAnimationFrame(()=>{l.scrollTop=(cols[i].index||0)*44;upd()})});
+    el.querySelector('[data-x=cancel]').onclick=()=>{closeSheet();res(null)};
+    el.querySelector('[data-x=ok]').onclick=()=>{const r=lists.map((l,i)=>Math.max(0,Math.min(cols[i].labels.length-1,Math.round(l.scrollTop/44))));closeSheet();res(r)};
+  })})}
+const HOURS=Array.from({length:19},(_,i)=>pad(i+4)); const MINS=['00','15','30','45'];
+async function pickTime(title,cur){const m=toMin(cur||nowQ());const h=Math.floor(m/60),mi=m%60;
+  const r=await wheelPick({title,cols:[{labels:HOURS,index:Math.max(0,HOURS.indexOf(pad(h))),sep:true},{labels:MINS,index:Math.max(0,MINS.indexOf(pad(mi)))}]});
+  return r?`${HOURS[r[0]]}:${MINS[r[1]]}`:null}
+
+/* ---------- Zeitberechnung ---------- */
+function labels(z){return {1:z.start==='hotel'?null:'Ankunft Büro',2:z.start==='hotel'?'Abfahrt Hotel':'Abfahrt zur Baustelle',3:'Ankunft Baustelle',4:'Abfahrt von Baustelle',5:z.ende==='hotel'?'Ankunft Hotel':'Ankunft Büro',6:z.ende==='hotel'?null:'Feierabend'}}
+const pOk=z=>z.pauseOk??(z.pause!=null);
+function minPause(b){if(b==null)return 0;let n=0;if(b>570)n=45;else if(b>540)n=Math.max(30,b-540);else if(b>390)n=30;else if(b>360)n=b-360;return Math.ceil(n/15)*15}
+function calc(z){const A=adj(z);const p=k=>A[k]??null;const L=labels(z);
+  const ruest=(L[1]&&p(1)!=null&&p(2)!=null?p(2)-p(1):0)+(L[6]&&p(5)!=null&&p(6)!=null?p(6)-p(5):0);
+  const fahrt=(p(2)!=null&&p(3)!=null?p(3)-p(2):0)+(p(4)!=null&&p(5)!=null?p(5)-p(4):0);
+  const ort=p(3)!=null&&p(4)!=null?p(4)-p(3):null;
+  const first=L[1]?p(1):p(2), last=L[6]?p(6):p(5);
+  const brutto=first!=null&&last!=null?last-first:null;
+  const known=Object.values(A);const est=brutto??(first!=null&&known.length?Math.max(...known)-first:null);
+  const pz=pOk(z)?z.pause:minPause(est);
+  return {ruest,fahrt,ort:ort==null?null:ort-pz,ortBrutto:ort,gesamt:brutto==null?null:brutto-pz,brutto,est,pause:pz,min:minPause(est),missing:[...Object.entries(L).filter(([k,l])=>l&&!z.p[k]).map(([k,l])=>l),...(pOk(z)?[]:['Pause bestätigen'])]}}
+const nightOk=z=>!!z.p[3]&&toMin(z.p[3])>=960;
+function adj(z){const L=labels(z);const r={};let off=0,prev=null;const n=nightOk(z);for(const k of [1,2,3,4,5,6]){if(!L[k]||!z.p[k])continue;let m=toMin(z.p[k])+off;if(prev!=null&&m<prev&&n&&off===0){off=1440;m+=1440}r[k]=m;prev=m}return r}
+function seqErr(z){const L=labels(z);const A=adj(z);const ks=[1,2,3,4,5,6].filter(x=>A[x]!=null);for(let i=1;i<ks.length;i++){if(A[ks[i]]<A[ks[i-1]])return `${L[ks[i]]} (${z.p[ks[i]]}) kann nicht vor ${L[ks[i-1]]} (${z.p[ks[i-1]]}) liegen.`}return''}
+function orderErr(z,k,t){return seqErr({...z,p:{...z.p,[k]:t}})}
+function _unusedOrderErr(z,k,t){const L=labels(z);const ks=[1,2,3,4,5,6].filter(x=>L[x]&&x!==+k&&z.p[x]);const m=toMin(t);
+  const before=ks.filter(x=>x<+k).pop(),after=ks.find(x=>x>+k);
+  if(before&&toMin(z.p[before])>m)return `${L[k]} (${t}) kann nicht vor ${L[before]} (${z.p[before]}) liegen.`;
+  if(after&&toMin(z.p[after])<m)return `${L[k]} (${t}) kann nicht nach ${L[after]} (${z.p[after]}) liegen.`;return''}
+function orderHint(z){const se=seqErr(z);if(se)return se+' Bitte prüfen.';
+  const c=calc(z);if(c.ortBrutto!=null&&c.pause>c.ortBrutto)return'Die Pause ist länger als die Zeit vor Ort.';return''}
+async function setTime(z,k){let cur=z.p[k];for(;;){const t=await pickTime(labels(z)[k],cur);if(!t)return false;const err=orderErr(z,k,t);if(!err){z.p[k]=t;return true}
+  const again=await new Promise(res=>sheet(`<h2>Zeit nicht plausibel</h2><p>${esc(err)}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="oe-c">Abbrechen</button><button class="btn pri" id="oe-a">Zeit neu wählen</button></div>`,el=>{el.querySelector('#oe-c').onclick=()=>{closeSheet();res(false)};el.querySelector('#oe-a').onclick=()=>{closeSheet();res(true)}}));
+  if(!again)return false;cur=t}}
+function pauseHint(z,c){if(!pOk(z)||c.est==null||z.pause>=c.min)return'';return `Pause kürzer als vorgeschrieben: Bei ${fMin(c.est)} h Anwesenheit sind mindestens ${c.min} Minuten nötig. Bewusst so eingetragen.`}
+
+/* ---------- Rendering ---------- */
+function render(){
+  const a=$('#app');
+  if(!S.user){const pin=$('#lg-pin')?.value||'';a.innerHTML=vLogin();if(pin)$('#lg-pin').value=pin;return}
+  const views={start:vStart,einsatz:vEinsatz,abschluss:vAbschluss,intern:vIntern,maengel:vMaengel};
+  a.innerHTML=top()+`<main class="wrap">${(views[V.name]||vStart)()}</main>`;
+  hydrateImages();chip();
+  if(V.name==='abschluss'&&ui.wiz===4)initSign();
+}
+function top(){const e=V.id?E(V.id):null;const i=V.name==='intern'?S.intern.find(x=>x.id===V.id):null;
+  return `<div class="top"><nav class="crumb" aria-label="Pfad"><button data-a="home">🏠 Einsätze</button>${e?`<span>/</span><button data-a="open" data-id="${e.id}">${esc(e.einsatzort)}</button>`:''}${V.name==='abschluss'?'<span>/</span><span style="padding:6px 4px">Abschließen</span>':''}${i?`<span>/</span><span style="padding:6px 4px">${esc(i.titel)}</span>`:''}${V.name==='maengel'?'<span>/</span><span style="padding:6px 4px">Mängel</span>':''}</nav>
+  <button class="chip" id="sync" data-a="sync" title=""><span class="dot"></span><span class="lbl">…</span></button>
+  <button class="btn small ghost" data-a="logout">${esc(me().name)}<span class="who"> · Abmelden</span></button></div>`}
+
+function vLogin(){return `<main class="wrap page" style="max-width:520px">
+  <div class="icon">🧰</div><h1>LST Baustelle</h1>
+  <p class="muted">Lüke-Strahl-Technik · Einsätze, Zeiten, Fotos und Lieferschein.</p>
+  <div class="stack" style="margin-top:24px">
+    <div class="field"><label for="lg-ma">Wer bist du?</label><div class="pickrow" id="lg-ma">${(S.leute&&S.leute.length?S.leute:S.mitarbeiter).map(m=>`<button class="pick${V.pickMa===m.id?' on':''}" data-a="lgpick" data-id="${m.id}">${esc(m.name)}</button>`).join('')||'<span class="small muted">Keine Verbindung zum Büro. Bitte WLAN oder Mobilfunk und Tailscale prüfen.</span>'}</div></div>
+    <div class="field"><label for="lg-pin">PIN</label><input class="inp num" id="lg-pin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off"></div>
+    <div id="lg-err" class="small" style="color:var(--danger)" role="alert"></div>
+    <button class="btn pri" data-a="login">Anmelden</button>
+    <p class="small muted">Einmal angemeldet, bleibt das iPad angemeldet. Ohne Netz geht die Anmeldung, wenn du dich auf diesem iPad schon einmal angemeldet hast.</p>
+  </div></main>`}
+
+function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).length;
+  if(e.status==='vorbereitet')tg.push(e.ls?'<span class="tag green">Lieferschein da</span>':'<span class="tag yellow">Lieferschein fehlt</span>');
+  if(e.zusatz?.length)tg.push('<span class="tag orange">Zusatzmaterial</span>');
+  if(nr)tg.push(`<span class="tag purple">${nr} Reisetag${nr>1?'e':''}</span>`);
+  if(e.status==='inarbeit'){const n=e.tage.length,plan=Math.round((new Date(e.bis)-new Date(e.von))/864e5)+1;tg.push(`<span class="tag blue">Tag ${n} von ${plan}</span>`);
+    const mitF=new Set(e.fotos.map(f=>f.anlage)).size;tg.push(`<span class="tag">${e.fotos.length} Fotos · ${mitF}/${e.anlagen.length} Anlagen</span>`)}
+  if(e.status==='abgeschlossen'){const lt=curTag(e);if(lt&&homeOpen(e,lt)&&Object.values(lt.zeiten).some(z=>calc(z).missing.length))tg.push('<span class="tag red">Heimfahrt eintragen</span>')}
+  if(e.status==='abgeschlossen')tg.push(e.ergebnis==='unterschrieben'?'<span class="tag green">Unterschrieben</span>':'<span class="tag yellow">Unterschrift ausstehend</span>');
+  const zeit=e.von===e.bis?fD(e.von):`${fD(e.von)} – ${fD(e.bis)}`;
+  return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(e.einsatzort)}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
+function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="col"><h3>${t} <span class="tag">${list.length}</span></h3>${list.join('')||`<div class="empty">${empty}</div>`}</section>`;
+  const es=st=>S.einsaetze.filter(e=>e.status===st).sort((a,b)=>st==='abgeschlossen'?b.von.localeCompare(a.von):a.von.localeCompare(b.von));
+  const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div><div class="tags">${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div></button>`);
+  const mOffen=S.maengel.filter(m=>m.status==='offen').length;
+  return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
+  <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
+  <div class="board">${col('Vorbereitet',es('vorbereitet').map(cardE),'Nichts geplant')}${col('In Arbeit',es('inarbeit').map(cardE),'Kein laufender Einsatz')}${col('Abgeschlossen',es('abgeschlossen').map(cardE),'Noch nichts abgeschlossen')}${col('Intern',intern,'Keine offenen Aufträge')}</div>
+  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}</div></div>`}
+
+/* ---------- Einsatz ---------- */
+function vEinsatz(){const e=E(V.id);if(!e)return vStart();
+  const t=ui.tab;
+  const head=`<div class="page"><div class="icon">❄️</div><h1>${esc(e.einsatzort)}</h1>
+  <div class="props">
+    <div class="k">Kunde</div><div>${esc(e.kunde)}</div>
+    <div class="k">Status</div><div>${e.status==='vorbereitet'?'<span class="tag">Vorbereitet</span>':e.status==='inarbeit'?'<span class="tag blue">In Arbeit</span>':'<span class="tag green">Abgeschlossen</span>'}</div>
+    <div class="k">Termin</div><div>${e.von===e.bis?fDY(e.von):fDY(e.von)+' – '+fDY(e.bis)}</div>
+    <div class="k">Adresse</div><div>${esc(e.adresse)}</div>
+    <div class="k">AP vor Ort</div><div>${esc(e.apOrt.name||'–')}${e.apOrt.tel?` <span class="muted num">${esc(e.apOrt.tel)}</span>`:''}</div>
+    <div class="k">Lieferschein</div><div>${e.ls?`<span class="tag green">${e.ls}</span>`:'<span class="tag yellow">fehlt noch</span> <span class="small muted">kommt automatisch, sobald im Projekt</span>'}</div>
+    <div class="k">Reinigungsart</div><div><span class="tag red">${esc(e.reinigungsart)}</span></div>
+  </div>`;
+  if(e.status==='vorbereitet')return head+vVorbereitung(e)+'</div>';
+  const tabs=[['heute','Zeiten'],['fotos','Fotos'],['bericht','Tagesbericht'],['info','Einsatz']];
+  const body={heute:tHeute,fotos:tFotos,bericht:tBericht,info:tInfo}[t]||tHeute;
+  return head+`<div class="tabs" role="tablist">${tabs.map(([k,l])=>`<button role="tab" aria-selected="${k===t}" class="${k===t?'on':''}" data-a="tab" data-t="${k}">${l}</button>`).join('')}</div>${body(e)}</div>`}
+
+function geraeteForm(e){const ve=S.mitarbeiter;const opt=(list,sel,lab)=>list.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(lab(x))}</option>`).join('');
+  const k=kp(e.geraete.kompressor);
+  return `<div class="stack">
+  <h3>Team</h3>
+  <div class="times"><div class="field"><label for="g-vor">Vorarbeiter</label><select class="inp" id="g-vor" data-f="vor">${opt(ve,e.team.vor,m=>m.name)}</select></div>
+  <div class="field"><label for="g-fach">Facharbeiter</label><select class="inp" id="g-fach" data-f="fach"><option value="">– niemand –</option>${opt(ve,e.team.fach,m=>m.name)}</select></div></div>
+  <h3 style="margin-top:8px">Geräte</h3>
+  <div class="field"><label>Fahrzeug</label><div class="pickrow">${S.fahrzeuge.filter(f=>f.aktiv!==false).map(f=>`<button class="pick${e.geraete.fahrzeug===f.id?' on':''}" data-a="gsel" data-g="fahrzeug" data-id="${f.id}">${esc(f.kz)} <span class="small">${esc(f.name)}</span></button>`).join('')}<button class="pick" data-a="fremdfz">+ Fahrzeug hinzufügen</button></div></div>
+  <div class="field"><label>Kompressor</label><div class="pickrow">${S.kompressoren.filter(x=>x.aktiv!==false).map(x=>`<button class="pick${e.geraete.kompressor===x.id?' on':''}" data-a="gsel" data-g="kompressor" data-id="${x.id}">${x.eigen?'LST-Kompressor':'Mietgerät'} · ${esc(x.kz)}</button>`).join('')}<button class="pick" data-a="miete">+ Mietgerät hinzufügen</button></div></div>
+  <div class="field"><label>Strahlgeräte (ein oder zwei)</label><div class="pickrow">${S.strahlgeraete.map(s=>`<button class="pick${e.geraete.strahl.includes(s.id)?' on':''}" data-a="strahl" data-id="${s.id}">${esc(s.name)}</button>`).join('')}</div></div>
+  ${k&&!k.eigen?`<div class="callout small">Mietgerät ${esc(k.kz)}${k.vermieter?' von '+esc(k.vermieter):''}: ${k.h} h bei Abholung.</div>`:''}
+  </div>`}
+function vVorbereitung(e){return `<div class="hr"></div>
+  <div class="callout"><span>📋</span><div><b>Technische Daten</b><br>${esc(e.technisch||'–')}</div></div>
+  ${reiseList(e)?'<div style="margin-top:12px"></div>'+reiseList(e):''}
+  ${e.zusatz.length?`<div class="callout warn" style="margin-top:12px"><span>📦</span><div><b>Zusatzmaterial für diesen Einsatz</b><br>${e.zusatz.map(z=>esc(z.name)).join(', ')}</div></div>`:''}
+  <div class="hr"></div>${geraeteForm(e)}
+  <div class="hr"></div>
+  <div class="toggle"><span>Tagesberichte vom Kunden unterschreiben lassen</span><span class="seg"><button class="${e.tagesUnterschrift?'on':''}" data-a="tu" data-v="1">Ja</button><button class="${!e.tagesUnterschrift?'on':''}" data-a="tu" data-v="0">Nein</button></span></div>
+  <div class="fab"><button class="btn pri" data-a="starten">Einsatz starten</button><span class="small muted">Startet Tag 1 und übernimmt die Startstände der Geräte.</span></div>`}
+
+function tHeute(e){const open=offenerTag(e);const tag=selTag(e);
+  let top='';
+  if(e.status==='abgeschlossen')top=`<div class="callout ok" style="margin-bottom:16px"><span>✅</span><div>Einsatz abgeschlossen am ${fDY(e.abschluss?.datum)}. ${e.ergebnis==='unterschrieben'?'Lieferschein unterschrieben.':'Unterschrift ausstehend, Lieferschein im Büro zur Unterschrift versenden.'}</div></div>${e.lsHtml?`<div style="margin-bottom:24px;overflow-x:auto">${e.lsHtml}</div>`:''}`;
+  else if(!open)top=`<div class="callout" style="margin-bottom:16px"><span>🌅</span><div>Tag ${e.tage.length} ist erledigt. Unten geht es mit „Neuer Tag“ weiter oder mit „Job abschließen“ zum Lieferschein.</div></div>`;
+  if(!tag)return top+reiseList(e);
+  const lk=locked(e,tag);const keys=Object.keys(tag.zeiten);const team=keys.length?keys:[e.team.vor,e.team.fach].filter(Boolean);
+  return top+reiseList(e)+dayTabs(e)+`<div class="row" style="justify-content:space-between;margin-bottom:12px"><h2>Tag ${e.tage.indexOf(tag)+1} · ${fD(tag.datum)}</h2><button class="btn small" data-a="zeigen">🖼️ Fotos zeigen</button></div>
+  ${homeOpen(e,tag)?`<div class="callout warn small" style="margin-bottom:12px">${e.status==='abgeschlossen'?'Job abgeschlossen.':'Tagesbericht unterschrieben.'} Ankunft Büro/Hotel, Feierabend und die Pause können hier noch nachgetragen werden.</div>`:lk?'<div class="callout small" style="margin-bottom:12px">🔒 Unterschrieben. Dieser Tag kann nicht mehr geändert werden.</div>':tag.fertig?'<div class="callout small" style="margin-bottom:12px">Tag erledigt. Änderungen sind möglich, bis er unterschrieben ist.</div>':''}
+  <div class="times">${team.map((mid,ix)=>zeitBox(e,tag,mid,ix,lk)).join('')}</div>
+  ${e.status!=='abgeschlossen'?`<div class="fab"><button class="btn" data-a="tab" data-t="fotos">📷 Fotos</button><button class="btn" data-a="tab" data-t="bericht">📝 Tagesbericht</button></div>${dayActions(e,tag)}`:''}`}
+function dayActions(e,tag){if(!tag||e.status==='abgeschlossen')return'';const i=e.tage.indexOf(tag);const last=i===e.tage.length-1;
+  if(!tag.fertig)return `<div class="fab"><button class="btn" data-a="tagende">Neuer Tag</button><button class="btn" data-a="tagsign" data-i="${i}">✍️ Tagesbericht abschließen</button><button class="btn pri" data-a="wizard">Job abschließen</button></div><p class="small muted">„Neuer Tag“ speichert heute ohne Unterschrift, morgen geht es im selben Einsatz weiter. „Tagesbericht abschließen“ lässt den Kunden diesen Tag unterschreiben. „Job abschließen“ führt zu Abbau-Check, Kundenansicht und Lieferschein.</p>`;
+  const b=[];if(!tag.unterschrift)b.push(`<button class="btn${last?'':' pri'}" data-a="tagsign" data-i="${i}">✍️ Tagesbericht abschließen</button>`);
+  if(last)b.push(`<button class="btn" data-a="neuertag">Neuer Tag (Tag ${e.tage.length+1} beginnen)</button>`,'<button class="btn pri" data-a="wizard">Job abschließen</button>');
+  return b.length?`<div class="fab">${b.join('')}</div>`:''}
+function tagPage(e,t,i){const s=t.bericht;const team=Object.keys(t.zeiten).map(id=>vollName(id)).filter(Boolean);const nf=e.fotos.filter(f=>f.tag===i).length;
+  const einst=e.geraete.strahl.map(sid=>{const g=sg(sid);const v=s.einst[sid]||{};return `${esc(g.name)}: ${S.typen[g.typ].felder.map(f=>`${f.label} ${v[f.key]??'–'}`).join(', ')}`}).join('<br>');
+  return `<div class="paper"><div class="lh"><b>LÜKE</b><i>Strahltechnik</i></div><div><b>Tagesbericht Tag ${i+1} – ${fDY(t.datum)}</b></div>
+  <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Lieferschein</span><span>${esc(e.ls||'folgt')}</span></div>
+  <div style="margin-top:12px"><b>Arbeitsbericht</b><div>${esc(s.text||'–')}</div>${s.bes?`<div>${esc(s.bes)}</div>`:''}</div>
+  <div class="g"><span>Mitarbeiter</span><span>${team.map(esc).join(', ')||'–'}</span><span>Strahlmittel</span><span>${esc(S.strahlmittel[s.sm]||'–')}${s.grund?' (Grundmenge)':' · '+(s.kg??0)+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span><span>Fotos des Tages</span><span>${nf}</span></div>
+  <div class="ft"><span>Tagesbericht TB${(e.ls||'LS------').slice(2)}-${i+1}</span><span>Seite 1/1</span></div></div>`}
+function signDay(e,i){const t=e.tage[i];
+  sheet(`<h2>Tagesbericht Tag ${i+1} unterschreiben</h2><div style="overflow-x:auto;margin-bottom:12px">${tagPage(e,t,i)}</div>
+  <div class="stack"><div class="field"><label for="ds-name">Name des Unterzeichners</label><input class="inp" id="ds-name" value="${esc(t.signName||'')}" placeholder="Nachname"></div>
+  <div class="field"><label>Unterschrift</label><canvas class="sign" id="sign" aria-label="Unterschriftsfeld"></canvas><div class="row" style="justify-content:space-between"><span class="small muted">Arbeiten an diesem Tag wie beschrieben ausgeführt.</span><button class="btn small ghost" id="ds-clr">Löschen</button></div></div>
+  <div id="ds-err" class="small" style="color:var(--danger)" role="alert"></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="ds-c">Abbrechen</button><button class="btn pri" id="ds-ok">Unterschreiben</button></div></div>`,el=>{
+    initSign();el.querySelector('#ds-clr').onclick=initSign;el.querySelector('#ds-c').onclick=closeSheet;
+    el.querySelector('#ds-ok').onclick=()=>{const n=el.querySelector('#ds-name').value.trim();if(!n){el.querySelector('#ds-err').textContent='Bitte den Namen des Unterzeichners eintragen.';return}if(!sigDirty){el.querySelector('#ds-err').textContent='Bitte im Feld unterschreiben lassen.';return}
+      t.unterschrift=$('#sign').toDataURL('image/png');t.signName=n;t.signTs=Date.now();t.fertig=true;save();closeSheet();render();toast(`Tagesbericht Tag ${i+1} unterschrieben`)}})}
+function zeitBox(e,tag,mid,ix,lk){const dis=lk?' disabled':'';const live=!tag.fertig&&!lk;const z=tag.zeiten[mid]||(tag.zeiten[mid]={start:'buero',ende:'buero',p:{},pause:null,pauseOk:false});const L=labels(z);const A=adj(z);const c=calc(z);const he=homeOpen(e,tag);const ph=pauseHint(z,c);
+  const rows=[1,2,3,4,5,6].filter(k=>L[k]).map(k=>`<div class="trow"><span class="n">${k}</span><span>${L[k]}</span><button class="tval${z.p[k]?'':' empty'}" data-a="tedit" data-m="${mid}" data-k="${k}" aria-label="${L[k]} ändern"${k>=5&&he?'':dis}>${z.p[k]||'–:–'}${A[k]>=1440?'<span class="small muted" style="font-weight:400"> +1</span>':''}</button>${live||(he&&k>=5)?`<button class="btn small" data-a="tnow" data-m="${mid}" data-k="${k}">Jetzt</button>`:'<span></span>'}</div>`).join('');
+  const d=(x,y)=>A[x]!=null&&A[y]!=null?Math.max(0,A[y]-A[x]):0;const parts=[[L[1]?d(1,2):0,'var(--faint)'],[d(2,3),'var(--warn)'],[d(3,4),'var(--ok)'],[d(4,5),'var(--warn)'],[L[6]?d(5,6):0,'var(--faint)']];const all=parts.reduce((s2,x)=>s2+x[0],0)||1;
+  return `<section class="box"><div class="row" style="justify-content:space-between"><h3>${esc(ma(mid)?.name)} <span class="small muted" style="font-weight:400">${ix===0?'Vorarbeiter':'Facharbeiter'}</span>${nightOk(z)?' <span class="tag purple">Nachtschicht</span>':''}</h3></div>
+  <div class="row small" style="margin:8px 0;gap:12px"><span class="muted">Beginn</span><span class="seg"><button class="${z.start==='buero'?'on':''}" data-a="zmode" data-m="${mid}" data-w="start" data-v="buero"${dis}>Büro</button><button class="${z.start==='hotel'?'on':''}" data-a="zmode" data-m="${mid}" data-w="start" data-v="hotel"${dis}>Hotel</button></span><span class="muted">Ende</span><span class="seg"><button class="${z.ende==='buero'?'on':''}" data-a="zmode" data-m="${mid}" data-w="ende" data-v="buero"${dis}>Büro</button><button class="${z.ende==='hotel'?'on':''}" data-a="zmode" data-m="${mid}" data-w="ende" data-v="hotel"${dis}>Hotel</button></span></div>
+  ${rows}
+  <div class="trow"><span class="n">⏸</span><span>Pause${pOk(z)?'':' <span class="small muted">Vorschlag</span>'}</span><button class="tval${pOk(z)?'':' empty'}" data-a="pause" data-m="${mid}"${he?'':dis}>${c.pause} min</button>${pOk(z)?'<span></span>':z.p[4]?`<button class="btn small pri" data-a="pok" data-m="${mid}"${he?'':dis}>Bestätigen</button>`:'<span class="small muted" style="text-align:center">nach Abfahrt</span>'}</div>
+  ${ph?`<div class="callout warn small" style="margin-top:8px">${ph}</div>`:''}${orderHint(z)?`<div class="callout err small" style="margin-top:8px">${orderHint(z)}</div>`:''}
+  <div class="bar" aria-hidden="true">${parts.map(([v,col])=>v>0?`<i style="width:${v/all*100}%;background:${col}"></i>`:'').join('')}</div>
+  <div class="sum"><div><span>Rüsten</span><b>${fMin(c.ruest)}</b></div><div><span>Fahrt</span><b>${fMin(c.fahrt)}</b></div><div><span>Vor Ort</span><b>${fMin(c.ort)}</b></div><div><span>Gesamt</span><b>${fMin(c.gesamt)}</b></div></div>
+  ${ix>0?`<button class="btn small" style="margin-top:12px" data-a="zcopy" data-m="${mid}"${dis}>Zeiten von ${esc(ma(e.team.vor)?.name)} übernehmen</button>`:''}</section>`}
+
+function tFotos(e){if(!ui.anlage||!e.anlagen.find(a=>a.id===ui.anlage))ui.anlage=e.anlagen[0]?.id||null;
+  const tag=offenerTag(e);
+  const cam=e.status!=='abgeschlossen'?`<div class="cam"><div class="pickrow" aria-label="Anlage">${e.anlagen.map(a=>`<button class="pick${ui.anlage===a.id?' on':''}" data-a="anl" data-id="${a.id}">${esc(a.name)}</button>`).join('')}<button class="pick" data-a="anladd">+ Anlage</button></div>
+    <div class="row"><span class="seg"><button class="${ui.phase==='vorher'?'on':''}" data-a="phase" data-v="vorher">Vorher</button><button class="${ui.phase==='nachher'?'on':''}" data-a="phase" data-v="nachher">Nachher</button></span>
+    <label class="btn pri" for="cam-in" style="flex:1;min-width:180px">📷 Foto aufnehmen</label><input id="cam-in" type="file" accept="image/*" capture="environment" multiple hidden>
+    <button class="btn" data-a="zeigen">🖼️ Fotos zeigen</button></div>
+    ${!tag?'<div class="small muted">Kein offener Tag: Fotos werden dem letzten Tag zugeordnet.</div>':''}</div>`:'';
+  const list=e.anlagen.map((a,ix)=>{const f=ph=>e.fotos.filter(x=>x.anlage===a.id&&x.phase===ph);
+    return `<section class="anl"><h3>${esc(a.name)} <span class="small muted" style="font-weight:400">${f('vorher').length+f('nachher').length} Fotos</span>
+      ${e.status!=='abgeschlossen'?`<span style="margin-left:auto" class="row"><button class="btn small ghost" data-a="anlup" data-id="${a.id}" aria-label="nach oben"${ix===0?' disabled':''}>↑</button><button class="btn small ghost" data-a="anlren" data-id="${a.id}">Umbenennen</button><button class="btn small ghost danger" data-a="anldel" data-id="${a.id}">Löschen</button></span>`:''}</h3>
+      <div class="ph">${['vorher','nachher'].map(ph=>`<div><div class="lbl">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${f(ph).map(x=>`<button class="th" data-a="foto" data-id="${x.id}" aria-label="Foto öffnen"><img data-img="${x.id}" alt="${esc(a.name)} ${ph}"></button>`).join('')||'<div class="empty">noch keine</div>'}</div></div>`).join('')}</div></section>`}).join('');
+  return cam+list+(e.trash.length?`<div class="fab"><span class="small muted">${e.trash.length} gelöschte Fotos im Papierkorb</span><button class="btn small" data-a="restore">Letztes wiederherstellen</button></div>`:'')}
+
+function tBericht(e){const tag=selTag(e);if(!tag)return'<div class="empty">Noch kein Tag begonnen.</div>';
+  const b=tag.bericht;const fertig=locked(e,tag);
+  const team=[e.team.vor,e.team.fach].filter(Boolean);const miss=team.flatMap(m=>{const z=tag.zeiten[m];return z?calc(z).missing.map(x=>`${ma(m).name}: ${x}`):[`${ma(m).name}: keine Zeiten`]});
+  const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const ty=S.typen[s.typ];b.einst[sid]=b.einst[sid]||{};
+    return `<div class="box"><h3 style="margin-bottom:8px">${esc(s.name)}</h3>${ty.felder.map(fd=>`<div class="field" style="margin-bottom:10px"><label>${esc(fd.label)}</label><div class="pickrow">${fd.werte.map(w=>`<button class="pick${String(b.einst[sid][fd.key])===w?' on':''}" data-a="einst" data-s="${sid}" data-k="${fd.key}" data-v="${w}"${fertig?' disabled':''}>${esc(w)}</button>`).join('')}</div></div>`).join('')}</div>`}).join('');
+  return dayTabs(e)+`<h2 style="margin-bottom:12px">Tagesbericht Tag ${e.tage.indexOf(tag)+1} · ${fD(tag.datum)}</h2>
+  ${miss.length&&!fertig?`<div class="callout warn" style="margin-bottom:12px"><span>⏱️</span><div><b>Es fehlen noch Zeiten</b><br>${miss.map(esc).join('<br>')}</div></div>`:''}
+  <div class="stack">
+  <div class="field"><label for="b-text">Was wurde gemacht?</label><textarea class="inp" id="b-text" data-b="text"${fertig?' disabled':''} placeholder="Tischtauscher 1 bis 3 gereinigt, Lamellen teilweise verbogen">${esc(b.text)}</textarea></div>
+  <div class="field"><label>Strahlmittel</label><div class="pickrow">${Object.entries(S.strahlmittel).map(([k,l])=>`<button class="pick${b.sm===k?' on':''}" data-a="sm" data-v="${k}"${fertig?' disabled':''}>${esc(l)}</button>`).join('')}</div></div>
+  <div class="toggle"><span>Menge</span><span class="seg"><button class="${b.grund?'on':''}" data-a="grund" data-v="1"${fertig?' disabled':''}>Grundmenge</button><button class="${!b.grund?'on':''}" data-a="grund" data-v="0"${fertig?' disabled':''}>Mehrmenge in kg</button></span></div>
+  ${!b.grund?`<div class="field"><label for="b-kg">Mehrmenge kg</label><input class="inp num" id="b-kg" inputmode="decimal" data-b="kg" value="${b.kg??''}"${fertig?' disabled':''}></div>`:''}
+  <div class="field"><label>Einstellungen je Strahlgerät</label>${einst}</div>
+  <div class="field"><label for="b-bes">Besonderheiten</label><textarea class="inp" id="b-bes" data-b="bes"${fertig?' disabled':''} placeholder="z. B. Nachreinigung empfohlen, Zugang erst ab 10 Uhr">${esc(b.bes)}</textarea></div>
+  </div>
+  ${fertig?`<div class="callout" style="margin-top:16px">🔒 Unterschrieben${tag.signName?' von '+esc(tag.signName):''}. Dieser Tagesbericht kann nicht mehr geändert werden.</div>`:(tag.fertig?`<div class="callout" style="margin-top:16px">Tag erledigt, aber noch nicht unterschrieben. Änderungen werden gespeichert.</div>`:'')+dayActions(e,tag)}`}
+
+function tInfo(e){return `<div class="callout"><span>📋</span><div><b>Technische Daten</b><br>${esc(e.technisch||'–')}</div></div><div class="hr"></div>${geraeteForm(e)}
+  <div class="hr"></div><div class="props" style="margin:0"><div class="k">Startstand Kompressor</div><div class="num">${e.start?.kompH??'–'} h</div><div class="k">Startstand Kilometer</div><div class="num">${e.start?.km??'–'} km</div><div class="k">Strahlmittel im Fahrzeug</div><div>${(()=>{const f=fz(e.geraete.fahrzeug);return f?.saecke?Object.entries(f.saecke).map(([k,n])=>`<span class="tag">${n} Säcke ${esc(S.strahlmittel[k])}</span>`).join(' '):'–'})()}</div></div>
+  <div class="fab"><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button><button class="btn" data-a="beladen">+ Säcke geladen</button></div>`}
+
+/* ---------- Abschluss-Assistent ---------- */
+const WSTEPS=['Prüfung','Abbau-Check','Endstände','Kundenansicht','Unterschrift'];
+function vAbschluss(){const e=E(V.id);const w=ui.wiz;
+  const steps=`<div class="steps">${WSTEPS.map((s,i)=>`<span class="${i===w?'on':i<w?'done':''}">${i+1}. ${s}</span>`).join('')}</div>`;
+  return `<div class="page"><h1>Abschließen</h1><p class="muted">${esc(e.einsatzort)} · ${e.ls||'Lieferschein folgt'}</p>${steps}${[wFotos,wCheck,wStaende,wKunde,wSign][w](e)}</div>`}
+function wFotos(e){return `<div class="callout ok"><span>✅</span><div><b>Alles vollständig</b><br>Zeiten, Tagesberichte sowie Vorher- und Nachher-Fotos aller ${e.anlagen.length} Anlagen sind erfasst.</div></div>
+  <p class="small muted">„Abfahrt von Baustelle“ ist als voraussichtliche Zeit eingetragen. Ankunft Büro/Hotel und Feierabend werden nach dem Abschluss unter „Zeiten“ nachgetragen.</p>
+  <div class="fab"><button class="btn" data-a="tabback" data-t="fotos">Zu den Fotos</button><button class="btn pri" data-a="wnext">Weiter zum Abbau-Check</button></div>`}
+function wCheck(e){e.check=e.check||{};const items=[...S.checkliste.map((t,i)=>({k:'c'+i,t,extra:false})),...e.zusatz.map(z=>({k:'z'+z.id,t:z.name,extra:true}))];
+  const st=k=>e.check[k]?.s;const done=items.every(i=>st(i.k));
+  const f=fz(e.geraete.fahrzeug);
+  return `<p class="muted" style="margin-top:0">Einmal in Gedanken über die Baustelle gehen. Jede Zeile beantworten.</p>
+  ${items.map(i=>`<div class="check${i.extra?' extra':''}"><div><div class="t">${esc(i.t)}</div>${st(i.k)&&st(i.k)!=='verladen'?`<input class="inp small" style="min-height:40px;margin-top:6px" placeholder="${st(i.k)==='vorort'?'Warum bleibt es vor Ort?':'Was fehlt oder ist defekt?'}" data-cn="${i.k}" value="${esc(e.check[i.k]?.n||'')}">`:''}</div>
+    <span class="seg"><button class="${st(i.k)==='verladen'?'on':''}" data-a="chk" data-k="${i.k}" data-v="verladen">verladen</button><button class="${st(i.k)==='vorort'?'on':''}" data-a="chk" data-k="${i.k}" data-v="vorort">bleibt vor Ort</button><button class="${st(i.k)==='fehlt'?'on':''}" data-a="chk" data-k="${i.k}" data-v="fehlt">fehlt/defekt</button></span></div>`).join('')}
+  <div class="check"><div>Strahlmittel: Säcke übrig im ${esc(f?.kz||'Fahrzeug')}</div><button class="tval${e.check.saecke==null?' empty':''}" data-a="saecke">${e.check.saecke??'wählen'}</button></div>
+  <div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${done&&e.check.saecke!=null?'':' disabled'}>Weiter</button>${done&&e.check.saecke!=null?'':'<span class="small muted">Erst alle Zeilen beantworten.</span>'}</div>`}
+function wStaende(e){const k=kp(e.geraete.kompressor),f=fz(e.geraete.fahrzeug);e.ende=e.ende||{};
+  const kh=e.ende.kompH??'',km=e.ende.km??'';const warn=[];
+  if(kh!==''&&e.start?.kompH!=null&&+kh<e.start.kompH)warn.push('Kompressor-Endstand liegt unter dem Startstand.');
+  if(km!==''&&e.start?.km!=null&&+km<e.start.km)warn.push('Kilometerstand liegt unter dem Startstand.');
+  return `<div class="stack">
+  <div class="field"><label for="s-k">Kompressor ${esc(k?.kz)} – Betriebsstunden jetzt <span class="small">(Start ${e.start?.kompH??'–'} h)</span></label><input class="inp num" id="s-k" inputmode="decimal" data-s="kompH" value="${kh}" placeholder="${e.start?.kompH??''}"></div>
+  <div class="field"><label for="s-km">${esc(f?.kz)} – Kilometerstand <span class="small">(Start ${e.start?.km??'–'} km, optional)</span></label><input class="inp num" id="s-km" inputmode="numeric" data-s="km" value="${km}" placeholder="${e.start?.km??''}"></div>
+  ${warn.map(w=>`<div class="callout warn small">${w}</div>`).join('')}
+  ${k&&!k.eigen?'<div class="callout small">Mietgerät: Dieser Stand gilt als Rückgabestand. Danach verschwindet es aus der Auswahl.</div>':''}
+  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${kh===''?' disabled':''}>Weiter zur Kundenansicht</button></div>`}
+function wKunde(e){const sub=V.kv||'ls';
+  return `<p class="muted" style="margin-top:0">Das iPad jetzt dem Kunden geben.</p>
+  <div class="tabs"><button class="${sub==='ls'?'on':''}" data-a="kv" data-v="ls">Lieferschein</button><button class="${sub==='fd'?'on':''}" data-a="kv" data-v="fd">Fotodokumentation (${e.fotos.length})</button></div>
+  ${sub==='ls'?`<div class="lexpage">Seiten 1–2 aus Lexware · ${e.ls||'Lieferschein folgt aus dem Büro'}<br><span class="small">Beschreibung, technische Daten und Leistungspositionen wie im Lexware-Lieferschein.</span></div><div style="height:12px"></div><div style="overflow-x:auto">${page3(e,null)}</div>`:fdView(e)}
+  <div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext">Weiter zur Unterschrift</button><button class="btn" data-a="ohne">Ohne Kunde abschließen</button></div>`}
+function fdView(e){return e.anlagen.map(a=>{const f=ph=>e.fotos.filter(x=>x.anlage===a.id&&x.phase===ph);if(!f('vorher').length&&!f('nachher').length)return'';
+  return `<section class="anl"><h3>${esc(a.name)}</h3><div class="ph">${['vorher','nachher'].map(ph=>`<div><div class="lbl">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${f(ph).map(x=>`<button class="th" data-a="foto" data-id="${x.id}"><img data-img="${x.id}" alt="${esc(a.name)} ${ph}"></button>`).join('')||'<div class="empty">–</div>'}</div></div>`).join('')}</div></section>`}).join('')||'<div class="empty">Keine Fotos.</div>'}
+function wSign(e){const s=e.sig=e.sig||{eingesehen:false,versand:false,mail:e.apOrt.mail||'',name:'',zeiten:e.zeitenAufLs};
+  return `<div class="stack">
+  <div class="toggle"><span>Fotodokumentation vom Kunden vor Ort eingesehen</span><span class="seg"><button class="${s.eingesehen?'on':''}" data-a="sg" data-k="eingesehen" data-v="1">Ja</button><button class="${!s.eingesehen?'on':''}" data-a="sg" data-k="eingesehen" data-v="0">Nein</button></span></div>
+  <div class="toggle"><span>Arbeitszeiten auf den Lieferschein</span><span class="seg"><button class="${s.zeiten?'on':''}" data-a="sg" data-k="zeiten" data-v="1">Ja</button><button class="${!s.zeiten?'on':''}" data-a="sg" data-k="zeiten" data-v="0">Nein</button></span></div>
+  <div class="toggle"><span>Lieferschein an den Einsatzort senden</span><span class="seg"><button class="${s.versand?'on':''}" data-a="sg" data-k="versand" data-v="1">Ja</button><button class="${!s.versand?'on':''}" data-a="sg" data-k="versand" data-v="0">Nein</button></span></div>
+  ${s.versand?`<div class="field"><label for="sg-mail">E-Mail Einsatzort</label><input class="inp" id="sg-mail" type="email" data-sg="mail" value="${esc(s.mail)}" placeholder="name@firma.de"></div>
+  <div class="toggle"><span>Wann senden?</span><span class="seg"><button class="${!s.spaeter?'on':''}" data-a="sg" data-k="spaeter" data-v="0">Direkt</button><button class="${s.spaeter?'on':''}" data-a="sg" data-k="spaeter" data-v="1">Später</button></span></div>`:''}
+  <div class="field"><label for="sg-name">Name des Unterzeichners</label><input class="inp" id="sg-name" data-sg="name" value="${esc(s.name)}" placeholder="Nachname"></div>
+  <div class="field"><label>Unterschrift</label><canvas class="sign" id="sign" aria-label="Unterschriftsfeld"></canvas><div class="row" style="justify-content:space-between"><span class="small muted">„Oben genannte Arbeiten wurden ordnungsgemäß durchgeführt.“</span><button class="btn small ghost" data-a="sigclear">Löschen</button></div></div>
+  <div id="sg-err" class="small" style="color:var(--danger)" role="alert"></div>
+  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="fertig">Unterschreiben und abschließen</button></div>`}
+let sigDirty=false;
+function initSign(){const c=$('#sign');if(!c)return;const r=c.getBoundingClientRect();const dpr=window.devicePixelRatio||1;c.width=r.width*dpr;c.height=r.height*dpr;const g=c.getContext('2d');g.scale(dpr,dpr);g.lineWidth=2.2;g.lineCap='round';g.lineJoin='round';g.strokeStyle='#1a2a6c';sigDirty=false;let down=false;
+  c.onpointerdown=ev=>{down=true;c.setPointerCapture(ev.pointerId);g.beginPath();g.moveTo(ev.offsetX,ev.offsetY)};
+  c.onpointermove=ev=>{if(!down)return;g.lineTo(ev.offsetX,ev.offsetY);g.stroke();sigDirty=true};
+  c.onpointerup=c.onpointercancel=()=>{down=false}}
+
+/* ---------- Seite 3 des Lieferscheins (App-Seite) ---------- */
+function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund=true;let kg=0;
+  tl.forEach(t=>{smArt.add(t.bericht.sm);if(!t.bericht.grund){grund=false;kg+=+t.bericht.kg||0}});
+  const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const last=[...tl].reverse().find(t=>t.bericht.einst[sid]&&Object.keys(t.bericht.einst[sid]).length);const v=last?.bericht.einst[sid]||{};return `${esc(s.name)}: ${S.typen[s.typ].felder.map(f=>`${f.label} ${v[f.key]??'–'}`).join(', ')}`}).join('<br>');
+  const fd='FD'+(e.ls||'LS------').slice(2);const seen=sig?sig.eingesehen:e.sig?.eingesehen;
+  const zeiten=(sig?sig.zeiten:e.zeitenAufLs)?`<div style="margin-top:12px"><b>Arbeitszeiten vor Ort</b><table><tr><th>Tag</th><th>Ankunft</th><th>Abfahrt</th><th>vor Ort</th></tr>${tl.map(t=>{const z=t.zeiten[e.team.vor];if(!z)return'';const c=calc(z);return `<tr><td>${fDY(t.datum)}</td><td>${z.p[3]||'–'}</td><td>${z.p[4]||'–'}</td><td>${fMin(c.ort)} h</td></tr>`}).join('')}</table></div>`:'';
+  return `<div class="paper"><div class="lh"><b>LÜKE</b><i>Strahltechnik</i></div>
+  <div><b>Lieferschein ${esc(e.ls||'(folgt)')} – Arbeitsnachweis</b></div>
+  <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
+  <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
+  <div class="g"><span>Vorarbeiter</span><span>${esc(vollName(e.team.vor)||'–')}</span><span>Facharbeiter</span><span>${esc(vollName(e.team.fach)||'–')}</span>
+  <span>Strahlmittel</span><span>${[...smArt].filter(Boolean).map(k=>esc(S.strahlmittel[k])).join(', ')||'–'}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span></div>
+  ${zeiten}
+  <div style="margin-top:12px">Fotodokumentation ${fd} (${e.fotos.length} Fotos): ${seen?'☒':'☐'} vom Kunden vor Ort eingesehen</div>
+  <div style="margin-top:12px">Oben genannte Arbeiten wurden ordnungsgemäß durchgeführt.</div>
+  ${sig?.ohne?`<div style="margin-top:12px"><b>Kunde nicht vor Ort</b> – Unterschrift wird nachgeholt.</div>`:`<div class="g"><span>Name</span><span>${esc(sig?.name||'')}</span><span>Datum</span><span>${sig?fDY(today())+', '+nowQ()+' Uhr':''}</span></div><div style="margin-top:10px">Unterschrift: ${sig?.img?`<img class="sig" src="${sig.img}" alt="Unterschrift">`:'<span style="display:inline-block;width:220px;border-bottom:1px solid #999">&nbsp;</span>'}</div>`}
+  <div class="ft"><span>LST Lüke-Strahl-Technik GmbH · Am Hinkelstein 53a · 64665 Alsbach-Hähnlein</span><span>Prüfsumme Fotodoku: ${sig?.hash||'wird beim Abschluss berechnet'}</span><span>Seite 3/3</span></div></div>`}
+
+/* ---------- Interne Aufträge, Mängel ---------- */
+function vIntern(){const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
+  return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
+  <div class="props"><div class="k">Erledigen am</div><div>${fDY(i.datum)}</div><div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div><div class="k">Status</div><div>${i.status==='erledigt'?'<span class="tag green">Erledigt</span>':'<span class="tag yellow">Offen</span>'}</div></div>
+  <div class="hr"></div><p>${esc(i.beschreibung)}</p>
+  <div class="field" style="margin-top:16px"><label for="in-n">Notiz</label><textarea class="inp" id="in-n" data-in="notiz" placeholder="Kupplung getauscht, neue bestellt">${esc(i.notiz||'')}</textarea></div>
+  <div class="fab">${!i.zust&&i.status==='offen'?'<button class="btn" data-a="mache">Mache ich</button>':''}${i.status==='offen'?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
+function vMaengel(){const list=[...S.maengel].sort((a,b)=>b.ts-a.ts);
+  return `<div class="page"><div class="icon">⚠️</div><h1>Mängelliste</h1><p class="muted">Gemeldet auf Baustellen und im Lager. Aus einer Meldung wird mit einem Tipp ein interner Auftrag.</p>
+  ${list.length?list.map(m=>`<div class="check"><div><b>${esc(m.teil)}</b> <span class="tag ${m.art==='defekt'?'red':m.art==='fehlt'?'orange':'yellow'}">${esc(m.art)}</span><div class="small muted">${new Date(m.ts).toLocaleDateString('de-DE')} · ${esc(ma(m.von)?.name)}${m.notiz?' · '+esc(m.notiz):''}</div></div>${m.status==='offen'?`<button class="btn small" data-a="m2a" data-id="${m.id}">Auftrag daraus</button>`:'<span class="tag green">Auftrag angelegt</span>'}</div>`).join(''):'<div class="empty">Keine Mängel gemeldet.</div>'}</div>`}
+
+/* ---------- Bilder nachladen ---------- */
+function fotoEinsatz(id){const e=S.einsaetze.find(x=>(x.fotos||[]).some(f=>f.id===id)||(x.trash||[]).some(f=>f.id===id));return e?e.id:null}
+function hydrateImages(){document.querySelectorAll('img[data-img]').forEach(async im=>{const id=im.dataset.img;const u=await imgUrl(id);if(u){im.src=u;return}const eid=fotoEinsatz(id);if(eid)im.src=`/foto/${encodeURIComponent(eid)}/${encodeURIComponent(id)}?v=1`})}
+
+/* ---------- Foto-Import mit Verkleinerung ---------- */
+async function shrink(file,max=1600){try{const bm=await createImageBitmap(file);const s=Math.min(1,max/Math.max(bm.width,bm.height));const c=document.createElement('canvas');c.width=Math.round(bm.width*s);c.height=Math.round(bm.height*s);c.getContext('2d').drawImage(bm,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(r,'image/jpeg',.82))}catch(e){return file}}
+
+/* ---------- Fotos zeigen (Kundenmodus) ---------- */
+function showMode(e){const pairs=e.anlagen.map(a=>({a,v:e.fotos.filter(f=>f.anlage===a.id&&f.phase==='vorher'),n:e.fotos.filter(f=>f.anlage===a.id&&f.phase==='nachher')})).filter(p=>p.v.length||p.n.length);
+  if(!pairs.length){toast('Noch keine Fotos vorhanden');return}
+  let i=0;const L=$('#layer');
+  const draw=()=>{const p=pairs[i];L.innerHTML=`<div class="show" role="dialog" aria-label="Fotos zeigen"><div class="head"><div><b style="font-size:18px">${esc(p.a.name)}</b><div style="color:#aaa;font-size:14px">${esc(e.einsatzort)} · ${i+1} von ${pairs.length}</div></div><button class="exit" id="exit">Zum Beenden gedrückt halten</button></div>
+    <div class="pair"><figure><figcaption>Vorher</figcaption><div>${p.v[0]?`<img data-img="${p.v[0].id}" alt="vorher">`:'kein Foto'}</div></figure><figure><figcaption>Nachher</figcaption><div>${p.n[0]?`<img data-img="${p.n[0].id}" alt="nachher">`:'in Arbeit'}</div></figure></div>
+    <div class="nav"><button id="prev"${i===0?' disabled':''}>‹ Zurück</button><span style="color:#888">${p.v.length} vorher · ${p.n.length} nachher</span><button id="next"${i===pairs.length-1?' disabled':''}>Weiter ›</button></div></div>`;
+    hydrateImages();$('#prev').onclick=()=>{if(i>0){i--;draw()}};$('#next').onclick=()=>{if(i<pairs.length-1){i++;draw()}};
+    const ex=$('#exit');let tm;ex.onpointerdown=()=>{ex.textContent='Halten…';tm=setTimeout(()=>{L.innerHTML=''},900)};ex.onpointerup=ex.onpointerleave=()=>{clearTimeout(tm);if(L.firstChild)ex.textContent='Zum Beenden gedrückt halten'}};
+  draw()}
+
+/* ---------- Formulare in Sheets ---------- */
+function formSheet(title,fields,submit,onOk){sheet(`<h2>${esc(title)}</h2><form id="fs" class="stack">${fields}<div id="fs-err" class="small" style="color:var(--danger)" role="alert"></div><div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="fs-c">Abbrechen</button><button class="btn pri">${esc(submit)}</button></div></form>`,el=>{
+  el.querySelector('#fs-c').onclick=closeSheet;const f=el.querySelector('#fs');f.onsubmit=ev=>{ev.preventDefault();const d=Object.fromEntries(new FormData(f));const err=onOk(d,f);if(err){el.querySelector('#fs-err').textContent=err;return}closeSheet()};
+  f.querySelectorAll('[data-pk]').forEach(b=>b.onclick=()=>{const n=b.dataset.pk;f.querySelectorAll(`[data-pk="${n}"]`).forEach(x=>x.classList.toggle('on',x===b));f.elements[n].value=b.dataset.v})})}
+const pickField=(name,label,opts,val)=>`<div class="field"><label>${label}</label><div class="pickrow">${opts.map(([v,l])=>`<button type="button" class="pick${v===val?' on':''}" data-pk="${name}" data-v="${esc(v)}">${esc(l)}</button>`).join('')}</div><input type="hidden" name="${name}" value="${esc(val||'')}"></div>`;
+
+function mangelSheet(){formSheet('Mangel melden',`${pickField('teil','Baugruppe',S.checkliste.slice(0,7).map(c=>[c,c.split(':')[0]]),'')}
+  <div class="field"><label for="mg-t">oder Teil genau benennen</label><input class="inp" id="mg-t" name="teil2" placeholder="Wasserkupplung 3/4 Zoll"></div>
+  ${pickField('art','Was ist los?',[['defekt','defekt'],['fehlt','fehlt'],['fast aufgebraucht','fast aufgebraucht']],'defekt')}
+  <div class="field"><label for="mg-n">Notiz</label><input class="inp" id="mg-n" name="notiz" placeholder="tropft am Anschluss"></div>`,'Melden',d=>{const teil=(d.teil2||'').trim()||d.teil;if(!teil)return'Bitte Baugruppe wählen oder Teil benennen.';
+    S.maengel.push({id:uid(),teil,art:d.art,notiz:d.notiz,ts:Date.now(),von:S.user,status:'offen'});save();toast('Mangel gemeldet');render()})}
+function tankSheet(){const e=V.id?E(V.id):null;const all=[...S.fahrzeuge.map(f=>['f:'+f.id,f.kz+' '+f.name]),...S.kompressoren.filter(k=>k.aktiv!==false).map(k=>['k:'+k.id,k.kz+' '+(k.eigen?'Kompressor':'Mietkompressor')])];
+  const def=e?'f:'+e.geraete.fahrzeug:all[0][0];
+  formSheet('Tanken',`${pickField('g','Gerät',all,def)}
+  <div class="times"><div class="field"><label for="tk-l">Liter</label><input class="inp num" id="tk-l" name="l" inputmode="decimal" required></div><div class="field"><label for="tk-b">Betrag €</label><input class="inp num" id="tk-b" name="b" inputmode="decimal"></div></div>
+  <div class="field"><label for="tk-km">Kilometerstand (Sprinter)</label><input class="inp num" id="tk-km" name="km" inputmode="numeric" value="${fz(def.slice(2))?.km??''}"></div>
+  <div class="field"><label for="tk-f">Foto vom Beleg</label><input class="inp" id="tk-f" name="beleg" type="file" accept="image/*" capture="environment"></div>`,'Speichern',d=>{if(!num(d.l))return'Bitte Liter eintragen.';
+    const [t,id]=d.g.split(':');S.tanken.push({id:uid(),geraet:d.g,l:+d.l,b:num(d.b),km:num(d.km),datum:today(),einsatz:e?.id||null,von:S.user});if(t==='f'&&num(d.km))fz(id).km=+d.km;save();toast('Tankvorgang gespeichert')})}
+function mieteSheet(e){formSheet('Mietkompressor hinzufügen',`<div class="field"><label for="mi-kz">Kennzeichen</label><input class="inp" id="mi-kz" name="kz" placeholder="MA XY 123" required></div>
+  <div class="field"><label for="mi-v">Vermieter</label><input class="inp" id="mi-v" name="v" list="verm" placeholder="Name des Vermieters"><datalist id="verm">${[...new Set(S.kompressoren.filter(k=>!k.eigen&&k.vermieter).map(k=>k.vermieter))].map(v=>`<option value="${esc(v)}">`).join('')}</datalist></div>
+  <div class="field"><label for="mi-h">Betriebsstunden bei Abholung</label><input class="inp num" id="mi-h" name="h" inputmode="decimal" required></div>
+  <div class="field"><label for="mi-f">Foto vom Gerät oder Übergabeprotokoll (optional)</label><input class="inp" id="mi-f" type="file" accept="image/*" capture="environment"></div>`,'Hinzufügen',d=>{if(!d.kz.trim())return'Bitte Kennzeichen eintragen.';if(num(d.h)==null)return'Bitte Betriebsstunden eintragen.';
+    const k={id:uid(),kz:d.kz.trim().toUpperCase(),name:'Mietkompressor',h:+d.h,eigen:false,vermieter:d.v.trim(),aktiv:true};S.kompressoren.push(k);e.geraete.kompressor=k.id;if(e.start)e.start.kompH=k.h;save();toast('Mietgerät hinzugefügt');render()})}
+function fremdFzSheet(e){formSheet('Fahrzeug hinzufügen',`<div class="field"><label for="ff-kz">Kennzeichen</label><input class="inp" id="ff-kz" name="kz" required></div><div class="field"><label for="ff-n">Bezeichnung</label><input class="inp" id="ff-n" name="n" placeholder="Mietwagen"></div><div class="field"><label for="ff-km">Kilometerstand</label><input class="inp num" id="ff-km" name="km" inputmode="numeric"></div>`,'Hinzufügen',d=>{if(!d.kz.trim())return'Bitte Kennzeichen eintragen.';
+  const f={id:uid(),kz:d.kz.trim().toUpperCase(),name:d.n||'Fremdfahrzeug',km:num(d.km),eigen:false,saecke:{}};S.fahrzeuge.push(f);e.geraete.fahrzeug=f.id;save();render()})}
+function textSheet(title,label,val,ok){formSheet(title,`<div class="field"><label for="ts-v">${esc(label)}</label><input class="inp" id="ts-v" name="v" value="${esc(val)}" required></div>`,'Speichern',d=>{if(!d.v.trim())return'Bitte einen Namen eintragen.';ok(d.v.trim())})}
+function confirmSheet(title,text,okLabel,ok){sheet(`<h2>${esc(title)}</h2><p>${text}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="cs-c">Abbrechen</button><button class="btn pri" id="cs-o">${esc(okLabel)}</button></div>`,el=>{el.querySelector('#cs-c').onclick=closeSheet;el.querySelector('#cs-o').onclick=()=>{closeSheet();ok()}})}
+
+/* ---------- Aktionen ---------- */
+function newDay(e){const prev=curTag(e);const d={datum:today(),fertig:false,zeiten:{},bericht:{text:'',sm:prev?.bericht.sm||'ultrafein',grund:true,kg:null,einst:JSON.parse(JSON.stringify(prev?.bericht.einst||{})),bes:''}};
+  [e.team.vor,e.team.fach].filter(Boolean).forEach(m=>{const pz=prev?.zeiten[m];d.zeiten[m]={start:pz?.ende==='hotel'?'hotel':'buero',ende:'buero',p:{},pause:null,pauseOk:false}});e.tage.push(d)}
+async function sha(text){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(b)].slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('')}catch(err){return uid()}}
+async function finish(e,sig){
+  const ids=e.fotos.map(f=>f.id).join(',');sig.hash=await sha(e.ls+ids+e.einsatzort);
+  e.zeitenAufLs=sig.zeiten;const ct=offenerTag(e);if(ct)ct.fertig=true;
+  e.lsHtml=page3(e,sig);e.status='abgeschlossen';e.ergebnis=sig.ohne?'ausstehend':'unterschrieben';e.abschluss={datum:today(),name:sig.name,ohneKunde:!!sig.ohne};
+  const k=kp(e.geraete.kompressor);if(k&&num(e.ende?.kompH)!=null){k.h=+e.ende.kompH;if(!k.eigen)k.aktiv=false}
+  const f=fz(e.geraete.fahrzeug);if(f&&num(e.ende?.km)!=null)f.km=+e.ende.km;
+  if(f&&e.check?.saecke!=null){const sm=curTag(e)?.bericht.sm||'ultrafein';f.saecke=f.saecke||{};f.saecke[sm]=e.check.saecke}
+  Object.entries(e.check||{}).forEach(([k2,v])=>{if(v?.s==='fehlt'){const name=k2.startsWith('c')?S.checkliste[+k2.slice(1)]:e.zusatz.find(z=>'z'+z.id===k2)?.name;S.maengel.push({id:uid(),teil:name,art:'fehlt',notiz:v.n||'beim Abbau gemeldet',ts:Date.now(),von:S.user,status:'offen'})}});
+  const datei=`${yymmdd(today())} ${e.kunde===e.einsatzort?e.einsatzort:e.kunde+' '+e.einsatzort} Lieferschein unterschr ${e.ls||''}.pdf`;
+  e.sync_abschluss={datum:today(),name:sig.name||'',bild:sig.img||null,eingesehen:!!sig.eingesehen,zeiten_auf_ls:!!sig.zeiten,versand:!!sig.versand,spaeter:!!sig.spaeter,mail:sig.mail||'',ohne_kunde:!!sig.ohne};
+  save();V={name:'einsatz',id:e.id};ui.tab='heute';render();syncBald(100);
+  sheet(`<h2>${sig.ohne?'Abgeschlossen ohne Unterschrift':'Lieferschein unterschrieben'}</h2><div class="stack small">
+   <div class="callout ok">Gespeichert. Sobald Netz da ist, erstellt das Büro daraus:</div>
+   <div>📄 <b>${esc(datei)}</b></div><div>🖼️ ${esc(datei.replace('Lieferschein unterschr '+(e.ls||''),'Fotodoku FD'+(e.ls||'').slice(2)))}</div>
+   <div>${sig.ohne?'Steht unter „Abgeschlossen“ als „Unterschrift ausstehend“.':sig.versand?(sig.spaeter?'Versand an den Einsatzort wartet im Büro.':'Wird an '+esc(sig.mail)+' gesendet, Kopie an post@.'):'Kein Versand an den Einsatzort, Kopie an post@.'}</div>
+   <div>Fotobericht an ${esc(e.kunde)} wartet auf Freigabe im Büro.</div></div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn pri" id="ok">Fertig</button></div>`,el=>{el.querySelector('#ok').onclick=closeSheet})}
+
+/* ---------- Reisetage ---------- */
+const ARTEN={anreise:'Anreise',abreise:'Abreise',wechsel:'Zwischen zwei Jobs'};
+function reiseList(e){const rs=S.reisetage.filter(r=>r.einsatz===e.id).sort((a,b)=>a.datum.localeCompare(b.datum));if(!rs.length)return'';
+  return `<div class="box" style="margin-bottom:16px"><h3 style="margin-bottom:6px">🚐 Reisetage</h3>${rs.map(r=>{const d=toMin(r.an)-toMin(r.ab);return `<div class="check"><div><b>${fD(r.datum)} · ${ARTEN[r.art]}</b><div class="small muted">${r.ab}–${r.an} Uhr · ${fMin(d)} h Fahrt · ${r.ma.map(id=>esc(ma(id)?.name)).join(', ')}${r.notiz?' · '+esc(r.notiz):''}</div></div><button class="btn small" data-a="reiseedit" data-id="${r.id}">Ändern</button></div>`}).join('')}</div>`}
+function reiseSheet(r){const jobs=S.einsaetze.filter(e=>e.status!=='abgeschlossen'||(e.abschluss&&e.abschluss.datum>=addDays(today(),-14))).sort((a,b)=>a.von.localeCompare(b.von));
+  sheet(`<h2>${r.id?'Reisetag ändern':'Reisetag erfassen'}</h2><div class="stack">
+  <div class="field"><label>Zu welchem Job? <span style="color:var(--danger)">*</span></label><div class="stack" style="gap:6px">${jobs.map(e=>`<button type="button" class="pick${r.einsatz===e.id?' on':''}" data-rj="${e.id}" style="text-align:left;height:auto;padding:8px 12px"><b>${esc(e.einsatzort)}</b> <span class="small">${e.von===e.bis?fD(e.von):fD(e.von)+' – '+fD(e.bis)} · ${e.status==='vorbereitet'?'vorbereitet':e.status==='inarbeit'?'in Arbeit':'abgeschlossen'}</span></button>`).join('')}</div></div>
+  <div class="field"><label>Art</label><div class="pickrow">${Object.entries(ARTEN).map(([k,l])=>`<button type="button" class="pick${r.art===k?' on':''}" data-ra="${k}">${l}</button>`).join('')}</div></div>
+  <div class="field"><label for="rt-d">Datum</label><input class="inp" id="rt-d" type="date" value="${r.datum}"></div>
+  <div class="field"><label>Wer reist?</label><div class="pickrow">${S.mitarbeiter.map(m=>`<button type="button" class="pick${r.ma.includes(m.id)?' on':''}" data-rm="${m.id}">${esc(m.name)}</button>`).join('')}</div></div>
+  <div class="times" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="field"><label>Abfahrt</label><button type="button" class="tval inp${r.ab?'':' empty'}" data-rt="ab">${r.ab||'wählen'}</button></div><div class="field"><label>Ankunft</label><button type="button" class="tval inp${r.an?'':' empty'}" data-rt="an">${r.an||'wählen'}</button></div></div>
+  <div class="field"><label for="rt-n">Notiz (optional)</label><input class="inp" id="rt-n" value="${esc(r.notiz)}" placeholder="z. B. Hotel in Hamburg, Stau A7"></div>
+  <div id="rt-err" class="small" style="color:var(--danger)" role="alert"></div>
+  <div class="row">${r.id?'<button class="btn danger" id="rt-del">Löschen</button>':''}<span style="flex:1"></span><button class="btn" id="rt-c">Abbrechen</button><button class="btn pri" id="rt-ok">Speichern</button></div></div>`,el=>{
+    const keep=()=>{r.datum=el.querySelector('#rt-d').value;r.notiz=el.querySelector('#rt-n').value};
+    const sugg=()=>{if(r.dTouched||!r.einsatz)return;const e=E(r.einsatz);if(r.art==='anreise')r.datum=addDays(e.von,-1);else if(r.art==='abreise')r.datum=addDays(e.bis,1)};
+    el.querySelector('#rt-d').onchange=()=>{r.dTouched=true};
+    el.querySelectorAll('[data-rj]').forEach(b=>b.onclick=()=>{keep();r.einsatz=b.dataset.rj;sugg();reiseSheet(r)});
+    el.querySelectorAll('[data-ra]').forEach(b=>b.onclick=()=>{keep();r.art=b.dataset.ra;sugg();reiseSheet(r)});
+    el.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{keep();const id=b.dataset.rm;r.ma=r.ma.includes(id)?r.ma.filter(x=>x!==id):[...r.ma,id];reiseSheet(r)});
+    el.querySelectorAll('[data-rt]').forEach(b=>b.onclick=async()=>{keep();const k=b.dataset.rt;const t=await pickTime(k==='ab'?'Abfahrt':'Ankunft',r[k]||(k==='an'&&r.ab?r.ab:null));if(t)r[k]=t;reiseSheet(r)});
+    el.querySelector('#rt-c').onclick=closeSheet;
+    const del=el.querySelector('#rt-del');if(del)del.onclick=()=>{if(del.dataset.sure){S.reisetage=S.reisetage.filter(x=>x.id!==r.id);(S.weg.reisetage=S.weg.reisetage||[]).push(r.id);save();closeSheet();render();toast('Reisetag gelöscht')}else{del.dataset.sure=1;del.textContent='Wirklich löschen?'}};
+    el.querySelector('#rt-ok').onclick=()=>{keep();const err=m=>{el.querySelector('#rt-err').textContent=m};
+      if(!r.einsatz)return err('Bitte den Job auswählen, zu dem der Reisetag gehört.');
+      if(!r.datum)return err('Bitte ein Datum wählen.');
+      if(!r.ma.length)return err('Bitte mindestens einen Mitarbeiter wählen.');
+      if(!r.ab||!r.an)return err('Bitte Abfahrt und Ankunft wählen.');
+      if(toMin(r.an)<=toMin(r.ab))return err('Die Ankunft muss nach der Abfahrt liegen.');
+      const e=E(r.einsatz);const clash=e.tage.find(t=>t.datum===r.datum&&r.ma.some(id=>t.zeiten[id]));
+      if(clash&&!r.ok2){r.ok2=true;return err(`Am ${fDY(r.datum)} gibt es bei diesem Job schon einen Arbeitstag. Für An- oder Abreise am selben Tag dort „Hotel“ als Beginn oder Ende wählen. Nochmal „Speichern“, wenn der Reisetag trotzdem richtig ist.`)}
+      delete r.ok2;delete r.dTouched;if(r.id){const i=S.reisetage.findIndex(x=>x.id===r.id);S.reisetage[i]=r}else{r.id=uid();r.von=S.user;S.reisetage.push(r)}
+      save();closeSheet();render();toast(`Reisetag gespeichert: ${E(r.einsatz).einsatzort}`)};
+  })}
+
+/* Nach jedem Foto: gespeichert, direkt weiter mit „Neues Foto“ */
+async function postShot(e,f,n){const an=e.anlagen.find(x=>x.id===f.anlage);const u=await imgUrl(f.id);
+  const cnt=e.fotos.filter(x=>x.anlage===f.anlage&&x.phase===f.phase).length;
+  sheet(`<h2>${n>1?n+' Fotos gespeichert':'Foto gespeichert'}</h2>
+  ${u?`<img src="${u}" alt="" style="border-radius:6px;width:100%;max-height:42vh;object-fit:contain;background:var(--bg2)">`:''}
+  <p class="small muted" style="margin:8px 0 12px">${esc(an?.name)} · ${f.phase==='vorher'?'Vorher':'Nachher'} · ${cnt} Foto${cnt>1?'s':''} bei dieser Anlage</p>
+  <div class="row" style="margin-bottom:12px"><span class="small muted">Nächstes Foto als</span><span class="seg"><button id="pv" class="${ui.phase==='vorher'?'on':''}">Vorher</button><button id="pn" class="${ui.phase==='nachher'?'on':''}">Nachher</button></span></div>
+  <div class="row"><button class="btn danger" id="pd">Verwerfen</button><button class="btn" id="pf" style="margin-left:auto">Fertig</button><button class="btn pri" id="pnew">📷 Neues Foto</button></div>`,el=>{
+    const setP=p=>{ui.phase=p;el.querySelector('#pv').classList.toggle('on',p==='vorher');el.querySelector('#pn').classList.toggle('on',p==='nachher')};
+    el.querySelector('#pv').onclick=()=>setP('vorher');el.querySelector('#pn').onclick=()=>setP('nachher');
+    el.querySelector('#pf').onclick=()=>{closeSheet();render()};
+    el.querySelector('#pd').onclick=()=>{e.fotos=e.fotos.filter(x=>x!==f);e.trash.push(f);save();closeSheet();render();toast('Foto verworfen')};
+    el.querySelector('#pnew').onclick=()=>{closeSheet();render();const inp=document.getElementById('cam-in');if(inp)inp.click()};
+  })}
+
+document.addEventListener('click',async ev=>{
+  const b=ev.target.closest('[data-a]');if(!b||b.disabled)return;const a=b.dataset.a;const e=V.id?E(V.id):null;
+  switch(a){
+  case 'lgpick':V.pickMa=b.dataset.id;render();break;
+  case 'login':{const pin=$('#lg-pin').value;const err=t=>{$('#lg-err').textContent=t};if(!V.pickMa)return err('Bitte zuerst deinen Namen wählen.');if(!pin)return err('Bitte PIN eingeben.');b.disabled=true;try{const r=await jpost('/api/login',{wer:V.pickMa,pin});S.user=r.ich.id;S.ich=r.ich;S.pins[r.ich.id]=await pinPruefsumme(r.ich.id,pin);save0();V={name:'start'};render();holen()}catch(ex){if(ex.netz&&S.pins[V.pickMa]&&S.pins[V.pickMa]===await pinPruefsumme(V.pickMa,pin)){S.user=V.pickMa;save0();V={name:'start'};render();toast('Offline angemeldet. Alles wird später übertragen.')}else err(ex.netz?'Keine Verbindung zum Büro. Ohne Netz geht die Anmeldung nur, wenn du dich hier schon einmal angemeldet hast.':ex.message)}finally{b.disabled=false}break}
+  case 'logout':{zaehlen();if(SY.offen&&!b.dataset.sure){b.dataset.sure=1;toast(`Noch ${SY.offen} nicht übertragen. Nochmal tippen zum Abmelden – die Daten bleiben auf dem iPad.`);break}S.user=null;save0();V={name:'login'};render();jpost('/api/logout',{}).catch(()=>{});leuteLaden();break}
+  case 'sync':holen();break;
+  case 'home':V={name:'start'};render();break;
+  case 'open':V={name:'einsatz',id:b.dataset.id};ui.tab='heute';ui.day=null;render();scrollTo(0,0);break;
+  case 'intern':V={name:'intern',id:b.dataset.id};render();scrollTo(0,0);break;
+  case 'maengel':V={name:'maengel'};render();break;
+  case 'tab':ui.tab=b.dataset.t;render();break;
+  case 'day':ui.day=+b.dataset.i;render();break;
+  case 'tabback':V={name:'einsatz',id:e.id};ui.tab=b.dataset.t;render();break;
+  case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht.','Zurücksetzen',()=>{const u=S.user;S=seed();S.user=u;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
+  case 'gsel':e.geraete[b.dataset.g]=b.dataset.id;if(e.start&&b.dataset.g==='kompressor')e.start.kompH=kp(b.dataset.id).h;save();render();break;
+  case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){if(s.length>1)s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
+  case 'miete':mieteSheet(e);break;
+  case 'fremdfz':fremdFzSheet(e);break;
+  case 'tu':e.tagesUnterschrift=b.dataset.v==='1';save();render();break;
+  case 'starten':e.status='inarbeit';e.start={kompH:kp(e.geraete.kompressor)?.h,km:fz(e.geraete.fahrzeug)?.km};newDay(e);save();ui.tab='heute';render();toast('Einsatz gestartet, Tag 1');break;
+  case 'neuertag':ui.day=null;newDay(e);save();render();break;
+  case 'tnow':{const z=selTag(e).zeiten[b.dataset.m];const t=nowQ();const err=orderErr(z,b.dataset.k,t);if(err){sheet(`<h2>Zeit nicht plausibel</h2><p>${esc(err)}</p><p class="small muted">Bitte zuerst die andere Zeit über das Rad korrigieren.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" id="oe-ok">Verstanden</button></div>`,el=>{el.querySelector('#oe-ok').onclick=closeSheet});break}z.p[b.dataset.k]=t;save();render();break}
+  case 'tedit':{const z=selTag(e).zeiten[b.dataset.m];if(await setTime(z,b.dataset.k)){save();render()}break}
+  case 'pause':{const z=selTag(e).zeiten[b.dataset.m];const P=[0,15,30,45,60,75,90,105,120];let cur=calc(z).pause;
+    for(;;){const r=await wheelPick({title:'Pause',cols:[{labels:P.map(p=>p+' min'),index:Math.max(0,P.indexOf(cur))}]});if(!r)break;const v=P[r[0]];const c=calc(z);
+      if(c.est!=null&&v<c.min){const go=await new Promise(res=>sheet(`<h2>Pause zu kurz</h2><p>Bei ${fMin(c.est)} h Anwesenheit schreibt das Arbeitszeitgesetz mindestens <b>${c.min} Minuten</b> Pause vor. Die Pause sollte länger sein.</p><div class="row" style="justify-content:flex-end"><button class="btn" id="pz-a">Pause ändern</button><button class="btn pri" id="pz-d">Dennoch eintragen</button></div>`,el=>{el.querySelector('#pz-a').onclick=()=>{closeSheet();res(false)};el.querySelector('#pz-d').onclick=()=>{closeSheet();res(true)}}));
+        if(!go){cur=v;continue}}
+      z.pause=v;z.pauseOk=true;save();render();break}
+    break}
+  case 'pok':{const z=selTag(e).zeiten[b.dataset.m];z.pause=calc(z).pause;z.pauseOk=true;save();render();toast(`Pause ${z.pause} min bestätigt`);break}
+  case 'zmode':{const z=selTag(e).zeiten[b.dataset.m];z[b.dataset.w]=b.dataset.v;if(b.dataset.w==='start'&&b.dataset.v==='hotel')delete z.p[1];if(b.dataset.w==='ende'&&b.dataset.v==='hotel')delete z.p[6];save();render();break}
+  case 'zcopy':{const t=selTag(e);t.zeiten[b.dataset.m]=JSON.parse(JSON.stringify(t.zeiten[e.team.vor]));save();render();toast('Zeiten übernommen');break}
+  case 'zeigen':showMode(e);break;
+  case 'anl':ui.anlage=b.dataset.id;render();break;
+  case 'phase':ui.phase=b.dataset.v;render();break;
+  case 'anladd':textSheet('Anlage hinzufügen','Name der Anlage','',v=>{const a={id:uid(),name:v};e.anlagen.push(a);ui.anlage=a.id;save();render()});break;
+  case 'anlren':{const an=e.anlagen.find(x=>x.id===b.dataset.id);textSheet('Anlage umbenennen','Name der Anlage',an.name,v=>{an.name=v;save();render()});break}
+  case 'anlup':{const i=e.anlagen.findIndex(x=>x.id===b.dataset.id);if(i>0){[e.anlagen[i-1],e.anlagen[i]]=[e.anlagen[i],e.anlagen[i-1]];save();render()}break}
+  case 'anldel':{const an=e.anlagen.find(x=>x.id===b.dataset.id);const n=e.fotos.filter(f=>f.anlage===an.id).length;const rest=e.anlagen.filter(x=>x.id!==an.id);
+    if(!n){confirmSheet('Anlage löschen',`„${esc(an.name)}“ hat keine Fotos und wird gelöscht.`,'Löschen',()=>{e.anlagen=rest;save();render()});break}
+    if(!rest.length){toast('Letzte Anlage mit Fotos kann nicht gelöscht werden');break}
+    formSheet('Anlage löschen',`<p>„${esc(an.name)}“ hat ${n} Fotos. Wohin sollen sie verschoben werden?</p>${pickField('z','Ziel-Anlage',rest.map(r=>[r.id,r.name]),rest[0].id)}`,'Verschieben und löschen',d=>{e.fotos.forEach(f=>{if(f.anlage===an.id)f.anlage=d.z});e.anlagen=rest;save();render()});break}
+  case 'foto':{const f=e.fotos.find(x=>x.id===b.dataset.id);if(!f)break;const an=e.anlagen.find(x=>x.id===f.anlage);const u=await imgUrl(f.id);
+    sheet(`<h2>${esc(an?.name)} · ${f.phase}</h2>${u?`<img src="${u}" alt="" style="border-radius:6px;width:100%">`:''}<div class="stack" style="margin-top:12px">${e.status!=='abgeschlossen'?`${pickField('mv','Umhängen zu Anlage',e.anlagen.map(x=>[x.id,x.name]),f.anlage)}<div class="row"><button class="btn" id="ph">${f.phase==='vorher'?'Als Nachher markieren':'Als Vorher markieren'}</button><button class="btn danger" id="del">Foto löschen</button><button class="btn pri" id="cl" style="margin-left:auto">Fertig</button></div>`:'<div class="row" style="justify-content:flex-end"><button class="btn pri" id="cl">Schließen</button></div>'}</div>`,el=>{
+      el.querySelector('#cl').onclick=()=>{closeSheet();render()};
+      el.querySelectorAll('[data-pk=mv]').forEach(x=>x.onclick=()=>{f.anlage=x.dataset.v;el.querySelectorAll('[data-pk=mv]').forEach(y=>y.classList.toggle('on',y===x));save()});
+      const ph=el.querySelector('#ph');if(ph)ph.onclick=()=>{f.phase=f.phase==='vorher'?'nachher':'vorher';save();closeSheet();render();toast('Geändert')};
+      const del=el.querySelector('#del');if(del)del.onclick=()=>{if(del.dataset.sure){e.fotos=e.fotos.filter(x=>x!==f);e.trash.push(f);save();closeSheet();render();toast('Foto im Papierkorb')}else{del.dataset.sure=1;del.textContent='Wirklich löschen?'}}});break}
+  case 'restore':{const f=e.trash.pop();if(f){e.fotos.push(f);save();render();toast('Foto wiederhergestellt')}break}
+  case 'sm':selTag(e).bericht.sm=b.dataset.v;save();render();break;
+  case 'grund':selTag(e).bericht.grund=b.dataset.v==='1';save();render();break;
+  case 'einst':{const t=selTag(e);t.bericht.einst[b.dataset.s]=t.bericht.einst[b.dataset.s]||{};t.bericht.einst[b.dataset.s][b.dataset.k]=b.dataset.v;save();render();break}
+  case 'tagsign':{const i=+b.dataset.i;const t=e.tage[i];const m=missingDay(e,t,!t.fertig);if(m.length){gateSheet(e,m,`Tag ${i+1} ist noch nicht vollständig`);break}signDay(e,i);break}
+  case 'tagende':{const t=offenerTag(e);const go=()=>{t.fertig=true;save();render();toast('Tag gespeichert. Morgen geht es hier weiter.')};
+    if(e.tagesUnterschrift){sheet(`<h2>Tagesbericht unterschreiben</h2><p class="small muted">${esc(t.bericht.text||'–')}</p><canvas class="sign" id="sign"></canvas><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" id="sk">Ohne Unterschrift</button><button class="btn pri" id="so">Unterschrieben</button></div>`,el=>{initSign();el.querySelector('#sk').onclick=()=>{closeSheet();go()};el.querySelector('#so').onclick=()=>{t.unterschrift=$('#sign').toDataURL('image/png');closeSheet();go()}})}else go();break}
+  case 'wizard':{const m=missingJob(e);if(m.length){gateSheet(e,m,'Job noch nicht vollständig');break}}ui.wiz=0;V={name:'abschluss',id:e.id};render();scrollTo(0,0);break;
+  case 'wnext':ui.wiz=Math.min(4,ui.wiz+1);if(ui.wiz===3)V.kv='ls';render();scrollTo(0,0);break;
+  case 'wback':ui.wiz=Math.max(0,ui.wiz-1);render();scrollTo(0,0);break;
+  case 'chk':e.check=e.check||{};e.check[b.dataset.k]={s:b.dataset.v,n:e.check[b.dataset.k]?.n||''};save();render();break;
+  case 'saecke':{const r=await wheelPick({title:'Säcke Strahlmittel übrig (25 kg)',cols:[{labels:Array.from({length:41},(_,i)=>String(i)),index:e.check?.saecke??fz(e.geraete.fahrzeug)?.saecke?.[curTag(e)?.bericht.sm||'ultrafein']??0}]});if(r){e.check.saecke=r[0];save();render()}break}
+  case 'kv':V.kv=b.dataset.v;render();break;
+  case 'ohne':confirmSheet('Ohne Kunde abschließen','Der Lieferschein wird fertig erzeugt und als „Unterschrift ausstehend“ markiert. Das Büro schickt ihn zur Unterschrift.','Abschließen',()=>finish(e,{ohne:true,eingesehen:false,zeiten:e.zeitenAufLs}));break;
+  case 'sg':e.sig[b.dataset.k]=b.dataset.v==='1';save();render();break;
+  case 'sigclear':initSign();break;
+  case 'fertig':{const s=e.sig;if(!s.name.trim()){$('#sg-err').textContent='Bitte den Namen des Unterzeichners eintragen.';return}if(!sigDirty){$('#sg-err').textContent='Bitte im Feld unterschreiben lassen.';return}if(s.versand&&!/\S+@\S+\.\S+/.test(s.mail)){$('#sg-err').textContent='Die E-Mail-Adresse sieht unvollständig aus.';return}
+    s.img=$('#sign').toDataURL('image/png');finish(e,{...s});break}
+  case 'mangel':mangelSheet();break;
+  case 'reise':reiseSheet({id:null,datum:today(),art:'anreise',einsatz:V.name==='einsatz'?V.id:null,ma:[S.user],ab:null,an:null,notiz:''});break;
+  case 'reiseedit':{const r=S.reisetage.find(x=>x.id===b.dataset.id);if(r)reiseSheet(JSON.parse(JSON.stringify(r)));break}
+  case 'tanken':tankSheet();break;
+  case 'beladen':{const f=fz(e.geraete.fahrzeug);const keys=Object.keys(S.strahlmittel).slice(0,2);const r=await wheelPick({title:'Säcke geladen',cols:[{labels:keys.map(k=>S.strahlmittel[k]),index:0},{labels:Array.from({length:21},(_,i)=>'+'+i),index:4}]});if(r){f.saecke=f.saecke||{};f.saecke[keys[r[0]]]=(f.saecke[keys[r[0]]]||0)+r[1];save();render();toast('Bestand aktualisiert')}break}
+  case 'mache':{const i=S.intern.find(x=>x.id===V.id);i.zust=S.user;save();render();break}
+  case 'erledigt':{const i=S.intern.find(x=>x.id===V.id);i.status='erledigt';save();V={name:'start'};render();toast('Auftrag erledigt');break}
+  case 'm2a':{const m=S.maengel.find(x=>x.id===b.dataset.id);S.intern.push({id:uid(),titel:`${m.teil}: ${m.art}`,beschreibung:m.notiz||'Aus Mängelmeldung.',datum:today(),zust:'m1',status:'offen'});m.status='auftrag';save();render();toast('Interner Auftrag für Matthias angelegt');break}
+  }});
+document.addEventListener('input',ev=>{const t=ev.target;const e=V.id?E(V.id):null;
+  if(t.dataset.b&&e){const tag=selTag(e);if(tag&&!locked(e,tag)){tag.bericht[t.dataset.b]=t.dataset.b==='kg'?num(t.value):t.value;save()}}
+  if(t.dataset.s&&e){e.ende=e.ende||{};e.ende[t.dataset.s]=t.value===''?'':t.value;save();const btn=document.querySelector('[data-a=wnext]');if(btn&&t.dataset.s==='kompH')btn.disabled=t.value===''}
+  if(t.dataset.sg&&e){e.sig[t.dataset.sg]=t.value;save()}
+  if(t.dataset.cn&&e){e.check[t.dataset.cn].n=t.value;save()}
+  if(t.dataset.in){const i=S.intern.find(x=>x.id===V.id);if(i){i.notiz=t.value;save()}}});
+document.addEventListener('change',async ev=>{const t=ev.target;const e=V.id?E(V.id):null;
+  if(t.dataset.f&&e){e.team[t.dataset.f]=t.value||null;const ct=offenerTag(e);if(ct&&t.value&&!ct.zeiten[t.value])ct.zeiten[t.value]={start:'buero',ende:'buero',p:{},pause:null,pauseOk:false};save();render()}
+  if(t.id==='cam-in'&&e&&t.files.length){const files=[...t.files];toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');const tg=Math.max(0,e.tage.length-1);
+    let last=null;for(const f of files){const blob=await shrink(f);const id=uid();await putBlob(id,blob);last={id,anlage:ui.anlage,phase:ui.phase,tag:tg,ts:Date.now()};e.fotos.push(last)}save();render();if(last)postShot(e,last,files.length)}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#layer').innerHTML)closeSheet();if(ev.key==='Enter'&&ev.target.id==='lg-pin')document.querySelector('[data-a=login]').click()});
+
+/* ---------- Start ---------- */
+if(S.user)V={name:'start'};
+zaehlen();render();chip();
+leuteLaden();
+openDB().then(()=>{render();holen()});
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('/app/sw.js').catch(()=>{});
+})();
+</script>
+
+</body>
+</html>

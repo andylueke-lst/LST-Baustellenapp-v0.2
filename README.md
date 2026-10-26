@@ -11,10 +11,11 @@ Büro, iPads und Handys greifen über Tailscale zu. Das Konzept liegt im Claude-
 | --- | --- | --- |
 | 1 | Klickbarer Prototyp (Ablauf, Bedienung) | abgestimmt |
 | 2 | Dokumente: Lieferschein, Fotodoku, Fotobericht, Tagesbericht | fertig (Dokumente, Server, Büro-Freigabe, Postausgang) |
+| 2b | iPad-App am Server: Anmeldung, Abgleich, Offline-Zwischenspeicher | fertig, Probelauf auf dem Mac mini offen |
 | 3 | Geräte, Material, Lohnliste | offen |
 | 4 | Offline-Abgleich, Handy-Kamera | offen |
-| 5 | Notion-Anbindung (Test-Kopie) | offen |
-| 6 | Einrichtung Mac mini | offen |
+| 5 | Notion-Anbindung | Lesen fertig (Projekte übernehmen), Schreiben offen |
+| 6 | Einrichtung Mac mini | Skript fertig, Einrichtung am Dienstag |
 
 ## Aufbau
 
@@ -32,6 +33,13 @@ lst/speicher.py          SQLite-Datenbank und Dateiablage unter daten/
 lst/mail.py              Mailversand mit Postausgang
 lst/vorlagen/, statisch/ Seiten und Stil im Notion-Look
 lst/demo.py              Legt Testdaten an und spielt einen Job-Abschluss durch
+lst/app/                 iPad-App (wird aus prototyp/ erzeugt: python3 werkzeuge/app_bauen.py)
+lst/notion.py            Projekte aus Notion lesen (nur lesend)
+lst/sicherung.py         Nächtliche Sicherung, optional Spiegel nach iCloud
+lst/verwaltung.py        PIN setzen, Mitarbeiterliste, Adresse anzeigen
+einrichten.command       Einrichtung auf dem Mac mini (Doppelklick)
+aktualisieren.command    Neue Version holen und Server neu starten
+tests/                   Prüfungen (z. B. Notion-Übernahme mit nachgebauter API)
 beispiele/               Skript für Beispiel-Dokumente
 prototyp/                Prototyp aus Stufe 1 (eine HTML-Datei)
 ```
@@ -92,3 +100,39 @@ Daten liegen in `daten/` (änderbar über `LST_DATEN`), Port über `LST_PORT`.
 ```
 
 Ohne diesen Block werden alle Mails als `.eml` im Postausgang abgelegt.
+
+## iPad-App
+
+`/app/` ist die App für iPad und Handy (in Safari öffnen, „Zum Home-Bildschirm“). Bedienung wie
+im abgestimmten Prototyp. Alles wird zuerst auf dem Gerät gespeichert und im Hintergrund zum
+Mac mini übertragen; oben rechts steht der Stand („Alles im Büro“, „Offline · 2 wartet“).
+
+- Anmeldung mit Name und PIN; das iPad bleibt 60 Tage angemeldet. Ohne Netz geht die Anmeldung,
+  wenn sich die Person auf diesem iPad schon einmal angemeldet hat.
+- Einsätze kommen vom Büro (angelegt unter „＋ Einsatz“ oder aus Notion übernommen).
+- Fotos gehen einzeln hoch, sobald Netz da ist. Der Job-Abschluss wartet, bis alle Fotos
+  angekommen sind, dann erzeugt der Mac mini Lieferschein und Fotodoku.
+- Was das Büro entscheidet (Status abgeschlossen, Lexware-Nummer), überschreibt das iPad nicht.
+
+Änderungen an der Oberfläche werden im Prototyp gemacht und mit `python3 werkzeuge/app_bauen.py`
+in die App übernommen.
+
+## Notion
+
+Die App liest Projekte aus „LST Projekte“ (Status 13–15, letzte 7 bis nächste 60 Tage) und legt
+daraus vorbereitete Einsätze an: Einsatzort, Kunde, Adresse, Ansprechpartner, Termin,
+Reinigungsart, 2. Mann, technische Daten, Anlagen-Vorschlag und – falls vorhanden – den
+Lexware-Lieferschein aus Projektinfos → Unterlagen → Lieferschein.
+
+Zugang in `geheim.json`:
+
+```json
+"notion": {"token": "ntn_…", "projekte": "644d7ac7-3929-4aea-8f1e-4d9cec143d1a", "schreiben": false}
+```
+
+Die Integration bekommt in Notion nur die Fähigkeit „Inhalte lesen“ und nur Zugriff auf
+LST Projekte, LST Firmenadressen, die Kontakte und die PLZ-Datenbank – nie auf
+„LST Projekte kaufmännisch“ und nie auf die übergeordnete Seite „Datenbanken“. Verweise auf
+synchronisierte Blöcke (der Abschnitt „Kaufmännisches“) öffnet die App grundsätzlich nicht.
+
+Prüfung ohne Netz: `LST_DATEN=$(mktemp -d) python3 -m tests.test_notion`
