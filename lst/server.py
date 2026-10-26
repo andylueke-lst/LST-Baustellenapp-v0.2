@@ -166,7 +166,7 @@ def fotobericht_vorschau(eid):
     if not auswahl:
         return "Bitte mindestens ein Foto auswählen.", 400
     try:
-        name, pdf, info = dok_abschluss.fotobericht_aus_auswahl(e, auswahl, _quelle(eid))
+        name, pdf, info = dok_abschluss.fotobericht_aus_auswahl(e, auswahl, _quelle(eid), heute=_doku_datum(e))
     except fotos.ZuGross as ex:
         return str(ex), 400
     return send_file(io.BytesIO(pdf), mimetype="application/pdf", download_name=name)
@@ -183,7 +183,7 @@ def fotobericht_freigeben(eid):
     if "@" not in an or "." not in an.split("@")[-1]:
         return jsonify(fehler="Die Empfänger-Adresse sieht unvollständig aus."), 400
     try:
-        name, pdf, info = dok_abschluss.fotobericht_aus_auswahl(e, auswahl, _quelle(eid))
+        name, pdf, info = dok_abschluss.fotobericht_aus_auswahl(e, auswahl, _quelle(eid), heute=_doku_datum(e))
     except fotos.ZuGross as ex:
         return jsonify(fehler=str(ex)), 400
     ergebnis = mail.senden(an, d.get("betreff") or name[:-4], d.get("text") or "", [(name, pdf)], eid)
@@ -286,6 +286,20 @@ def api_foto(eid):
     return jsonify(ok=True, id=fid)
 
 
+def _abschluss_datum(wert):
+    """Tag der Unterschrift bzw. des Abschlusses. Das iPad schickt ihn mit, damit ein
+    später nachgereichter Abschluss (offline) trotzdem das richtige Datum bekommt."""
+    try:
+        return date.fromisoformat(wert).isoformat() if wert else date.today().isoformat()
+    except (TypeError, ValueError):
+        return date.today().isoformat()
+
+
+def _doku_datum(e):
+    """Datum für Dateinamen nachträglicher Dokumente: Tag des Job-Abschlusses."""
+    return (e.get("abschluss") or {}).get("datum") or date.today().isoformat()
+
+
 @app.route("/api/einsatz/<eid>/abschluss", methods=["POST"])
 @anmeldung()
 def api_abschluss(eid):
@@ -300,7 +314,8 @@ def api_abschluss(eid):
     stamm = {"mitarbeiter": {m["id"]: m for m in speicher.stamm("mitarbeiter", [])},
              "strahlgeraete": {g["id"]: g for g in speicher.stamm("strahlgeraete", [])},
              "typen": speicher.stamm("geraetetypen", {})}
-    docs = dok_abschluss.einsatz_dokumente(e, stamm, _quelle(eid), lex_pdf, sig)
+    datum = _abschluss_datum(sig.get("datum"))
+    docs = dok_abschluss.einsatz_dokumente(e, stamm, _quelle(eid), lex_pdf, sig, heute=datum)
     fd_name, fd_pdf, fd_info = docs["fotodoku"]
     ls_name, ls_pdf, ls_info = docs["lieferschein"]
     nr = basis.nummer_ziffern(e.get("ls"))
@@ -316,7 +331,7 @@ def api_abschluss(eid):
         speicher.dokument_status(did, ls_status, sig["mail"])
     e = speicher.einsatz(eid)
     e["status"] = "abgeschlossen"
-    e["abschluss"] = {"datum": date.today().isoformat(), "name": sig.get("name"), "ohneKunde": bool(sig.get("ohne_kunde"))}
+    e["abschluss"] = {"datum": datum, "name": sig.get("name"), "ohneKunde": bool(sig.get("ohne_kunde"))}
     speicher.einsatz_speichern(e)
     admins = [m for m in speicher.stamm("mitarbeiter", []) if m.get("rolle") == "admin" and m.get("mail")]
     for a in admins:

@@ -66,7 +66,7 @@ def main():
         e["ls"] = "LS260067"
         speicher.einsatz_speichern(e)
     sig = {"name": "Rebmann", "bild": "data:image/png;base64," + base64.b64encode(unterschrift_png()).decode(),
-           "eingesehen": True, "zeiten_auf_ls": False, "versand": True, "mail": "vorort@example.com"}
+           "eingesehen": True, "zeiten_auf_ls": False, "datum": "2026-10-16", "versand": True, "mail": "vorort@example.com"}
     r = c.post(f"/api/einsatz/{e['id']}/abschluss", json=sig)
     print(json.dumps(r.json, ensure_ascii=False, indent=2))
 

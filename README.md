@@ -46,7 +46,8 @@ prototyp/                Prototyp aus Stufe 1 (eine HTML-Datei)
 - **Fotobericht**: Auswahl aus dem Büro; wird stufenweise verkleinert, bis er unter 10 MB liegt.
 - **Dateinamen**: `JJMMTT Kunde Einsatzort Dokument Nummer.pdf`, z. B.
   `261016 Zimmermann GmbH Zimmermann Lauenau Lieferschein unterschr LS260067.pdf`.
-  FD/FB/TB-Nummern übernehmen die Ziffern der LS-Nummer.
+  FD/FB/TB-Nummern übernehmen die Ziffern der LS-Nummer. Das Datum ist der Tag der Unterschrift,
+  ohne Unterschrift der Tag des Job-Abschlusses – auch für den später freigegebenen Fotobericht.
 
 ## Schriften
 
