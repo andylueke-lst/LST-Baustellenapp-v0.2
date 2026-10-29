@@ -627,7 +627,7 @@ function wStaende(e){const k=kp(e.geraete.kompressor),f=fz(e.geraete.fahrzeug);e
 function wKunde(e){const sub=V.kv||'ls';
   return `<p class="muted" style="margin-top:0">Das iPad jetzt dem Kunden geben.</p>
   <div class="tabs"><button class="${sub==='ls'?'on':''}" data-a="kv" data-v="ls">Lieferschein</button><button class="${sub==='fd'?'on':''}" data-a="kv" data-v="fd">Fotodokumentation (${e.fotos.length})</button></div>
-  ${sub==='ls'?`<div class="lexpage">Seiten 1–2 aus Lexware · ${e.ls||'Lieferschein folgt aus dem Büro'}<br><span class="small">Beschreibung, technische Daten und Leistungspositionen wie im Lexware-Lieferschein.</span></div><div style="height:12px"></div><div style="overflow-x:auto">${page3(e,null)}</div>`:fdView(e)}
+  ${sub==='ls'?`${(e.lsSeiten||[]).length?e.lsSeiten.map((id,i)=>`<img data-img="${id}" alt="Lieferschein ${esc(e.ls||'')} Seite ${i+1}" style="display:block;width:100%;max-width:820px;margin:0 auto 12px;border:1px solid var(--line);border-radius:4px;background:#fff">`).join(''):`<div class="lexpage">Seiten 1–2 aus Lexware · ${e.ls||'Lieferschein folgt aus dem Büro'}<br><span class="small">Beschreibung, technische Daten und Leistungspositionen wie im Lexware-Lieferschein.</span></div>`}<div style="height:12px"></div><div style="overflow-x:auto">${page3(e,null)}</div>`:fdView(e)}
   <div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext">Weiter zur Unterschrift</button><button class="btn" data-a="ohne">Ohne Kunde abschließen</button></div>`}
 function fdView(e){return e.anlagen.map(a=>{const f=ph=>e.fotos.filter(x=>x.anlage===a.id&&x.phase===ph);if(!f('vorher').length&&!f('nachher').length)return'';
   return `<section class="anl"><h3>${esc(a.name)}</h3><div class="ph">${['vorher','nachher'].map(ph=>`<div><div class="lbl">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${f(ph).map(x=>`<button class="th" data-a="foto" data-id="${x.id}"><img data-img="${x.id}" alt="${esc(a.name)} ${ph}"></button>`).join('')||'<div class="empty">–</div>'}</div></div>`).join('')}</div></section>`}).join('')||'<div class="empty">Keine Fotos.</div>'}
@@ -788,18 +788,25 @@ function notizenSheet(){const alle=S.notizen||[];const neu=alle.filter(n=>!n.ges
 /* ---------- Echten Einsatz einfügen ----------
    Das Büro schickt einen Code (beginnt mit LST1:). Er steht nur in der Nachricht, nicht auf der Webseite,
    damit Kundendaten nicht öffentlich werden. Einfügen ersetzt einen Einsatz gleicher Kennung, solange er nicht begonnen hat. */
-function importSheet(){sheet(`<h2>Einsatz einfügen</h2><p class="small muted" style="margin-top:0">Den Code aus der Nachricht vom Büro kopieren (beginnt mit „LST1:“) und hier einfügen.</p>
-  <textarea class="inp" id="im-t" rows="5" placeholder="LST1:…" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+function importSheet(){sheet(`<h2>Einsatz einfügen</h2><p class="small muted" style="margin-top:0">Die Einsatz-Datei vom Büro wählen (z. B. aus „Dateien“) – oder den Code (beginnt mit „LST1:“) einfügen.</p>
+  <label class="btn" for="im-f" style="margin-bottom:10px">📄 Einsatz-Datei wählen</label><input id="im-f" type="file" accept=".json,.txt,application/json,text/plain" hidden>
+  <textarea class="inp" id="im-t" rows="4" placeholder="LST1:…" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
   <div id="im-err" class="small" style="color:var(--danger);min-height:20px;margin-top:6px" role="alert"></div>
   <div class="row" style="justify-content:flex-end"><button class="btn" id="im-c">Abbrechen</button><button class="btn pri" id="im-ok">Einfügen</button></div>`,el=>{
   el.querySelector('#im-c').onclick=closeSheet;const err=t=>{el.querySelector('#im-err').textContent=t};
-  el.querySelector('#im-ok').onclick=()=>{let txt=el.querySelector('#im-t').value.replace(/\s+/g,'');if(!txt.startsWith('LST1:'))return err('Der Code muss mit „LST1:“ beginnen.');
-    let d;try{const bin=atob(txt.slice(5));d=JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))))}catch(ex){return err('Der Code ist unvollständig. Bitte noch einmal ganz kopieren.')}
-    const neu=d.einsatz;if(!neu||!neu.id||!neu.einsatzort||!Array.isArray(neu.anlagen))return err('Im Code steht kein Einsatz.');
-    const alt=E(neu.id);if(alt&&alt.tage.length)return err(`„${alt.einsatzort}“ ist schon da und hat bereits begonnen. Nichts geändert.`);
+  const uebernehmen=async d=>{const neu=d.einsatz;if(!neu||!neu.id||!neu.einsatzort||!Array.isArray(neu.anlagen))return err('In der Datei steht kein Einsatz.');
+    // Lexware-Seiten als Bilder im Fotospeicher ablegen
+    const seiten=[];for(const [i,url] of (d.lsSeiten||[]).entries()){try{const b=await (await fetch(url)).blob();const id=`lsp-${neu.id}-${i}`;await putBlob(id,b);urls.delete(id);seiten.push(id)}catch(ex){}}
+    const alt=E(neu.id);
+    if(alt&&alt.tage.length){if(neu.ls)alt.ls=neu.ls;if(seiten.length)alt.lsSeiten=seiten;save();closeSheet();render();return toast(seiten.length?`Lieferschein ${alt.ls||''} ergänzt (${seiten.length} Seiten). Der laufende Einsatz bleibt unverändert.`:'Einsatz läuft schon – nichts geändert.')}
     ['tage','fotos','trash','zusatz'].forEach(k=>{neu[k]=neu[k]||[]});neu.team=neu.team||{vor:null,fach:null};neu.geraete=neu.geraete||{fahrzeug:'f2',kompressor:'k1',strahl:['s1']};
+    if(seiten.length)neu.lsSeiten=seiten;else if(alt&&alt.lsSeiten)neu.lsSeiten=alt.lsSeiten;
     if(alt)S.einsaetze[S.einsaetze.indexOf(alt)]=neu;else S.einsaetze.push(neu);
-    save();closeSheet();V={name:'start'};render();toast(`Einsatz „${neu.einsatzort}“ eingefügt`)}})}
+    save();closeSheet();V={name:'start'};render();toast(`Einsatz „${neu.einsatzort}“ eingefügt${seiten.length?` mit Lieferschein ${neu.ls||''}`:''}`)};
+  const lesen=txt=>{txt=txt.trim();if(txt.startsWith('{'))return JSON.parse(txt);txt=txt.replace(/\s+/g,'');if(!txt.startsWith('LST1:'))throw new Error('kein Code');
+    const bin=atob(txt.slice(5));return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))))};
+  el.querySelector('#im-f').onchange=async ev=>{const f=ev.target.files[0];if(!f)return;err('Wird gelesen …');try{await uebernehmen(lesen(await f.text()))}catch(ex){err('Die Datei lässt sich nicht lesen. Ist es die Einsatz-Datei vom Büro?')}};
+  el.querySelector('#im-ok').onclick=async()=>{let d;try{d=lesen(el.querySelector('#im-t').value)}catch(ex){return err('Der Code muss mit „LST1:“ beginnen und vollständig sein.')}await uebernehmen(d)}})}
 
 /* ---------- Reisetage ---------- */
 const ARTEN={anreise:'Anreise',abreise:'Abreise',wechsel:'Zwischen zwei Jobs'};
