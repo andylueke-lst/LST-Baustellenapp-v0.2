@@ -200,7 +200,7 @@ const nowQ=()=>{const d=new Date();let m=d.getHours()*60+Math.round(d.getMinutes
 const num=v=>v===''||v==null||isNaN(+v)?null:+v;
 
 /* ---------- Speicher: Zustand in localStorage, Fotos in IndexedDB ---------- */
-const KEY='lst-baustelle-prototyp-v2';try{localStorage.removeItem('lst-baustelle-prototyp-v1')}catch(e){}
+const KEY='lst-baustelle-prototyp-v3';try{localStorage.removeItem('lst-baustelle-prototyp-v1');localStorage.removeItem('lst-baustelle-prototyp-v2')}catch(e){}
 const mem=new Map(); let idb=null;
 function openDB(){return new Promise(res=>{try{const r=indexedDB.open('lst-fotos',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{idb=r.result;res()};r.onerror=()=>res()}catch(e){res()}})}
 function putBlob(id,blob){mem.set(id,blob);if(!idb)return Promise.resolve();return new Promise(res=>{try{const tx=idb.transaction('f','readwrite');tx.objectStore('f').put(blob,id);tx.oncomplete=res;tx.onerror=res}catch(e){res()}})}
@@ -222,7 +222,7 @@ function seed(){
   const anl=(...n)=>n.map(x=>({id:uid(),name:x}));
   const e1={id:'e1',art:'kunde',status:'vorbereitet',einsatzort:'Frischemarkt Weststadt',kunde:'Kältetechnik Muster GmbH',adresse:'Beispielweg 4, 64283 Darmstadt',apOrt:{name:'Herr Beispiel',tel:'06151 000000',mail:'markt.weststadt@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,1),bis:addDays(t,2),ls:'LS260071',reinigungsart:'Wärmetauscher',technisch:'2 V-Tauscher und 4 Tischtauscher auf dem Dach. Zugang über Treppenhaus, Wasser in der Heizungszentrale, Kompressor vor dem Gebäude.',anlagen:anl('V-Tauscher 1','V-Tauscher 2','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3','Tischtauscher 4'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
   const e2={id:'e2',art:'kunde',status:'vorbereitet',einsatzort:'Kühlhaus Hafenstraße',kunde:'Kühlhaus Hafenstraße GmbH',adresse:'Hafenstraße 12, 68159 Mannheim',apOrt:{name:'Frau Kühl',tel:'0621 000000',mail:'technik@example.com'},apKunde:{name:'Frau Kühl',mail:'technik@example.com'},von:addDays(t,5),bis:addDays(t,5),ls:null,reinigungsart:'Intensivreinigung',technisch:'3 Verdampfer in der Kühlzelle, Arbeiten nur mit Rollgerüst.',anlagen:anl('Verdampfer 1','Verdampfer 2','Verdampfer 3'),zusatz:[{id:uid(),name:'Rollgerüst (Halle)'},{id:uid(),name:'Heizlüfter (Miete)'}],team:{vor:'m1',fach:'m3'},geraete:{fahrzeug:'f1',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false};
-  const e3={id:'e3',art:'kunde',status:'inarbeit',einsatzort:'Logistikzentrum Süd',kunde:'Kältetechnik Muster GmbH',adresse:'Industriestraße 30, 64653 Lorsch',apOrt:{name:'Herr Lager',tel:'06251 000000',mail:'lager.sued@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,-1),bis:addDays(t,1),ls:'LS260068',reinigungsart:'Wärmetauscher',technisch:'1 Lamellenrückkühler und 3 Tischtauscher, Südseite ebenerdig. Wasseranschluss am Tor 3.',anlagen:anl('Lamellenrückkühler','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},start:{kompH:3412.5,km:41210},tagesUnterschrift:false,zeitenAufLs:false,fotos:[],trash:[],
+  const e3={id:'e3',art:'kunde',status:'inarbeit',einsatzort:'Beispiel: Logistikzentrum Süd',kunde:'Beispielkunde Kältetechnik GmbH',adresse:'Industriestraße 30, 64653 Lorsch',apOrt:{name:'Herr Lager',tel:'06251 000000',mail:'lager.sued@example.com'},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,-1),bis:addDays(t,1),ls:'LS260068',reinigungsart:'Wärmetauscher',technisch:'1 Lamellenrückkühler und 3 Tischtauscher, Südseite ebenerdig. Wasseranschluss am Tor 3.',anlagen:anl('Lamellenrückkühler','Tischtauscher 1','Tischtauscher 2','Tischtauscher 3'),zusatz:[],team:{vor:'m1',fach:'m2'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},start:{kompH:3412.5,km:41210},tagesUnterschrift:false,zeitenAufLs:false,fotos:[],trash:[],
     tage:[{datum:addDays(t,-1),fertig:true,zeiten:{m1:{start:'buero',ende:'hotel',p:{1:'06:30',2:'07:00',3:'08:45',4:'16:30',5:'16:45'},pause:45},m2:{start:'buero',ende:'hotel',p:{1:'06:30',2:'07:00',3:'08:45',4:'16:30',5:'16:45'},pause:45}},bericht:{text:'Aufbau, Lamellenrückkühler gereinigt, Tischtauscher 1 begonnen.',sm:'ultrafein',grund:true,kg:null,einst:{s1:{air:'5',media:'3',duese:'schmal'}},bes:''}},
       {datum:t,fertig:false,zeiten:{m1:{start:'hotel',ende:'buero',p:{2:'07:15',3:'07:45'},pause:null,pauseOk:false},m2:{start:'hotel',ende:'buero',p:{2:'07:15',3:'07:45'},pause:null,pauseOk:false}},bericht:{text:'',sm:'ultrafein',grund:true,kg:null,einst:{s1:{air:'5',media:'3',duese:'schmal'}},bes:''}}]};
   const e4={id:'e4',art:'kunde',status:'abgeschlossen',ergebnis:'unterschrieben',einsatzort:'Großmarkt Nord',kunde:'Kältetechnik Muster GmbH',adresse:'Nordring 2, 60388 Frankfurt',apOrt:{name:'Herr Nord',tel:'',mail:''},apKunde:{name:'Frau Muster',mail:'service@example.com'},von:addDays(t,-9),bis:addDays(t,-8),ls:'LS260064',reinigungsart:'Wärmetauscher',technisch:'',anlagen:anl('V-Tauscher 1'),zusatz:[],team:{vor:'m1',fach:'m3'},geraete:{fahrzeug:'f2',kompressor:'k1',strahl:['s1']},tage:[],fotos:[],trash:[],zeitenAufLs:false,tagesUnterschrift:false,abschluss:{datum:addDays(t,-8),name:'Nord'}};
@@ -234,8 +234,8 @@ function seed(){
     typen:{loki:{name:'Loki',felder:[{key:'air',label:'Air',werte:['1','2','3','4','5','6','7']},{key:'media',label:'Media',werte:['1','2','3','4','5','6','7']},{key:'duese',label:'Düse',werte:['breit','schmal','rund']}]}},
     strahlmittel:{ultrafein:'CaCO3 ultrafein',fein:'CaCO3 fein',sonst:'sonstiges'},
     checkliste:['Strahlgerät und Düsen','Luft: Schläuche, Kupplungen','Strom: Kabel, Verteiler','Wasser: Schläuche, Verbinder, Kupplungen','Absperrung und Sicherung','Licht','Werkzeugkiste','Müll und Restmaterial mitgenommen'],
-    einsaetze:[e3,e1,e2,e4,e5],
-    intern:[{id:'i1',titel:'Wasserkupplung am Verteiler tauschen',beschreibung:'Aus Mängelmeldung: Kupplung tropft. Ersatz liegt in Halle, Regal C2.',datum:t,zust:'m1',status:'offen'},{id:'i2',titel:'Sprinter DA LS 26 beladen',beschreibung:'Für Kühlhaus Hafenstraße: Rollgerüst und 6 Säcke ultrafein laden.',datum:addDays(t,4),zust:null,status:'offen'},{id:'i3',titel:'Kompressor Ölstand prüfen',beschreibung:'Vor dem nächsten Einsatz kontrollieren und nachfüllen.',datum:addDays(t,-2),zust:'m1',status:'erledigt'}],
+    einsaetze:[e3],
+    intern:[],
     maengel:[],tanken:[],reisetage:[],seeded:false};
 }
 
@@ -385,7 +385,7 @@ function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="c
   return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
   <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
   <div class="board">${col('Vorbereitet',es('vorbereitet').map(cardE),'Nichts geplant')}${col('In Arbeit',es('inarbeit').map(cardE),'Kein laufender Einsatz')}${col('Abgeschlossen',es('abgeschlossen').map(cardE),'Noch nichts abgeschlossen')}${col('Intern',intern,'Keine offenen Aufträge')}</div>
-  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}<button class="btn" data-a="notizen">📤 Notizen senden${(S.notizen||[]).length?` (${S.notizen.length})`:''}</button><button class="btn ghost" data-a="reset">Testdaten zurücksetzen</button></div></div>`}
+  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}<button class="btn" data-a="importieren">＋ Einsatz einfügen</button><button class="btn" data-a="notizen">📤 Notizen senden${(S.notizen||[]).length?` (${S.notizen.length})`:''}</button><button class="btn ghost" data-a="reset">Testdaten zurücksetzen</button></div></div>`}
 
 /* ---------- Einsatz ---------- */
 function vEinsatz(){const e=E(V.id);if(!e)return vStart();
@@ -704,6 +704,22 @@ function notizenSheet(){const alle=S.notizen||[];const neu=alle.filter(n=>!n.ges
       try{if(navigator.canShare&&navigator.canShare({files:[datei]})){await navigator.share({files:[datei],title:name});return}}catch(err){if(err&&err.name==='AbortError')return}
       const a=document.createElement('a');a.href=URL.createObjectURL(datei);a.download=name;document.body.appendChild(a);a.click();a.remove()}})}
 
+/* ---------- Echten Einsatz einfügen ----------
+   Das Büro schickt einen Code (beginnt mit LST1:). Er steht nur in der Nachricht, nicht auf der Webseite,
+   damit Kundendaten nicht öffentlich werden. Einfügen ersetzt einen Einsatz gleicher Kennung, solange er nicht begonnen hat. */
+function importSheet(){sheet(`<h2>Einsatz einfügen</h2><p class="small muted" style="margin-top:0">Den Code aus der Nachricht vom Büro kopieren (beginnt mit „LST1:“) und hier einfügen.</p>
+  <textarea class="inp" id="im-t" rows="5" placeholder="LST1:…" autocapitalize="off" autocomplete="off" spellcheck="false"></textarea>
+  <div id="im-err" class="small" style="color:var(--danger);min-height:20px;margin-top:6px" role="alert"></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="im-c">Abbrechen</button><button class="btn pri" id="im-ok">Einfügen</button></div>`,el=>{
+  el.querySelector('#im-c').onclick=closeSheet;const err=t=>{el.querySelector('#im-err').textContent=t};
+  el.querySelector('#im-ok').onclick=()=>{let txt=el.querySelector('#im-t').value.replace(/\s+/g,'');if(!txt.startsWith('LST1:'))return err('Der Code muss mit „LST1:“ beginnen.');
+    let d;try{const bin=atob(txt.slice(5));d=JSON.parse(new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0))))}catch(ex){return err('Der Code ist unvollständig. Bitte noch einmal ganz kopieren.')}
+    const neu=d.einsatz;if(!neu||!neu.id||!neu.einsatzort||!Array.isArray(neu.anlagen))return err('Im Code steht kein Einsatz.');
+    const alt=E(neu.id);if(alt&&alt.tage.length)return err(`„${alt.einsatzort}“ ist schon da und hat bereits begonnen. Nichts geändert.`);
+    ['tage','fotos','trash','zusatz'].forEach(k=>{neu[k]=neu[k]||[]});neu.team=neu.team||{vor:null,fach:null};neu.geraete=neu.geraete||{fahrzeug:'f2',kompressor:'k1',strahl:['s1']};
+    if(alt)S.einsaetze[S.einsaetze.indexOf(alt)]=neu;else S.einsaetze.push(neu);
+    save();closeSheet();V={name:'start'};render();toast(`Einsatz „${neu.einsatzort}“ eingefügt`)}})}
+
 /* ---------- Reisetage ---------- */
 const ARTEN={anreise:'Anreise',abreise:'Abreise',wechsel:'Zwischen zwei Jobs'};
 function reiseList(e){const rs=S.reisetage.filter(r=>r.einsatz===e.id).sort((a,b)=>a.datum.localeCompare(b.datum));if(!rs.length)return'';
@@ -768,6 +784,7 @@ document.addEventListener('click',async ev=>{
   case 'day':ui.day=+b.dataset.i;render();break;
   case 'tabback':V={name:'einsatz',id:e.id};ui.tab=b.dataset.t;render();break;
   case 'notiz':notizSheet();break;
+  case 'importieren':importSheet();break;
   case 'notizen':notizenSheet();break;
   case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht. Die Notizen bleiben erhalten.','Zurücksetzen',()=>{const u=S.user;const nz=S.notizen||[];S=seed();S.user=u;S.notizen=nz;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
   case 'gsel':e.geraete[b.dataset.g]=b.dataset.id;if(e.start&&b.dataset.g==='kompressor')e.start.kompH=kp(b.dataset.id).h;save();render();break;

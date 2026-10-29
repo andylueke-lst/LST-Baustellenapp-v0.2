@@ -95,7 +95,7 @@ async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
 
 ERSETZUNGEN = [
     # Speicherschlüssel und save(): nach jedem Speichern Abgleich anstoßen
-    ("const KEY='lst-baustelle-prototyp-v2';try{localStorage.removeItem('lst-baustelle-prototyp-v1')}catch(e){}", "const KEY='lst-baustelle-app-v1';"),
+    ("const KEY='lst-baustelle-prototyp-v3';try{localStorage.removeItem('lst-baustelle-prototyp-v1');localStorage.removeItem('lst-baustelle-prototyp-v2')}catch(e){}", "const KEY='lst-baustelle-app-v1';"),
     ("function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}",
      "function save0(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}\n"
      "function save(){save0();zaehlen();chip();syncBald()}"),
