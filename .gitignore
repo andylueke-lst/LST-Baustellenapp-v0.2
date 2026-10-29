@@ -5,3 +5,4 @@ __pycache__/
 daten/
 *.db
 .venv/
+web-prototyp/

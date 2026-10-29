@@ -508,7 +508,7 @@ def api_logout():
     return jsonify(ok=True)
 
 
-LISTEN = ("maengel", "tanken", "reisetage", "fahrzeuge", "kompressoren", "intern")
+LISTEN = ("maengel", "tanken", "reisetage", "fahrzeuge", "kompressoren", "intern", "notizen")
 
 
 @app.route("/api/stand")

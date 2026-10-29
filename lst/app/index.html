@@ -286,7 +286,7 @@ const jpost=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/jso
 function fuerServer(e){const c=JSON.parse(JSON.stringify(e));delete c.lsHtml;delete c.sync_abschluss;delete c.serverDocs;
   c.fotos=(c.fotos||[]).map(f=>({id:f.id,anlage:f.anlage,phase:f.phase,tag:f.tag||0,ts:f.ts}));return c}
 async function stempel(o){return sha(JSON.stringify(o))}
-function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,geloescht:S.weg||{}}}
+function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,notizen:S.notizen||[],geloescht:S.weg||{}}}
 function zaehlen(){let n=0;for(const e of S.einsaetze){n+=(e.fotos||[]).filter(f=>!f.up).length;if(e.sync_abschluss)n++}SY.offen=n}
 let syncT=null;function syncBald(ms=1500){clearTimeout(syncT);syncT=setTimeout(syncen,ms)}
 async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.busy=true;SY.again=false;chip();
@@ -310,7 +310,7 @@ async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.bu
 async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}catch(err){SY.offline=!!err.netz;SY.err=err.message;chip();if(err.auth){S.user=null;save0();V={name:'login'};render()}return}
   ['mitarbeiter','strahlgeraete','typen','strahlmittel','checkliste'].forEach(k=>{if(d[k]!=null)S[k]=d[k]});
   const lokalL=await stempel(listen());const listenUnveraendert=sk().listen===lokalL;
-  for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern']){const srv=d[k]||[];
+  for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern','notizen']){const srv=d[k]||[];
     if(listenUnveraendert)S[k]=srv;else{const m=new Map(srv.map(x=>[x.id,x]));(S[k]||[]).forEach(x=>m.set(x.id,x));S[k]=[...m.values()]}}
   if(listenUnveraendert)sk().listen=await stempel(listen());
   const neu=[];
@@ -432,6 +432,7 @@ function render(){
 }
 function top(){const e=V.id?E(V.id):null;const i=V.name==='intern'?S.intern.find(x=>x.id===V.id):null;
   return `<div class="top"><nav class="crumb" aria-label="Pfad"><button data-a="home">🏠 Einsätze</button>${e?`<span>/</span><button data-a="open" data-id="${e.id}">${esc(e.einsatzort)}</button>`:''}${V.name==='abschluss'?'<span>/</span><span style="padding:6px 4px">Abschließen</span>':''}${i?`<span>/</span><span style="padding:6px 4px">${esc(i.titel)}</span>`:''}${V.name==='maengel'?'<span>/</span><span style="padding:6px 4px">Mängel</span>':''}</nav>
+  <button class="btn small" data-a="notiz" title="Notiz zum Ablauf an dieser Stelle">💬 Notiz</button>
   <button class="chip" id="sync" data-a="sync" title=""><span class="dot"></span><span class="lbl">…</span></button>
   <button class="btn small ghost" data-a="logout">${esc(me().name)}<span class="who"> · Abmelden</span></button></div>`}
 
@@ -463,7 +464,7 @@ function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="c
   return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
   <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
   <div class="board">${col('Vorbereitet',es('vorbereitet').map(cardE),'Nichts geplant')}${col('In Arbeit',es('inarbeit').map(cardE),'Kein laufender Einsatz')}${col('Abgeschlossen',es('abgeschlossen').map(cardE),'Noch nichts abgeschlossen')}${col('Intern',intern,'Keine offenen Aufträge')}</div>
-  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}</div></div>`}
+  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}<button class="btn" data-a="notizen">📤 Notizen senden${(S.notizen||[]).length?` (${S.notizen.length})`:''}</button></div></div>`}
 
 /* ---------- Einsatz ---------- */
 function vEinsatz(){const e=E(V.id);if(!e)return vStart();
@@ -486,7 +487,7 @@ function vEinsatz(){const e=E(V.id);if(!e)return vStart();
 function geraeteForm(e){const ve=S.mitarbeiter;const opt=(list,sel,lab)=>list.map(x=>`<option value="${x.id}"${x.id===sel?' selected':''}>${esc(lab(x))}</option>`).join('');
   const k=kp(e.geraete.kompressor);
   return `<div class="stack">
-  <h3>Team</h3>
+  <h3>Team</h3><p class="small muted" style="margin:-4px 0 8px">Geplantes Team für Tag 1. Wer an einem bestimmten Tag dabei ist, wählst du unter „Zeiten“.</p>
   <div class="times"><div class="field"><label for="g-vor">Vorarbeiter</label><select class="inp" id="g-vor" data-f="vor">${opt(ve,e.team.vor,m=>m.name)}</select></div>
   <div class="field"><label for="g-fach">Facharbeiter</label><select class="inp" id="g-fach" data-f="fach"><option value="">– niemand –</option>${opt(ve,e.team.fach,m=>m.name)}</select></div></div>
   <h3 style="margin-top:8px">Geräte</h3>
@@ -750,6 +751,40 @@ async function finish(e,sig){
    <div>${sig.ohne?'Steht unter „Abgeschlossen“ als „Unterschrift ausstehend“.':sig.versand?(sig.spaeter?'Versand an den Einsatzort wartet im Büro.':'Wird an '+esc(sig.mail)+' gesendet, Kopie an post@.'):'Kein Versand an den Einsatzort, Kopie an post@.'}</div>
    <div>Fotobericht an ${esc(e.kunde)} wartet auf Freigabe im Büro.</div></div><div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn pri" id="ok">Fertig</button></div>`,el=>{el.querySelector('#ok').onclick=closeSheet})}
 
+/* ---------- Notizen zum Ablauf (Erprobung auf der Baustelle) ----------
+   Wer etwas bemerkt, tippt oben auf „Notiz“. Die App merkt sich dazu, wo man gerade war.
+   „Notizen senden“ verschickt sie per Mail und teilt auf Wunsch alle Eingaben als Datei. */
+function woGerade(){const e=V.id?E(V.id):null;const tabs={heute:'Zeiten',fotos:'Fotos',bericht:'Tagesbericht',info:'Einsatz'};
+  const teile=[];if(e){teile.push(e.einsatzort);if(V.name==='einsatz'){teile.push(tabs[ui.tab]||ui.tab);const t=selTag(e);if(t)teile.push('Tag '+(e.tage.indexOf(t)+1))}}
+  if(V.name==='abschluss')teile.push('Abschließen: '+WSTEPS[ui.wiz]);if(V.name==='start')teile.push('Startseite');if(V.name==='maengel')teile.push('Mängelliste');
+  if(V.name==='intern'){const i=S.intern.find(x=>x.id===V.id);teile.push('Intern: '+(i?i.titel:''))}
+  if($('#layer').innerHTML){const h=$('#layer h2');if(h)teile.push('Fenster „'+h.textContent+'“')}
+  return teile.join(' · ')||V.name}
+function notizSheet(){const wo=woGerade();S.notizen=S.notizen||[];
+  sheet(`<h2>Notiz zum Ablauf</h2><p class="small muted" style="margin-top:0">Stelle: ${esc(wo)}</p>
+  <div class="field"><label for="nz-t">Was passt nicht, was fehlt, was war umständlich?</label><textarea class="inp" id="nz-t" rows="5" placeholder="z. B. Pause erst nach Abfahrt bestätigen ist unpraktisch, weil …"></textarea></div>
+  <div class="pickrow" style="margin-bottom:12px"><button class="pick on" data-nz="Hinweis">Hinweis</button><button class="pick" data-nz="Fehler">Fehler</button><button class="pick" data-nz="Wunsch">Wunsch</button></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="nz-c">Abbrechen</button><button class="btn pri" id="nz-ok">Speichern</button></div>`,el=>{
+    let art='Hinweis';el.querySelectorAll('[data-nz]').forEach(b=>b.onclick=()=>{art=b.dataset.nz;el.querySelectorAll('[data-nz]').forEach(x=>x.classList.toggle('on',x===b))});
+    el.querySelector('#nz-c').onclick=closeSheet;const ta=el.querySelector('#nz-t');setTimeout(()=>ta.focus(),50);
+    el.querySelector('#nz-ok').onclick=()=>{const t=ta.value.trim();if(!t){ta.focus();return}
+      S.notizen.push({id:uid(),ts:Date.now(),wer:me()?.name||'',wo,art,text:t,gesendet:false});save();closeSheet();render();toast('Notiz gespeichert')}})}
+function notizText(liste){return liste.map(n=>{const d=new Date(n.ts);return `${pad(d.getDate())}.${pad(d.getMonth()+1)}. ${pad(d.getHours())}:${pad(d.getMinutes())} · ${n.wer} · ${n.art}\nStelle: ${n.wo}\n${n.text}`}).join('\n\n')}
+function notizenSheet(){const alle=S.notizen||[];const neu=alle.filter(n=>!n.gesendet);
+  sheet(`<h2>Notizen senden</h2><p class="small muted" style="margin-top:0">${alle.length} Notiz${alle.length===1?'':'en'}, davon ${neu.length} noch nicht gesendet.</p>
+  <div class="stack small" style="max-height:38vh;overflow:auto;margin-bottom:12px">${alle.slice().reverse().map(n=>`<div class="box" style="padding:10px 12px"><b>${esc(n.art)}</b> · ${esc(n.wo)}${n.gesendet?' <span class="tag green">gesendet</span>':''}<div>${esc(n.text)}</div><div class="muted">${esc(n.wer)} · ${new Date(n.ts).toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div></div>`).join('')||'<div class="empty">Noch keine Notizen. Oben auf „💬 Notiz“ tippen, wenn dir etwas auffällt.</div>'}</div>
+  <div class="field"><label for="nz-an">An</label><input class="inp" id="nz-an" type="email" value="${esc(S.notizAn||'post@lueke-strahlt.de')}"></div>
+  <div class="row" style="flex-wrap:wrap"><button class="btn" id="nz-x">Abbrechen</button><button class="btn" id="nz-f">Alles als Datei teilen</button><button class="btn pri" id="nz-m"${neu.length?'':' disabled'}>Neue per Mail senden</button></div>
+  <p class="small muted">„Als Datei teilen“ enthält zusätzlich alle Eingaben (Zeiten, Berichte, Abbau-Check) ohne Fotos – zum Auswerten im Büro.</p>`,el=>{
+    el.querySelector('#nz-x').onclick=closeSheet;
+    el.querySelector('#nz-m').onclick=()=>{const an=el.querySelector('#nz-an').value.trim();S.notizAn=an;
+      const body=notizText(neu);location.href=`mailto:${encodeURIComponent(an)}?subject=${encodeURIComponent('Baustellen-App: Notizen von '+(me()?.name||'')+' ('+fDY(today())+')')}&body=${encodeURIComponent(body)}`;
+      neu.forEach(n=>n.gesendet=true);save();setTimeout(()=>{closeSheet();render();toast('Mail geöffnet – bitte dort auf Senden tippen')},400)};
+    el.querySelector('#nz-f').onclick=async()=>{const daten={exportiert:new Date().toISOString(),von:me()?.name,notizen:alle,einsaetze:S.einsaetze.map(e=>({...e,lsHtml:undefined})),reisetage:S.reisetage,tanken:S.tanken,maengel:S.maengel};
+      const name=`${yymmdd(today())} Baustellen-App Erprobung ${me()?.name||''}.json`;const datei=new File([JSON.stringify(daten,null,1)],name,{type:'application/json'});
+      try{if(navigator.canShare&&navigator.canShare({files:[datei]})){await navigator.share({files:[datei],title:name});return}}catch(err){if(err&&err.name==='AbortError')return}
+      const a=document.createElement('a');a.href=URL.createObjectURL(datei);a.download=name;document.body.appendChild(a);a.click();a.remove()}})}
+
 /* ---------- Reisetage ---------- */
 const ARTEN={anreise:'Anreise',abreise:'Abreise',wechsel:'Zwischen zwei Jobs'};
 function reiseList(e){const rs=S.reisetage.filter(r=>r.einsatz===e.id).sort((a,b)=>a.datum.localeCompare(b.datum));if(!rs.length)return'';
@@ -814,7 +849,9 @@ document.addEventListener('click',async ev=>{
   case 'tab':ui.tab=b.dataset.t;render();break;
   case 'day':ui.day=+b.dataset.i;render();break;
   case 'tabback':V={name:'einsatz',id:e.id};ui.tab=b.dataset.t;render();break;
-  case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht.','Zurücksetzen',()=>{const u=S.user;S=seed();S.user=u;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
+  case 'notiz':notizSheet();break;
+  case 'notizen':notizenSheet();break;
+  case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht. Die Notizen bleiben erhalten.','Zurücksetzen',()=>{const u=S.user;const nz=S.notizen||[];S=seed();S.user=u;S.notizen=nz;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
   case 'gsel':e.geraete[b.dataset.g]=b.dataset.id;if(e.start&&b.dataset.g==='kompressor')e.start.kompH=kp(b.dataset.id).h;save();render();break;
   case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){if(s.length>1)s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
   case 'miete':mieteSheet(e);break;

@@ -41,7 +41,7 @@ const jpost=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/jso
 function fuerServer(e){const c=JSON.parse(JSON.stringify(e));delete c.lsHtml;delete c.sync_abschluss;delete c.serverDocs;
   c.fotos=(c.fotos||[]).map(f=>({id:f.id,anlage:f.anlage,phase:f.phase,tag:f.tag||0,ts:f.ts}));return c}
 async function stempel(o){return sha(JSON.stringify(o))}
-function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,geloescht:S.weg||{}}}
+function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,notizen:S.notizen||[],geloescht:S.weg||{}}}
 function zaehlen(){let n=0;for(const e of S.einsaetze){n+=(e.fotos||[]).filter(f=>!f.up).length;if(e.sync_abschluss)n++}SY.offen=n}
 let syncT=null;function syncBald(ms=1500){clearTimeout(syncT);syncT=setTimeout(syncen,ms)}
 async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.busy=true;SY.again=false;chip();
@@ -65,7 +65,7 @@ async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.bu
 async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}catch(err){SY.offline=!!err.netz;SY.err=err.message;chip();if(err.auth){S.user=null;save0();V={name:'login'};render()}return}
   ['mitarbeiter','strahlgeraete','typen','strahlmittel','checkliste'].forEach(k=>{if(d[k]!=null)S[k]=d[k]});
   const lokalL=await stempel(listen());const listenUnveraendert=sk().listen===lokalL;
-  for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern']){const srv=d[k]||[];
+  for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern','notizen']){const srv=d[k]||[];
     if(listenUnveraendert)S[k]=srv;else{const m=new Map(srv.map(x=>[x.id,x]));(S[k]||[]).forEach(x=>m.set(x.id,x));S[k]=[...m.values()]}}
   if(listenUnveraendert)sk().listen=await stempel(listen());
   const neu=[];
