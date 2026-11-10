@@ -280,6 +280,7 @@ function missingDay(e,t,closing){const i=e.tage.indexOf(t);const out=[];const id
     if(!closing&&!pOk(z))out.push({txt:`Tag ${i+1}, ${n}: Pause nicht bestätigt`,tab:'heute',day:i});
     const se=seqErr(z);if(se)out.push({txt:`Tag ${i+1}, ${n}: ${se}`,tab:'heute',day:i})});
   if(!(t.bericht.text||'').trim())out.push({txt:`Tag ${i+1}: Arbeitsbericht fehlt`,tab:'bericht',day:i});
+  if(e.anlagen.length&&!tagAnlagen(e,t).length)out.push({txt:`Tag ${i+1}: Welche Anlagen wurden gereinigt?`,tab:'fotos',day:i});
   return out}
 function missingJob(e){const out=[];if(!e.tage.length)out.push({txt:'Es wurde noch kein Tag erfasst',tab:'heute'});
   e.tage.forEach((t,i)=>out.push(...missingDay(e,t,i===e.tage.length-1||!!t.unterschrift)));
@@ -290,7 +291,7 @@ function gateSheet(e,items,title){sheet(`<h2>${esc(title)}</h2><p class="small m
   <p class="small muted">Eine Anlage, die nicht gereinigt wurde, kann unter Fotos gelöscht werden.</p><div class="row" style="justify-content:flex-end"><button class="btn pri" id="gs-c">Verstanden</button></div>`,el=>{
     el.querySelector('#gs-c').onclick=closeSheet;
     el.querySelectorAll('[data-g]').forEach(b=>b.onclick=()=>{const it=items[+b.dataset.g];closeSheet();V={name:'einsatz',id:e.id};ui.tab=it.tab;if(it.day!=null)ui.day=it.day;if(it.anlage)ui.anlage=it.anlage;render();scrollTo(0,0)})})}
-function dayTabs(e){if(!e.tage.length)return'';const sel=selTag(e);return `<div class="pickrow" style="margin-bottom:16px" role="tablist" aria-label="Tage">${e.tage.map((t,i)=>`<button class="pick${t===sel?' on':''}" role="tab" aria-selected="${t===sel}" data-a="day" data-i="${i}">Tag ${i+1} · ${fD(t.datum)}<span class="small" style="margin-left:6px;font-weight:400">${t.unterschrift||e.status==='abgeschlossen'?'unterschrieben':t.fertig?'erledigt':'heute'}</span></button>`).join('')}</div>`}
+function dayTabs(e){if(!e.tage.length)return'';const sel=selTag(e);return `<div class="pickrow" style="margin-bottom:16px" role="tablist" aria-label="Tage">${e.tage.map((t,i)=>`<button class="pick${t===sel?' on':''}" role="tab" aria-selected="${t===sel}" data-a="day" data-i="${i}">Tag ${i+1} · ${fD(t.datum)}<span class="small" style="margin-left:6px;font-weight:400">${t.unterschrift||e.ergebnis==='unterschrieben'?'unterschrieben':e.status==='abgeschlossen'?'abgeschlossen':t.fertig?'erledigt':'heute'}</span></button>`).join('')}</div>`}
 
 /* ---------- Toast ---------- */
 let toastT;function toast(msg){let t=$('.toast');if(!t){t=document.createElement('div');t.className='toast';t.setAttribute('role','status');document.body.appendChild(t)}t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true},2600)}
@@ -485,25 +486,83 @@ function zeitBox(e,tag,mid,ix,lk,lead){const dis=lk?' disabled':'';const live=!t
   <div class="sum"><div><span>Rüsten</span><b>${fMin(c.ruest)}</b></div><div><span>Fahrt</span><b>${fMin(c.fahrt)}</b></div><div><span>Vor Ort</span><b>${fMin(c.ort)}</b></div><div><span>Gesamt</span><b>${fMin(c.gesamt)}</b></div></div>
   ${ix>0?`<button class="btn small" style="margin-top:12px" data-a="zcopy" data-m="${mid}" data-src="${lead}"${dis}>Zeiten von ${esc(ma(lead)?.name)} übernehmen</button>`:''}</section>`}
 
-function tFotos(e){if(!ui.anlage||!e.anlagen.find(a=>a.id===ui.anlage))ui.anlage=e.anlagen[0]?.id||null;
-  const tag=offenerTag(e);
-  const cam=e.status!=='abgeschlossen'?`<div class="cam"><div class="pickrow" aria-label="Anlage">${e.anlagen.map(a=>`<button class="pick${ui.anlage===a.id?' on':''}" data-a="anl" data-id="${a.id}">${esc(a.name)}</button>`).join('')}<button class="pick" data-a="anladd">+ Anlage</button></div>
+/* Fotos gehören zu einem Tag (f.tag = Index in e.tage). Je Tag wird festgehalten, welche Anlagen
+   gereinigt wurden (t.anlagen); Anlagen mit Fotos an diesem Tag zählen automatisch dazu. */
+const tagIx=f=>f.tag??0;
+const fotoEdit=e=>e.status!=='abgeschlossen'||e.ergebnis==='ausstehend';
+function tagAnlagen(e,t){const i=e.tage.indexOf(t);if(i<0)return[];const s=new Set(t.anlagen||[]);e.fotos.forEach(f=>{if(tagIx(f)===i)s.add(f.anlage)});return e.anlagen.filter(a=>s.has(a.id))}
+function merkTagAnlage(e,ti,aid){const t=e.tage[ti];if(!t||!aid)return;t.anlagen=tagAnlagen(e,t).map(a=>a.id);if(!t.anlagen.includes(aid))t.anlagen.push(aid)}
+const fotoTag=e=>{const t=selTag(e);return t?e.tage.indexOf(t):Math.max(0,e.tage.length-1)};
+async function neuDoku(e){if(e.status!=='abgeschlossen'||e.ergebnis!=='ausstehend')return;const sig={ohne:true,eingesehen:false,zeiten:e.zeitenAufLs};
+  sig.hash=await sha(e.ls+e.fotos.map(f=>f.id).join(',')+e.einsatzort);e.lsHtml=page3(e,sig);save()}
+function tFotos(e){const tag=selTag(e);const ti=tag?e.tage.indexOf(tag):null;const edit=fotoEdit(e);
+  const heute=tag?tagAnlagen(e,tag):e.anlagen;
+  if(!ui.anlage||!heute.find(a=>a.id===ui.anlage))ui.anlage=heute[0]?.id||null;
+  const nach=e.status==='abgeschlossen'&&edit?`<div class="callout warn" style="margin-bottom:12px"><span>📷</span><div><b>Fotos nachreichen</b><br>Der Job ist ohne Unterschrift abgeschlossen. Fotos können noch ergänzt oder umgehängt werden. Die Fotodokumentation wird dabei neu berechnet.</div></div>`:'';
+  const wahl=tag?`<div class="field" style="margin-bottom:12px"><label>An Tag ${ti+1} gereinigt (${fD(tag.datum)})</label><div class="pickrow">${e.anlagen.map(a=>{const on=heute.some(x=>x.id===a.id);return `<button class="pick${on?' on':''}" data-a="tanl" data-id="${a.id}" aria-pressed="${on}"${edit?'':' disabled'}>${on?'✓ ':''}${esc(a.name)}</button>`}).join('')}${edit?'<button class="pick" data-a="anladd">+ Anlage</button>':''}</div></div>`:'';
+  const dis=ui.anlage?'':' aria-disabled="true" style="opacity:.45;pointer-events:none;flex:1;min-width:160px"';
+  const cam=!edit?'':(tag&&!heute.length)?`<div class="callout" style="margin-bottom:12px"><span>☝️</span><div>Zuerst oben antippen, welche Anlagen an diesem Tag gereinigt wurden.</div></div>`
+    :`<div class="cam"><div class="pickrow" aria-label="Anlage">${heute.map(a=>`<button class="pick${ui.anlage===a.id?' on':''}" data-a="anl" data-id="${a.id}">${esc(a.name)}</button>`).join('')}${tag?'':'<button class="pick" data-a="anladd">+ Anlage</button>'}</div>
     <div class="row"><span class="seg"><button class="${ui.phase==='vorher'?'on':''}" data-a="phase" data-v="vorher">Vorher</button><button class="${ui.phase==='nachher'?'on':''}" data-a="phase" data-v="nachher">Nachher</button></span>
-    <label class="btn pri" for="cam-in" style="flex:1;min-width:180px">📷 Foto aufnehmen</label><input id="cam-in" type="file" accept="image/*" capture="environment" multiple hidden>
-    <button class="btn" data-a="zeigen">🖼️ Fotos zeigen</button></div>
-    ${!tag?'<div class="small muted">Kein offener Tag: Fotos werden dem letzten Tag zugeordnet.</div>':''}</div>`:'';
-  const list=e.anlagen.map((a,ix)=>{const f=ph=>e.fotos.filter(x=>x.anlage===a.id&&x.phase===ph);
-    return `<section class="anl"><h3>${esc(a.name)} <span class="small muted" style="font-weight:400">${f('vorher').length+f('nachher').length} Fotos</span>
-      ${e.status!=='abgeschlossen'?`<span style="margin-left:auto" class="row"><button class="btn small ghost" data-a="anlup" data-id="${a.id}" aria-label="nach oben"${ix===0?' disabled':''}>↑</button><button class="btn small ghost" data-a="anlren" data-id="${a.id}">Umbenennen</button><button class="btn small ghost danger" data-a="anldel" data-id="${a.id}">Löschen</button></span>`:''}</h3>
-      <div class="ph">${['vorher','nachher'].map(ph=>`<div><div class="lbl">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${f(ph).map(x=>`<button class="th" data-a="foto" data-id="${x.id}" aria-label="Foto öffnen"><img data-img="${x.id}" alt="${esc(a.name)} ${ph}"></button>`).join('')||'<div class="empty">noch keine</div>'}</div></div>`).join('')}</div></section>`}).join('');
-  return cam+list+(e.trash.length?`<div class="fab"><span class="small muted">${e.trash.length} gelöschte Fotos im Papierkorb</span><button class="btn small" data-a="restore">Letztes wiederherstellen</button></div>`:'')}
+    <label class="btn pri" for="cam-in"${dis||' style="flex:1;min-width:160px"'}>📷 Foto aufnehmen</label><input id="cam-in" type="file" accept="image/*" capture="environment" multiple hidden>
+    <label class="btn" for="lib-in"${dis||' style="flex:1;min-width:160px"'}>🖼️ Aus Fotos oder Dateien</label><input id="lib-in" type="file" accept="image/*" multiple hidden></div>
+    <div class="small muted">„Aus Fotos oder Dateien“: für Bilder vom Handy des zweiten Mannes, z. B. per AirDrop aufs iPad geschickt.</div></div>`;
+  const fl=(a,ph)=>e.fotos.filter(x=>x.anlage===a.id&&x.phase===ph&&(ti==null||tagIx(x)===ti));
+  const list=heute.map(a=>{const ri=e.anlagen.indexOf(a);const n=fl(a,'vorher').length+fl(a,'nachher').length;const sonst=ti==null?0:e.fotos.filter(x=>x.anlage===a.id&&tagIx(x)!==ti).length;
+    return `<section class="anl"><h3>${esc(a.name)} <span class="small muted" style="font-weight:400">${n} Foto${n===1?'':'s'}${sonst?` · ${sonst} an anderen Tagen`:''}</span>
+      ${edit?`<span style="margin-left:auto" class="row"><button class="btn small ghost" data-a="anlup" data-id="${a.id}" aria-label="nach oben"${ri===0?' disabled':''}>↑</button><button class="btn small ghost" data-a="anlren" data-id="${a.id}">Umbenennen</button><button class="btn small ghost danger" data-a="anldel" data-id="${a.id}">Löschen</button></span>`:''}</h3>
+      <div class="ph">${['vorher','nachher'].map(ph=>`<div><div class="lbl">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${fl(a,ph).map(x=>`<button class="th" data-a="foto" data-id="${x.id}" aria-label="Foto öffnen"><img data-img="${x.id}" alt="${esc(a.name)} ${ph}"></button>`).join('')||'<div class="empty">noch keine</div>'}</div></div>`).join('')}</div></section>`}).join('');
+  const andere=tag?e.anlagen.filter(a=>!heute.some(x=>x.id===a.id)):[];
+  const rest=andere.length?`<p class="small muted" style="margin-top:12px">An diesem Tag nicht gereinigt: ${andere.map(a=>{const k=e.fotos.filter(x=>x.anlage===a.id).length;return esc(a.name)+(k?` (${k} Fotos an anderen Tagen)`:'')}).join(', ')}</p>`:'';
+  const fab=`<div class="fab">${e.trash.length&&edit?`<span class="small muted">${e.trash.length} gelöschte Fotos im Papierkorb</span><button class="btn small" data-a="restore">Letztes wiederherstellen</button>`:''}<button class="btn" data-a="zeigen">🖼️ Fotos zeigen</button>${e.fotos.length?`<button class="btn" data-a="fteilen">📤 Fotos teilen (${e.fotos.length})</button>`:''}</div>`;
+  return (e.tage.length>1?dayTabs(e):'')+nach+wahl+cam+list+rest+fab}
+
+/* Fotos als Dateien teilen (AirDrop, Mail, In Dateien sichern). Erst vorbereiten, dann teilen:
+   Safari erlaubt das Teilen nur direkt nach einem Fingertipp. */
+async function fotoDateien(e,nurTag){const ord=a=>e.anlagen.findIndex(x=>x.id===a);
+  const liste=e.fotos.filter(f=>nurTag==null||tagIx(f)===nurTag).sort((a,b)=>tagIx(a)-tagIx(b)||ord(a.anlage)-ord(b.anlage)||(a.phase==='vorher'?0:1)-(b.phase==='vorher'?0:1)||(a.ts||0)-(b.ts||0));
+  const out=[];const z={};for(const f of liste){const b=await getBlob(f.id);if(!b)continue;const an=e.anlagen.find(a=>a.id===f.anlage)?.name||'Anlage';const k=tagIx(f)+an+f.phase;z[k]=(z[k]||0)+1;
+    const d=e.tage[tagIx(f)]?.datum||e.von||today();out.push(new File([b],`${yymmdd(d)} ${e.einsatzort} ${an} ${f.phase} ${pad(z[k])}.jpg`.replace(/[\/\\:*?"<>|]/g,'-'),{type:b.type||'image/jpeg'}))}
+  return out}
+function teilenSheet(e){const opts=[[null,`Alle Fotos (${e.fotos.length})`],...(e.tage.length>1?e.tage.map((t,i)=>[i,`Tag ${i+1} · ${fD(t.datum)} (${e.fotos.filter(f=>tagIx(f)===i).length})`]):[])];
+  sheet(`<h2>Fotos teilen</h2><p class="small muted" style="margin-top:0">Die Fotos werden als Dateien weitergegeben, z. B. per AirDrop an das iPad oder mit „In Dateien sichern“.</p>
+  <div class="stack">${opts.map(([v,l],k)=>`<button class="btn" data-ft="${k}">${esc(l)}</button>`).join('')}</div><div id="ft-st" class="small muted" style="min-height:20px;margin-top:8px" role="status"></div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" id="ft-c">Schließen</button></div>`,el=>{el.querySelector('#ft-c').onclick=closeSheet;const st=el.querySelector('#ft-st');
+    el.querySelectorAll('[data-ft]').forEach(btn=>btn.onclick=async()=>{const [v,l]=opts[+btn.dataset.ft];
+      if(btn.dataset.ready){const fs=btn._files;
+        try{if(navigator.canShare&&navigator.canShare({files:fs})){await navigator.share({files:fs,title:e.einsatzort+' Fotos'});return}}catch(err){if(err&&err.name==='AbortError')return}
+        fs.forEach(f=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove()});return}
+      st.textContent='Fotos werden vorbereitet…';btn.disabled=true;const fs=await fotoDateien(e,v);btn.disabled=false;
+      if(!fs.length){st.textContent='Keine Fotos gefunden.';return}
+      btn._files=fs;btn.dataset.ready=1;btn.classList.add('pri');btn.textContent=`📤 ${fs.length} Fotos jetzt teilen`;st.textContent='Bereit. Noch einmal antippen zum Teilen.'})})}
+
+/* Fotos aus der Mediathek oder aus Dateien übernehmen und einem Tag, einer Anlage zuordnen */
+function importFotos(e,files){const ti0=fotoTag(e);
+  const dts=[...new Set(files.map(f=>f.lastModified?isoDate(new Date(f.lastModified)):''))];
+  let tsel=ti0;if(dts.length===1&&dts[0]){const k=e.tage.findIndex(t=>t.datum===dts[0]);if(k>=0)tsel=k}
+  const t0=e.tage[tsel];const leute=[...new Set([...(t0?Object.keys(t0.zeiten):[]),e.team.vor,e.team.fach,S.user].filter(Boolean))];
+  const anl=t0&&tagAnlagen(e,t0).length?tagAnlagen(e,t0):e.anlagen;const aSel=anl.find(a=>a.id===ui.anlage)?ui.anlage:anl[0]?.id;
+  formSheet(`${files.length} Foto${files.length>1?'s':''} hinzufügen`,
+    `${e.tage.length>1?pickField('t','Tag',e.tage.map((t,i)=>[String(i),`Tag ${i+1} · ${fD(t.datum)}`]),String(tsel)):''}
+    ${pickField('a','Anlage',e.anlagen.map(a=>[a.id,a.name]),aSel)}
+    ${pickField('p','Vorher oder nachher',[['vorher','Vorher'],['nachher','Nachher']],ui.phase)}
+    ${pickField('v','Fotografiert von',leute.map(id=>[id,ma(id)?.name||id]),S.user||leute[0])}
+    <p class="small muted" style="margin:0">${dts.length===1&&dts[0]?`Datum laut Datei: ${fDY(dts[0])}. `:''}Alle ausgewählten Fotos bekommen diese Zuordnung. Einzelne Fotos lassen sich danach antippen und umhängen.</p>`,
+    'Hinzufügen',d=>{if(!d.a)return'Bitte eine Anlage wählen.';const tg=d.t!=null&&d.t!==''?+d.t:tsel;
+      (async()=>{toast(`${files.length} Foto${files.length>1?'s werden':' wird'} gespeichert…`);let neu=0,dopp=0;
+        for(const f of files){const src=[f.name,f.size,f.lastModified].join('|');if(e.fotos.some(x=>x.src===src)){dopp++;continue}
+          const blob=await shrink(f);const id=uid();await putBlob(id,blob);e.fotos.push({id,anlage:d.a,phase:d.p||'vorher',tag:tg,ts:f.lastModified||Date.now(),von:d.v||S.user,src});neu++}
+        merkTagAnlage(e,tg,d.a);ui.anlage=d.a;ui.phase=d.p||ui.phase;if(e.tage.length)ui.day=tg;save();await neuDoku(e);render();
+        toast(`${neu} Foto${neu===1?'':'s'} hinzugefügt${dopp?`, ${dopp} schon vorhanden`:''}`)})()})}
 
 function tBericht(e){const tag=selTag(e);if(!tag)return'<div class="empty">Noch kein Tag begonnen.</div>';
   const b=tag.bericht;const fertig=locked(e,tag);
   const team=tagTeam(e,tag);const miss=team.flatMap(m=>{const z=tag.zeiten[m];return z?calc(z).missing.map(x=>`${ma(m).name}: ${x}`):[`${ma(m).name}: keine Zeiten`]});
   const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const ty=S.typen[s.typ];b.einst[sid]=b.einst[sid]||{};
     return `<div class="box"><h3 style="margin-bottom:8px">${esc(s.name)}</h3>${ty.felder.map(fd=>`<div class="field" style="margin-bottom:10px"><label>${esc(fd.label)}</label><div class="pickrow">${fd.werte.map(w=>`<button class="pick${String(b.einst[sid][fd.key])===w?' on':''}" data-a="einst" data-s="${sid}" data-k="${fd.key}" data-v="${w}"${fertig?' disabled':''}>${esc(w)}</button>`).join('')}</div></div>`).join('')}</div>`}).join('');
+  const ga=tagAnlagen(e,tag);
   return dayTabs(e)+`<h2 style="margin-bottom:12px">Tagesbericht Tag ${e.tage.indexOf(tag)+1} · ${fD(tag.datum)}</h2>
+  <div class="row" style="margin-bottom:12px;flex-wrap:wrap"><span class="small"><b>Gereinigt:</b> ${ga.length?ga.map(a=>esc(a.name)).join(', '):'<span class="muted">noch nicht gewählt</span>'}</span><button class="btn small ghost" data-a="tab" data-t="fotos">unter Fotos ändern</button></div>
   ${miss.length&&!fertig?`<div class="callout warn" style="margin-bottom:12px"><span>⏱️</span><div><b>Es fehlen noch Zeiten</b><br>${miss.map(esc).join('<br>')}</div></div>`:''}
   <div class="stack">
   <div class="field"><label for="b-text">Was wurde gemacht?</label><textarea class="inp" id="b-text" data-b="text"${fertig?' disabled':''} placeholder="Tischtauscher 1 bis 3 gereinigt, Lamellen teilweise verbogen">${esc(b.text)}</textarea></div>
@@ -584,7 +643,7 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
   return `<div class="paper"><div class="lh"><b>LÜKE</b><i>Strahltechnik</i></div>
   <div><b>Lieferschein ${esc(e.ls||'(folgt)')} – Arbeitsnachweis</b></div>
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
-  <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
+  <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${tl.length>1&&tagAnlagen(e,t).length?` <span style="color:#666">(${tagAnlagen(e,t).map(a=>esc(a.name)).join(', ')})</span>`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
   <div class="g">${mitarbeiterZeilen(e).map(r=>`<span>${r.rolle}</span><span>${esc(r.name)}${r.tage?` <span style="color:#666">(${r.tage})</span>`:''}</span>`).join('')}
   <span>Strahlmittel</span><span>${[...smArt].filter(Boolean).map(k=>esc(S.strahlmittel[k])).join(', ')||'–'}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span></div>
   ${zeiten}
@@ -818,22 +877,27 @@ document.addEventListener('click',async ev=>{
     const z=t.zeiten[id];const weg=()=>{delete t.zeiten[id];save();render();toast(`${ma(id)?.name} an diesem Tag nicht dabei`)};
     if(Object.values(z.p).some(Boolean))confirmSheet('Nicht dabei?',`Für ${esc(ma(id)?.name)} sind an diesem Tag schon Zeiten eingetragen. Wirklich herausnehmen? Die Zeiten werden gelöscht.`,'Herausnehmen',weg);else weg();break}
   case 'zeigen':showMode(e);break;
+  case 'fteilen':teilenSheet(e);break;
+  case 'tanl':{const t=selTag(e);if(!t)break;const ti=e.tage.indexOf(t);const id=b.dataset.id;t.anlagen=tagAnlagen(e,t).map(a=>a.id);
+    if(t.anlagen.includes(id)){if(e.fotos.some(f=>f.anlage===id&&tagIx(f)===ti)){toast('Diese Anlage hat an diesem Tag Fotos. Erst die Fotos umhängen oder löschen.');break}t.anlagen=t.anlagen.filter(x=>x!==id)}else{t.anlagen.push(id);ui.anlage=id}
+    save();render();break}
   case 'anl':ui.anlage=b.dataset.id;render();break;
   case 'phase':ui.phase=b.dataset.v;render();break;
-  case 'anladd':textSheet('Anlage hinzufügen','Name der Anlage','',v=>{const a={id:uid(),name:v};e.anlagen.push(a);ui.anlage=a.id;save();render()});break;
+  case 'anladd':textSheet('Anlage hinzufügen','Name der Anlage','',v=>{const a={id:uid(),name:v};e.anlagen.push(a);ui.anlage=a.id;const t=selTag(e);if(t)merkTagAnlage(e,e.tage.indexOf(t),a.id);save();render()});break;
   case 'anlren':{const an=e.anlagen.find(x=>x.id===b.dataset.id);textSheet('Anlage umbenennen','Name der Anlage',an.name,v=>{an.name=v;save();render()});break}
   case 'anlup':{const i=e.anlagen.findIndex(x=>x.id===b.dataset.id);if(i>0){[e.anlagen[i-1],e.anlagen[i]]=[e.anlagen[i],e.anlagen[i-1]];save();render()}break}
   case 'anldel':{const an=e.anlagen.find(x=>x.id===b.dataset.id);const n=e.fotos.filter(f=>f.anlage===an.id).length;const rest=e.anlagen.filter(x=>x.id!==an.id);
-    if(!n){confirmSheet('Anlage löschen',`„${esc(an.name)}“ hat keine Fotos und wird gelöscht.`,'Löschen',()=>{e.anlagen=rest;save();render()});break}
+    if(!n){confirmSheet('Anlage löschen',`„${esc(an.name)}“ hat keine Fotos und wird gelöscht.`,'Löschen',()=>{e.anlagen=rest;e.tage.forEach(t=>{if(t.anlagen)t.anlagen=t.anlagen.filter(x=>x!==an.id)});save();render()});break}
     if(!rest.length){toast('Letzte Anlage mit Fotos kann nicht gelöscht werden');break}
-    formSheet('Anlage löschen',`<p>„${esc(an.name)}“ hat ${n} Fotos. Wohin sollen sie verschoben werden?</p>${pickField('z','Ziel-Anlage',rest.map(r=>[r.id,r.name]),rest[0].id)}`,'Verschieben und löschen',d=>{e.fotos.forEach(f=>{if(f.anlage===an.id)f.anlage=d.z});e.anlagen=rest;save();render()});break}
+    formSheet('Anlage löschen',`<p>„${esc(an.name)}“ hat ${n} Fotos. Wohin sollen sie verschoben werden?</p>${pickField('z','Ziel-Anlage',rest.map(r=>[r.id,r.name]),rest[0].id)}`,'Verschieben und löschen',d=>{e.fotos.forEach(f=>{if(f.anlage===an.id)f.anlage=d.z});e.anlagen=rest;e.tage.forEach(t=>{if(t.anlagen)t.anlagen=t.anlagen.filter(x=>x!==an.id)});save();neuDoku(e).then(render)});break}
   case 'foto':{const f=e.fotos.find(x=>x.id===b.dataset.id);if(!f)break;const an=e.anlagen.find(x=>x.id===f.anlage);const u=await imgUrl(f.id);
-    sheet(`<h2>${esc(an?.name)} · ${f.phase}</h2>${u?`<img src="${u}" alt="" style="border-radius:6px;width:100%">`:''}<div class="stack" style="margin-top:12px">${e.status!=='abgeschlossen'?`${pickField('mv','Umhängen zu Anlage',e.anlagen.map(x=>[x.id,x.name]),f.anlage)}<div class="row"><button class="btn" id="ph">${f.phase==='vorher'?'Als Nachher markieren':'Als Vorher markieren'}</button><button class="btn danger" id="del">Foto löschen</button><button class="btn pri" id="cl" style="margin-left:auto">Fertig</button></div>`:'<div class="row" style="justify-content:flex-end"><button class="btn pri" id="cl">Schließen</button></div>'}</div>`,el=>{
-      el.querySelector('#cl').onclick=()=>{closeSheet();render()};
-      el.querySelectorAll('[data-pk=mv]').forEach(x=>x.onclick=()=>{f.anlage=x.dataset.v;el.querySelectorAll('[data-pk=mv]').forEach(y=>y.classList.toggle('on',y===x));save()});
-      const ph=el.querySelector('#ph');if(ph)ph.onclick=()=>{f.phase=f.phase==='vorher'?'nachher':'vorher';save();closeSheet();render();toast('Geändert')};
-      const del=el.querySelector('#del');if(del)del.onclick=()=>{if(del.dataset.sure){e.fotos=e.fotos.filter(x=>x!==f);e.trash.push(f);save();closeSheet();render();toast('Foto im Papierkorb')}else{del.dataset.sure=1;del.textContent='Wirklich löschen?'}}});break}
-  case 'restore':{const f=e.trash.pop();if(f){e.fotos.push(f);save();render();toast('Foto wiederhergestellt')}break}
+    sheet(`<h2>${esc(an?.name)} · ${f.phase}</h2>${u?`<img src="${u}" alt="" style="border-radius:6px;width:100%">`:''}<p class="small muted" style="margin:6px 0 0">${e.tage[tagIx(f)]?`Tag ${tagIx(f)+1} · ${fD(e.tage[tagIx(f)].datum)}`:''}${f.von&&ma(f.von)?` · fotografiert von ${esc(ma(f.von).name)}`:''}</p><div class="stack" style="margin-top:12px">${fotoEdit(e)?`${e.tage.length>1?pickField('mt','Umhängen zu Tag',e.tage.map((t,i)=>[String(i),`Tag ${i+1} · ${fD(t.datum)}`]),String(tagIx(f))):''}${pickField('mv','Umhängen zu Anlage',e.anlagen.map(x=>[x.id,x.name]),f.anlage)}<div class="row"><button class="btn" id="ph">${f.phase==='vorher'?'Als Nachher markieren':'Als Vorher markieren'}</button><button class="btn danger" id="del">Foto löschen</button><button class="btn pri" id="cl" style="margin-left:auto">Fertig</button></div>`:'<div class="row" style="justify-content:flex-end"><button class="btn pri" id="cl">Schließen</button></div>'}</div>`,el=>{
+      el.querySelector('#cl').onclick=async()=>{closeSheet();await neuDoku(e);render()};
+      el.querySelectorAll('[data-pk=mv]').forEach(x=>x.onclick=()=>{f.anlage=x.dataset.v;merkTagAnlage(e,tagIx(f),f.anlage);el.querySelectorAll('[data-pk=mv]').forEach(y=>y.classList.toggle('on',y===x));save()});
+      el.querySelectorAll('[data-pk=mt]').forEach(x=>x.onclick=()=>{f.tag=+x.dataset.v;merkTagAnlage(e,f.tag,f.anlage);el.querySelectorAll('[data-pk=mt]').forEach(y=>y.classList.toggle('on',y===x));save()});
+      const ph=el.querySelector('#ph');if(ph)ph.onclick=async()=>{f.phase=f.phase==='vorher'?'nachher':'vorher';save();closeSheet();await neuDoku(e);render();toast('Geändert')};
+      const del=el.querySelector('#del');if(del)del.onclick=async()=>{if(del.dataset.sure){e.fotos=e.fotos.filter(x=>x!==f);e.trash.push(f);save();closeSheet();await neuDoku(e);render();toast('Foto im Papierkorb')}else{del.dataset.sure=1;del.textContent='Wirklich löschen?'}}});break}
+  case 'restore':{const f=e.trash.pop();if(f){e.fotos.push(f);save();await neuDoku(e);render();toast('Foto wiederhergestellt')}break}
   case 'sm':selTag(e).bericht.sm=b.dataset.v;save();render();break;
   case 'grund':selTag(e).bericht.grund=b.dataset.v==='1';save();render();break;
   case 'einst':{const t=selTag(e);t.bericht.einst[b.dataset.s]=t.bericht.einst[b.dataset.s]||{};t.bericht.einst[b.dataset.s][b.dataset.k]=b.dataset.v;save();render();break}
@@ -869,8 +933,9 @@ document.addEventListener('input',ev=>{const t=ev.target;const e=V.id?E(V.id):nu
 document.addEventListener('change',async ev=>{const t=ev.target;const e=V.id?E(V.id):null;
   if(t.dataset.f&&e){const alt=e.team[t.dataset.f];e.team[t.dataset.f]=t.value||null;const ct=offenerTag(e);
     if(ct){if(alt&&alt!==t.value&&ct.zeiten[alt]&&!Object.values(ct.zeiten[alt].p).some(Boolean)&&Object.keys(ct.zeiten).length>1)delete ct.zeiten[alt];if(t.value&&!ct.zeiten[t.value])ct.zeiten[t.value]=leereZeiten(e,t.value)}save();render()}
-  if(t.id==='cam-in'&&e&&t.files.length){const files=[...t.files];toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');const tg=Math.max(0,e.tage.length-1);
-    let last=null;for(const f of files){const blob=await shrink(f);const id=uid();await putBlob(id,blob);last={id,anlage:ui.anlage,phase:ui.phase,tag:tg,ts:Date.now()};e.fotos.push(last)}save();render();if(last)postShot(e,last,files.length)}});
+  if(t.id==='cam-in'&&e&&t.files.length){const files=[...t.files];toast(files.length>1?`${files.length} Fotos werden gespeichert…`:'Foto wird gespeichert…');const tg=fotoTag(e);
+    let last=null;for(const f of files){const blob=await shrink(f);const id=uid();await putBlob(id,blob);last={id,anlage:ui.anlage,phase:ui.phase,tag:tg,ts:Date.now(),von:S.user};e.fotos.push(last)}merkTagAnlage(e,tg,ui.anlage);save();await neuDoku(e);render();if(last)postShot(e,last,files.length)}
+  if(t.id==='lib-in'&&e&&t.files.length){const files=[...t.files];t.value='';importFotos(e,files)}});
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&$('#layer').innerHTML)closeSheet();if(ev.key==='Enter'&&ev.target.id==='lg-pin')document.querySelector('[data-a=login]').click()});
 
 /* ---------- Start ---------- */
