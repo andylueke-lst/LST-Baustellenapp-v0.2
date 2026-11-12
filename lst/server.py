@@ -1162,7 +1162,19 @@ def tanken_eintrag_loeschen(tid):
 def tanken_seite():
     """Tankvorgänge sowie Kompressor-Betriebsstunden und Kilometer je Einsatz."""
     von, bis, _ = _zeitraum_auswahl()
-    return _tanken_anzeigen(von, bis, request.args.get("g") or None, neu=request.args.get("neu"))
+    g = request.args.get("g") or None
+    if request.args.get("pdf") or request.args.get("csv"):
+        from . import auswertung as aw
+        gruppen = aw.tank_summen([t for t in aw.tankvorgaenge(von, bis) if not g or t["gid"] == g])
+        kurz = f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]}"
+        zusatz = f" {gruppen[0]['geraet']}" if g and gruppen else ""
+        if request.args.get("csv"):
+            return send_file(io.BytesIO(aw.csv_tanken(gruppen)), mimetype="text/csv", as_attachment=True,
+                             download_name=f"{kurz} LST Tanken{zusatz}.csv")
+        from .dokumente import tanken as dok_tanken
+        return send_file(io.BytesIO(dok_tanken.tankliste(gruppen, von, bis)), mimetype="application/pdf",
+                         download_name=f"{kurz} LST Tanken{zusatz}.pdf")
+    return _tanken_anzeigen(von, bis, g, neu=request.args.get("neu"))
 
 
 def _tanken_anzeigen(von, bis, g, fehler=None, eingabe=None, neu=None):

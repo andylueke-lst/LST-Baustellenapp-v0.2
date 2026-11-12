@@ -364,3 +364,22 @@ def csv_arbeitszeiten(zeilen: list[dict]) -> bytes:
                         _dez(z["fahrt"]), _dez(z["ort"]), _dez(z["gesamt"]), hm(z["gesamt"]),
                         "fehlt: " + ", ".join(z["fehlt"]) if z["fehlt"] else ""])
     return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+
+def csv_tanken(gruppen: list[dict]) -> bytes:
+    """Alle Einträge je Gerät für Excel (Semikolon, deutsche Kommazahlen)."""
+    def k(x, st=2):
+        return f"{float(x):.{st}f}".replace(".", ",") if x not in (None, "") else ""
+    buf = io.StringIO()
+    w = csv.writer(buf, delimiter=";")
+    w.writerow(["Gerät/Fahrzeug", "Datum", "Stand", "Einheit Stand", "Diesel (l)", "Betrag (€)", "€/Liter",
+                "Seit letztem Tanken", "Verbrauch", "Einheit Verbrauch", "Öl geprüft", "Öl nachgefüllt (l)",
+                "Wer", "Einsatz"])
+    for x in gruppen:
+        km = x["art"] == "km"
+        for t in x["eintraege"]:
+            w.writerow([x["geraet"], date.fromisoformat(t["datum"]).strftime("%d.%m.%Y"), k(t["stand"], 1),
+                        "km" if km else "Std.", k(t["liter"]), k(t["betrag"]), k(t.get("preis"), 3),
+                        k(t.get("seit"), 1), k(t.get("verbrauch"), 2), "l/100 km" if km else "l/h",
+                        "ja" if t["oel_geprueft"] else "", k(t["oel_l"]), t["wer"], t["wo"]])
+    return ("\ufeff" + buf.getvalue()).encode("utf-8")

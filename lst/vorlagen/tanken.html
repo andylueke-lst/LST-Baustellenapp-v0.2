@@ -15,6 +15,12 @@
 </form>
 <p class="small" style="margin-top:8px">{% for t, a, b in schnell %}<a href="?von={{ a.isoformat() }}&bis={{ b.isoformat() }}{% if g %}&g={{ g|urlencode }}{% endif %}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
 
+<div class="row" style="flex-wrap:wrap;gap:8px;margin:16px 0 4px">
+  <a class="btn pri" href="?von={{ von }}&bis={{ bis }}{% if g %}&g={{ g|urlencode }}{% endif %}&pdf=1" target="_blank" rel="noopener">📄 PDF</a>
+  <a class="btn" href="?von={{ von }}&bis={{ bis }}{% if g %}&g={{ g|urlencode }}{% endif %}&csv=1">📊 CSV</a>
+  <span class="small muted">{{ datum(von) }} – {{ datum(bis) }}{% if g %} · nur ausgewähltes Gerät{% endif %}</span>
+</div>
+
 {% if gruppen %}
 <h2>Übersicht</h2>
 <table class="tab">
