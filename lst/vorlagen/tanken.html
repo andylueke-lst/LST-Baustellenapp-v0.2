@@ -18,9 +18,10 @@
 {% if gruppen %}
 <h2>Übersicht</h2>
 <table class="tab">
-  <tr><th>Gerät / Fahrzeug</th><th>Tankvorgänge</th><th>Diesel</th><th>Betrag</th><th>Öl geprüft</th><th>Öl nachgefüllt</th><th>Letzter Stand</th></tr>
+  <tr><th>Gerät / Fahrzeug</th><th>Tankvorgänge</th><th>Diesel</th><th>Betrag</th><th>Verbrauch</th><th>Öl geprüft</th><th>Öl nachgefüllt</th><th>Letzter Stand</th></tr>
   {% for x in gruppen %}{% set letzt = x.eintraege|selectattr('stand')|list|last %}<tr>
     <td><a href="#g-{{ loop.index }}"><b>{{ x.geraet }}</b></a></td><td>{{ x.anzahl }}</td><td>{{ zahl(x.liter) }} l</td><td>{{ zahl(x.betrag, 2) }} €</td>
+    <td>{% if x.verbrauch %}<b>{{ zahl(x.verbrauch, 1) }} {{ 'l/100 km' if x.art == 'km' else 'l/h' }}</b> <span class="small muted">({{ zahl(x.v_strecke) }} {{ 'km' if x.art == 'km' else 'Std.' }})</span>{% else %}–{% endif %}</td>
     <td>{{ x.oel_kontrollen }}×</td><td>{{ zahl(x.oel_l) }} l</td>
     <td>{% if letzt %}{{ zahl(letzt.stand) }} {{ 'km' if x.art == 'km' else 'Std.' }} <span class="small muted">({{ datum(letzt.datum) }})</span>{% else %}–{% endif %}</td></tr>{% endfor %}
 </table>
@@ -28,18 +29,21 @@
 {% for x in gruppen %}
 <h2 id="g-{{ loop.index }}">{{ x.geraet }}{% if not g %} <a class="btn small" style="margin-left:8px" href="?von={{ von }}&bis={{ bis }}&g={{ x.gid|urlencode }}">nur dieses</a>{% endif %}</h2>
 <table class="tab">
-  <tr><th>Datum</th><th>{{ 'Kilometerstand' if x.art == 'km' else 'Betriebsstunden' }}</th><th>Diesel</th><th>Betrag</th><th>€/l</th><th>Öl</th><th>Wer</th><th>Einsatz</th><th></th></tr>
+  <tr><th>Datum</th><th>{{ 'Kilometerstand' if x.art == 'km' else 'Betriebsstunden' }}</th><th>Diesel</th><th>Betrag</th><th>€/l</th><th>Verbrauch</th><th>Öl</th><th>Wer</th><th>Einsatz</th><th></th></tr>
   {% for t in x.eintraege %}<tr><td>{{ datum(t.datum) }}</td>
     <td>{{ zahl(t.stand) }}{% if t.stand is not none %} {{ 'km' if t.art == 'km' else 'Std.' }}{% endif %}</td>
     <td>{{ zahl(t.liter) ~ ' l' if t.liter else '–' }}</td>
     <td>{{ zahl(t.betrag, 2) ~ ' €' if t.betrag is not none else '–' }}</td>
     <td>{{ zahl(t.preis, 3) if t.preis else '–' }}</td>
+    <td>{% if t.verbrauch is defined and t.verbrauch is not none %}{{ zahl(t.verbrauch, 1) }} {{ 'l/100 km' if t.art == 'km' else 'l/h' }} <span class="small muted">({{ zahl(t.seit) }} {{ 'km' if t.art == 'km' else 'Std.' }})</span>{% else %}–{% endif %}</td>
     <td>{% if t.oel_l %}<span class="tag yellow">{{ zahl(t.oel_l) }} l nachgefüllt</span>{% elif t.oel_geprueft %}<span class="tag green">geprüft</span>{% else %}–{% endif %}</td>
     <td>{{ t.wer }}</td><td>{% if t.eid %}<a href="{{ url_for('einsatz_seite', eid=t.eid) }}">{{ t.wo }}</a>{% endif %}</td>
     <td><form method="post" action="{{ url_for('tanken_eintrag_loeschen', tid=t.id) }}" onsubmit="return confirm('Eintrag löschen?')"><button class="btn small" title="Eintrag löschen" aria-label="Eintrag löschen">🗑</button></form></td></tr>{% endfor %}
 </table>
 {% endfor %}
 {% else %}<h2>Tanken und Öl</h2><div class="empty">Keine Einträge in diesem Zeitraum.</div>{% endif %}
+
+<p class="small muted">Verbrauch: getankte Liter geteilt durch die Kilometer bzw. Betriebsstunden seit dem vorigen Tanken desselben Geräts. Stimmt, wenn jedes Mal vollgetankt wird und der Stand eingetragen ist.</p>
 
 <h2 id="eintragen">Tanken oder Öl im Büro eintragen</h2>
 <form method="post" action="{{ url_for('tanken_eintragen') }}" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">

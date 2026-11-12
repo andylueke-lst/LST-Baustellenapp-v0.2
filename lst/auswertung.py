@@ -257,20 +257,45 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
                    for k in speicher.stamm("kompressoren", [])})
     orte = {e["id"]: e.get("einsatzort", "") for e in speicher.einsaetze()}
     aus = []
+    alle = []
     for t in speicher.stamm("tanken", []):
-        if not isinstance(t, dict) or not _im_zeitraum(t.get("datum"), von, bis):
+        if not isinstance(t, dict) or not t.get("datum"):
             continue
         name, art = geraet.get(t.get("geraet"), (t.get("geraet") or "?", "km"))
         stand = t.get("h") if art == "h" else t.get("km")
         if art == "h" and stand is None and t.get("km") is not None:
             stand = t.get("km")  # ältere Einträge: Stand stand im Kilometerfeld
-        aus.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
+        alle.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
                     "betrag": _betrag(t), "preis": _preis(t), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
                     "oel_l": t.get("oel_l"), "id": t.get("id"),
                     "stand": stand, "wer": namen.get(t.get("von"), t.get("von") or ""),
                     "wo": orte.get(t.get("einsatz"), ""), "eid": t.get("einsatz")})
+    verbrauch_rechnen(alle)
+    aus = [t for t in alle if _im_zeitraum(t["datum"], von, bis)]
     aus.sort(key=lambda x: (x["datum"], x["geraet"]))
     return aus
+
+
+def verbrauch_rechnen(alle: list[dict]):
+    """Verbrauch nach der Volltank-Methode: getankte Liter geteilt durch die Strecke (bzw. Stunden)
+    seit dem vorigen Tanken desselben Geräts. Sprinter in l/100 km, Kompressor in l/h.
+    Ölkontrollen ohne Diesel zählen nicht als Tankvorgang. Rechnet über die ganze Historie,
+    damit auch der erste Tankvorgang im Zeitraum einen Vorgänger hat."""
+    je = {}
+    for t in alle:
+        if t["liter"] and t["stand"] is not None:
+            je.setdefault(t["gid"], []).append(t)
+    for liste in je.values():
+        liste.sort(key=lambda t: (float(t["stand"]), t["datum"]))
+        vorher = None
+        for t in liste:
+            t["seit"] = None
+            if vorher is not None:
+                d = float(t["stand"]) - float(vorher["stand"])
+                if d > 0:
+                    t["seit"] = d
+                    t["verbrauch"] = float(t["liter"]) / d * (100 if t["art"] == "km" else 1)
+            vorher = t
 
 
 def tank_summen(tank: list[dict]) -> list[dict]:
@@ -284,6 +309,12 @@ def tank_summen(tank: list[dict]) -> list[dict]:
         x["oel_l"] += float(t["oel_l"] or 0)
         x["liter"] += float(t["liter"] or 0)
         x["betrag"] += float(t["betrag"] or 0)
+        if t.get("verbrauch") is not None:
+            x["v_liter"] = x.get("v_liter", 0.0) + float(t["liter"])
+            x["v_strecke"] = x.get("v_strecke", 0.0) + t["seit"]
+    for x in s.values():
+        if x.get("v_strecke"):
+            x["verbrauch"] = x["v_liter"] / x["v_strecke"] * (100 if x["art"] == "km" else 1)
     return sorted(s.values(), key=lambda x: (x["art"] != "km", x["geraet"]))
 
 
