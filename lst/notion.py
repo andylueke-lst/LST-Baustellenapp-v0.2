@@ -401,16 +401,22 @@ AUFGABEN_QUELLE = "930c0024-ee04-4560-bf79-a47f02f2e709"   # LST Aufgaben
 
 def aufgaben_abfragen() -> list[dict]:
     ds = einstellungen().get("aufgaben") or AUFGABEN_QUELLE
-    filt = {"and": [{"property": IPAD_FELD, "select": {"is_not_empty": True}},
-                    {"property": "Erledigt", "checkbox": {"equals": False}}]}
+    # „iPad für“ darf Einfach- oder Mehrfachauswahl sein
+    def filt(art):
+        return {"and": [{"property": IPAD_FELD, art: {"is_not_empty": True}},
+                        {"property": "Erledigt", "checkbox": {"equals": False}}]}
+    art = "multi_select"
     aus, cursor = [], None
     while True:
-        body = {"filter": filt, "page_size": 100}
+        body = {"filter": filt(art), "page_size": 100}
         if cursor:
             body["start_cursor"] = cursor
         try:
             d = _anfrage("POST", f"/data_sources/{ds}/query", body)
         except NotionFehler as e:
+            if art == "multi_select" and not cursor:
+                art = "select"
+                continue
             if "iPad" in str(e) or "property" in str(e).lower():
                 raise NotionFehler(f"In LST Aufgaben fehlt das Feld „{IPAD_FELD}“ (Auswahl: Matthias, Faro, Arthur, Alle).") from None
             raise
@@ -444,16 +450,20 @@ def aufgaben_abgleichen() -> dict:
     neu, uebersprungen = {}, 0
     for p in aufgaben_abfragen():
         status = eig(p, "LST Status intern")
-        fuer = (eig(p, IPAD_FELD) or "").strip()
+        roh = eig(p, IPAD_FELD) or []
+        namen = [n.strip() for n in (roh if isinstance(roh, list) else [roh]) if n and n.strip()]
         if status not in AUFGABEN_STATUS:
             continue
-        if fuer.lower() == "alle":
+        fuer_ids = []
+        if any(n.lower() == "alle" for n in namen):
             zust = None
         else:
-            zust = _person_id(fuer)
-            if not zust:
+            fuer_ids = [i for i in (_person_id(n) for n in namen) if i]
+            if not fuer_ids:
                 uebersprungen += 1
                 continue
+            # eine Person: ihr zugeordnet; mehrere: für diese Personen offen, wer „Mache ich“ tippt, übernimmt
+            zust = fuer_ids[0] if len(fuer_ids) == 1 else None
         aid = "n-" + p["id"].replace("-", "")
         vorher = alt.get(aid) or {}
         geaendert = p.get("last_edited_time")
@@ -476,7 +486,7 @@ def aufgaben_abgleichen() -> dict:
         a = {"id": aid, "titel": eig(p, "Aufgabe") or titel(p) or "Aufgabe", "beschreibung": text,
              "datum": ((eig(p, "Wann tun") or {}).get("start") or "")[:10], "zust": zust,
              "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS[status],
-             "prio": eig(p, "Priorität") or "", "projekt": projekt,
+             "prio": eig(p, "Priorität") or "", "projekt": projekt, "fuer": fuer_ids if len(fuer_ids) > 1 else [],
              "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert}}
         if vorher.get("status") == "erledigt":
             a["status"] = "erledigt"

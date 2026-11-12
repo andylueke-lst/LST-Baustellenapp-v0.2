@@ -380,7 +380,14 @@ def _darf_intern(iid: str) -> bool:
     i = _intern(iid)
     if i is None:          # gerade auf dem iPad angelegt, noch nicht abgeglichen
         return True
-    return i.get("zust") in (None, m["id"]) or i.get("erledigt_von") == m["id"]
+    return intern_fuer(i, m["id"]) or i.get("erledigt_von") == m["id"]
+
+
+def intern_fuer(i: dict, mid: str) -> bool:
+    """Interner Auftrag sichtbar für mid: zugeordnet, für mehrere inkl. mid offen, oder für alle offen."""
+    if i.get("zust"):
+        return i["zust"] == mid
+    return not i.get("fuer") or mid in i["fuer"]
 
 
 @app.route("/api/intern/<iid>/foto", methods=["POST"])
@@ -770,7 +777,7 @@ def api_stand():
     for k in LISTEN:
         aus[k] = speicher.stamm(k, [])
     if (m or {}).get("rolle") != "admin":   # interne Aufträge: eigene und „offen für alle“
-        aus["intern"] = [i for i in aus["intern"] if i.get("zust") in (None, m["id"])]
+        aus["intern"] = [i for i in aus["intern"] if intern_fuer(i, m["id"]) or i.get("erledigt_von") == m["id"]]
     return jsonify(aus)
 
 
