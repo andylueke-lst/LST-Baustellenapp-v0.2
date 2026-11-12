@@ -110,9 +110,12 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
 
     # ---- Lieferschein, Seite Arbeitsnachweis
     ma = {k: voller_name(v) for k, v in stamm.get("mitarbeiter", {}).items()}
-    arten = sorted({t["bericht"].get("sm") for t in tage if t["bericht"].get("sm")})
-    grund = all(t["bericht"].get("grund", True) for t in tage)
-    kg = sum(float(t["bericht"].get("kg") or 0) for t in tage if not t["bericht"].get("grund", True))
+    mit_sm = [t for t in tage if t["bericht"].get("sm")]
+    arten = sorted({t["bericht"]["sm"] for t in mit_sm})
+    sonst_text = ", ".join(dict.fromkeys((t["bericht"].get("smText") or "").strip() for t in mit_sm
+                                         if t["bericht"]["sm"] == "sonst" and (t["bericht"].get("smText") or "").strip()))
+    grund = all(t["bericht"].get("grund", True) for t in mit_sm)
+    kg = sum(float(t["bericht"].get("kg") or 0) for t in mit_sm if not t["bericht"].get("grund", True))
     geraete = []
     for sid in e["geraete"].get("strahl", []):
         g = stamm["strahlgeraete"][sid]
@@ -135,7 +138,8 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
         "tage": [{"datum": t["datum"], "text": t["bericht"].get("text"), "bes": t["bericht"].get("bes"),
                   "unterschrieben": bool(t.get("unterschrift"))} for t in tage],
         "mitarbeiter": mitarbeiter_zeilen(e, ma),
-        "strahlmittel": {"arten": arten, "grundmenge": grund, "kg": kg},
+        "strahlmittel": {"arten": arten, "grundmenge": grund, "kg": kg, "sonst_text": sonst_text},
+        "material": [z.get("name", "") for z in e.get("zusatz") or [] if z.get("name")],
         "geraete": geraete, "zeiten": zeiten,
         "fotodoku": {"nummer": fd_nr, "anzahl": len(e["fotos"]), "eingesehen": bool(sig.get("eingesehen")),
                      "pruefsumme": fd_hash},

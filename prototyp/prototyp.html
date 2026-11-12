@@ -370,6 +370,8 @@ function vLogin(){return `<main class="wrap page" style="max-width:520px">
   </div></main>`}
 
 function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).length;
+  if(isAdmin()){const ids=[...new Set([e.team?.vor,e.team?.fach,...(e.tage||[]).flatMap(t=>Object.keys(t.zeiten||{}))].filter(Boolean))].filter(id=>ma(id)?.rolle!=='admin');
+    tg.push(ids.length?`<span class="tag">📱 ${ids.map(id=>esc(ma(id)?.name||'?')).join(', ')}</span>`:'<span class="tag yellow">📱 nur Büro-iPads</span>')}
   if(e.status==='vorbereitet')tg.push(e.ls?'<span class="tag green">Lieferschein da</span>':'<span class="tag yellow">Lieferschein fehlt</span>');
   if(e.zusatz?.length)tg.push('<span class="tag orange">Zusatzmaterial</span>');
   if(nr)tg.push(`<span class="tag purple">${nr} Reisetag${nr>1?'e':''}</span>`);
@@ -381,7 +383,7 @@ function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).l
   return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(e.einsatzort)}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
 function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="col"><h3>${t} <span class="tag">${list.length}</span></h3>${list.join('')||`<div class="empty">${empty}</div>`}</section>`;
   const es=st=>S.einsaetze.filter(e=>e.status===st).sort((a,b)=>st==='abgeschlossen'?b.von.localeCompare(a.von):a.von.localeCompare(b.von));
-  const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div><div class="tags">${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div></button>`);
+  const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div><div class="tags">${i.zust?`<span class="tag purple">📱 ${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">📱 alle</span>'}</div></button>`);
   const mOffen=S.maengel.filter(m=>m.status==='offen').length;
   return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
   <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
@@ -567,10 +569,11 @@ function tBericht(e){const tag=selTag(e);if(!tag)return'<div class="empty">Noch 
   ${miss.length&&!fertig?`<div class="callout warn" style="margin-bottom:12px"><span>⏱️</span><div><b>Es fehlen noch Zeiten</b><br>${miss.map(esc).join('<br>')}</div></div>`:''}
   <div class="stack">
   <div class="field"><label for="b-text">Was wurde gemacht?</label><textarea class="inp" id="b-text" data-b="text"${fertig?' disabled':''} placeholder="Tischtauscher 1 bis 3 gereinigt, Lamellen teilweise verbogen">${esc(b.text)}</textarea></div>
-  <div class="field"><label>Strahlmittel</label><div class="pickrow">${Object.entries(S.strahlmittel).map(([k,l])=>`<button class="pick${b.sm===k?' on':''}" data-a="sm" data-v="${k}"${fertig?' disabled':''}>${esc(l)}</button>`).join('')}</div></div>
-  <div class="toggle"><span>Menge</span><span class="seg"><button class="${b.grund?'on':''}" data-a="grund" data-v="1"${fertig?' disabled':''}>Grundmenge</button><button class="${!b.grund?'on':''}" data-a="grund" data-v="0"${fertig?' disabled':''}>Mehrmenge in kg</button></span></div>
-  ${!b.grund?`<div class="field"><label for="b-kg">Mehrmenge kg</label><input class="inp num" id="b-kg" inputmode="decimal" data-b="kg" value="${b.kg??''}"${fertig?' disabled':''}></div>`:''}
-  <div class="field"><label>Einstellungen je Strahlgerät</label>${einst}</div>
+  <div class="field"><label>Strahlmittel <span class="small muted">(antippen zum An- und Abwählen)</span></label><div class="pickrow">${Object.entries(S.strahlmittel).map(([k,l])=>`<button class="pick${b.sm===k?' on':''}" data-a="sm" data-v="${k}"${fertig?' disabled':''}>${esc(l)}</button>`).join('')}</div></div>
+  ${b.sm==='sonst'?`<div class="field"><label for="b-smt">Welches Strahlmittel?</label><input class="inp" id="b-smt" data-b="smText" value="${esc(b.smText||'')}" placeholder="z. B. Trockeneis, Glasperlen"${fertig?' disabled':''}></div>`:''}
+  ${b.sm?`<div class="toggle"><span>Menge</span><span class="seg"><button class="${b.grund?'on':''}" data-a="grund" data-v="1"${fertig?' disabled':''}>Grundmenge</button><button class="${!b.grund?'on':''}" data-a="grund" data-v="0"${fertig?' disabled':''}>Mehrmenge in kg</button></span></div>
+  ${!b.grund?`<div class="field"><label for="b-kg">Mehrmenge kg</label><input class="inp num" id="b-kg" inputmode="decimal" data-b="kg" value="${b.kg??''}"${fertig?' disabled':''}></div>`:''}`:''}
+  ${e.geraete.strahl.length?`<div class="field"><label>Einstellungen je Strahlgerät</label>${einst}</div>`:''}
   <div class="field"><label for="b-bes">Besonderheiten</label><textarea class="inp" id="b-bes" data-b="bes"${fertig?' disabled':''} placeholder="z. B. Nachreinigung empfohlen, Zugang erst ab 10 Uhr">${esc(b.bes)}</textarea></div>
   </div>
   ${fertig?`<div class="callout" style="margin-top:16px">🔒 Unterschrieben${tag.signName?' von '+esc(tag.signName):''}. Dieser Tagesbericht kann nicht mehr geändert werden.</div>`:(tag.fertig?`<div class="callout" style="margin-top:16px">Tag erledigt, aber noch nicht unterschrieben. Änderungen werden gespeichert.</div>`:'')+dayActions(e,tag)}`}
@@ -593,8 +596,10 @@ function wCheck(e){e.check=e.check||{};const items=[...S.checkliste.map((t,i)=>(
   return `<p class="muted" style="margin-top:0">Einmal in Gedanken über die Baustelle gehen. Jede Zeile beantworten.</p>
   ${items.map(i=>`<div class="check${i.extra?' extra':''}"><div><div class="t">${esc(i.t)}</div>${st(i.k)&&st(i.k)!=='verladen'?`<input class="inp small" style="min-height:40px;margin-top:6px" placeholder="${st(i.k)==='vorort'?'Warum bleibt es vor Ort?':'Was fehlt oder ist defekt?'}" data-cn="${i.k}" value="${esc(e.check[i.k]?.n||'')}">`:''}</div>
     <span class="seg"><button class="${st(i.k)==='verladen'?'on':''}" data-a="chk" data-k="${i.k}" data-v="verladen">verladen</button><button class="${st(i.k)==='vorort'?'on':''}" data-a="chk" data-k="${i.k}" data-v="vorort">bleibt vor Ort</button><button class="${st(i.k)==='fehlt'?'on':''}" data-a="chk" data-k="${i.k}" data-v="fehlt">fehlt/defekt</button></span></div>`).join('')}
-  <div class="check"><div>Strahlmittel: Säcke übrig im ${esc(f?.kz||'Fahrzeug')}</div><button class="tval${e.check.saecke==null?' empty':''}" data-a="saecke">${e.check.saecke??'wählen'}</button></div>
-  <div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${done&&e.check.saecke!=null?'':' disabled'}>Weiter</button>${done&&e.check.saecke!=null?'':'<span class="small muted">Erst alle Zeilen beantworten.</span>'}</div>`}
+  ${smJob(e)?`<div class="check"><div>Strahlmittel: Säcke übrig im ${esc(f?.kz||'Fahrzeug')}</div><button class="tval${e.check.saecke==null?' empty':''}" data-a="saecke">${e.check.saecke??'wählen'}</button></div>`:''}
+  <div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${done&&(e.check.saecke!=null||!smJob(e))?'':' disabled'}>Weiter</button>${done&&(e.check.saecke!=null||!smJob(e))?'':'<span class="small muted">Erst alle Zeilen beantworten.</span>'}</div>`}
+const smJob=e=>e.tage.some(t=>t.bericht.sm);
+const smName=(k,t)=>k==='sonst'&&(t||'').trim()?'sonstiges: '+t.trim():S.strahlmittel[k]||k;
 function wStaende(e){const k=kp(e.geraete.kompressor),f=fz(e.geraete.fahrzeug);e.ende=e.ende||{};
   const kh=e.ende.kompH??'',km=e.ende.km??'';const warn=[];
   if(kh!==''&&e.start?.kompH!=null&&+kh<e.start.kompH)warn.push('Kompressor-Endstand liegt unter dem Startstand.');
@@ -637,7 +642,7 @@ function mitarbeiterZeilen(e){const tl=e.tage;const ids=[];tl.forEach(t=>tagTeam
   const vor=ids.includes(e.team.vor)?e.team.vor:ids[0];ids.sort((a,b)=>(a===vor?-1:b===vor?1:0));
   return ids.map(id=>{const nr=tl.map((t,i)=>t.zeiten[id]?i+1:0).filter(Boolean);return {rolle:id===vor?'Vorarbeiter':'Facharbeiter',name:vollName(id),tage:tl.length>1&&nr.length<tl.length?tageText(nr):''}})}
 function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund=true;let kg=0;
-  tl.forEach(t=>{smArt.add(t.bericht.sm);if(!t.bericht.grund){grund=false;kg+=+t.bericht.kg||0}});
+  tl.forEach(t=>{if(!t.bericht.sm)return;smArt.add(smName(t.bericht.sm,t.bericht.smText));if(!t.bericht.grund){grund=false;kg+=+t.bericht.kg||0}});
   const einst=e.geraete.strahl.map(sid=>{const s=sg(sid);const last=[...tl].reverse().find(t=>t.bericht.einst[sid]&&Object.keys(t.bericht.einst[sid]).length);const v=last?.bericht.einst[sid]||{};return `${esc(s.name)}: ${S.typen[s.typ].felder.map(f=>`${f.label} ${v[f.key]??'–'}`).join(', ')}`}).join('<br>');
   const fd='FD'+(e.ls||'LS------').slice(2);const seen=sig?sig.eingesehen:e.sig?.eingesehen;
   const zeiten=(sig?sig.zeiten:e.zeitenAufLs)?`<div style="margin-top:12px"><b>Arbeitszeiten vor Ort</b><table><tr><th>Tag</th><th>Ankunft</th><th>Abfahrt</th><th>vor Ort</th></tr>${tl.map(t=>{const z=t.zeiten[tagTeam(e,t)[0]];if(!z)return'';const c=calc(z);return `<tr><td>${fDY(t.datum)}</td><td>${z.p[3]||'–'}</td><td>${z.p[4]||'–'}</td><td>${fMin(c.ort)} h</td></tr>`}).join('')}</table></div>`:'';
@@ -646,7 +651,8 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
   <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${tl.length>1&&tagAnlagen(e,t).length?` <span style="color:#666">(${tagAnlagen(e,t).map(a=>esc(a.name)).join(', ')})</span>`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
   <div class="g">${mitarbeiterZeilen(e).map(r=>`<span>${r.rolle}</span><span>${esc(r.name)}${r.tage?` <span style="color:#666">(${r.tage})</span>`:''}</span>`).join('')}
-  <span>Strahlmittel</span><span>${[...smArt].filter(Boolean).map(k=>esc(S.strahlmittel[k])).join(', ')||'–'}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span><span>Einstellungen</span><span>${einst||'–'}</span></div>
+  ${(e.zusatz||[]).length?`<span>Material/Geräte</span><span>${e.zusatz.map(z=>esc(z.name)).join(', ')}</span>`:''}
+  ${smArt.size?`<span>Strahlmittel</span><span>${[...smArt].map(esc).join(', ')}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span>`:''}${einst?`<span>Einstellungen</span><span>${einst}</span>`:''}</div>
   ${zeiten}
   <div style="margin-top:12px">Fotodokumentation ${fd} (${e.fotos.length} Fotos): ${seen?'☒':'☐'} vom Kunden vor Ort eingesehen</div>
   <div style="margin-top:12px">Oben genannte Arbeiten wurden ordnungsgemäß durchgeführt.</div>
@@ -710,7 +716,7 @@ function textSheet(title,label,val,ok){formSheet(title,`<div class="field"><labe
 function confirmSheet(title,text,okLabel,ok){sheet(`<h2>${esc(title)}</h2><p>${text}</p><div class="row" style="justify-content:flex-end"><button class="btn" id="cs-c">Abbrechen</button><button class="btn pri" id="cs-o">${esc(okLabel)}</button></div>`,el=>{el.querySelector('#cs-c').onclick=closeSheet;el.querySelector('#cs-o').onclick=()=>{closeSheet();ok()}})}
 
 /* ---------- Aktionen ---------- */
-function newDay(e){const prev=curTag(e);const d={datum:today(),fertig:false,zeiten:{},bericht:{text:'',sm:prev?.bericht.sm||'ultrafein',grund:true,kg:null,einst:JSON.parse(JSON.stringify(prev?.bericht.einst||{})),bes:''}};
+function newDay(e){const prev=curTag(e);const d={datum:today(),fertig:false,zeiten:{},bericht:{text:'',sm:(e.geraete.strahl||[]).length?(prev?.bericht.sm||'ultrafein'):null,smText:prev?.bericht.smText||'',grund:true,kg:null,einst:JSON.parse(JSON.stringify(prev?.bericht.einst||{})),bes:''}};
   const vorschlag=prev&&Object.keys(prev.zeiten).length?tagTeam(e,prev):[e.team.vor,e.team.fach].filter(Boolean);
   vorschlag.forEach(m=>{const pz=prev?.zeiten[m];d.zeiten[m]={start:pz?.ende==='hotel'?'hotel':'buero',ende:'buero',p:{},pause:null,pauseOk:false}});e.tage.push(d);return d}
 async function sha(text){try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));return [...new Uint8Array(b)].slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('')}catch(err){return uid()}}
@@ -899,7 +905,7 @@ document.addEventListener('click',async ev=>{
       const ph=el.querySelector('#ph');if(ph)ph.onclick=async()=>{f.phase=f.phase==='vorher'?'nachher':'vorher';save();closeSheet();await neuDoku(e);render();toast('Geändert')};
       const del=el.querySelector('#del');if(del)del.onclick=async()=>{if(del.dataset.sure){e.fotos=e.fotos.filter(x=>x!==f);e.trash.push(f);save();closeSheet();await neuDoku(e);render();toast('Foto im Papierkorb')}else{del.dataset.sure=1;del.textContent='Wirklich löschen?'}}});break}
   case 'restore':{const f=e.trash.pop();if(f){e.fotos.push(f);save();await neuDoku(e);render();toast('Foto wiederhergestellt')}break}
-  case 'sm':selTag(e).bericht.sm=b.dataset.v;save();render();break;
+  case 'sm':{const bb=selTag(e).bericht;bb.sm=bb.sm===b.dataset.v?null:b.dataset.v;save();render();break}
   case 'grund':selTag(e).bericht.grund=b.dataset.v==='1';save();render();break;
   case 'einst':{const t=selTag(e);t.bericht.einst[b.dataset.s]=t.bericht.einst[b.dataset.s]||{};t.bericht.einst[b.dataset.s][b.dataset.k]=b.dataset.v;save();render();break}
   case 'tagsign':{const i=+b.dataset.i;const t=e.tage[i];const m=missingDay(e,t,!t.fertig);if(m.length){gateSheet(e,m,`Tag ${i+1} ist noch nicht vollständig`);break}signDay(e,i);break}

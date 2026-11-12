@@ -57,13 +57,22 @@ def arbeitsnachweis(daten: dict, oben: float = 188) -> bytes:
     for z in zeilen or [{"rolle": "Vorarbeiter", "name": "–", "tage": ""}]:
         s.feld(z["rolle"] + ":", z["name"] + (f" ({z['tage']})" if z.get("tage") else ""))
 
-    s.abstand(8)
+    if daten.get("material"):
+        s.abstand(6)
+        s.feld("Material/Geräte:", ", ".join(daten["material"]))
+
+    # Strahlmittel und Geräte-Einstellungen nur, wenn gestrahlt wurde (z. B. nicht bei Bodenreinigung ohne Loki)
     sm = daten.get("strahlmittel") or {}
-    arten = {STRAHLMITTEL.get(a, a) for a in sm.get("arten", [])}
-    s.text("Strahlmittel", 9)
-    s.auswahl("Art:", list(STRAHLMITTEL.values()), arten)
-    s.auswahl("Menge:", ["Grundmenge"], {"Grundmenge"} if sm.get("grundmenge", True) else set(),
-              zusatz="" if sm.get("grundmenge", True) else f"Mehrmenge: {sm.get('kg') or 0} kg")
+    if sm.get("arten"):
+        s.abstand(8)
+        namen = dict(STRAHLMITTEL)
+        if sm.get("sonst_text"):
+            namen["sonst"] = f"sonstiges: {sm['sonst_text']}"
+        arten = {namen.get(a, a) for a in sm.get("arten", [])}
+        s.text("Strahlmittel", 9)
+        s.auswahl("Art:", list(namen.values()), arten)
+        s.auswahl("Menge:", ["Grundmenge"], {"Grundmenge"} if sm.get("grundmenge", True) else set(),
+                  zusatz="" if sm.get("grundmenge", True) else f"Mehrmenge: {sm.get('kg') or 0} kg")
 
     for g in daten.get("geraete") or []:
         s.abstand(6)
