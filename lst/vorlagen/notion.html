@@ -18,13 +18,21 @@
       <div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}{% if p.reinigungsart %} · {{ p.reinigungsart }}{% endif %}</div></div>
     <div class="row">
       {% if p.url %}<a class="btn small" href="{{ p.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}
-      {% if not p.einsatz or p.einsatz.status == 'vorbereitet' %}
+      {% if p.kandidaten %}
+      <form method="post" action="{{ url_for('notion_verknuepfen', pid=p.id) }}" class="row"><input type="hidden" name="eid" value="{{ p.kandidaten[0].id }}">
+        <button class="btn small pri" title="Kein neuer Einsatz, sondern dem vorhandenen zuordnen">Gehört zu „{{ p.kandidaten[0].einsatzort }}“ ({{ zeitraum(p.kandidaten[0].von, p.kandidaten[0].bis) }})</button></form>
+      <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small">Doch neu anlegen</button></form>
+      {% elif not p.einsatz or p.einsatz.status == 'vorbereitet' %}
       <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small {{ '' if p.einsatz else 'pri' }}">{{ 'Aktualisieren' if p.einsatz else 'Übernehmen' }}</button></form>
       {% else %}<a class="btn small" href="{{ url_for('einsatz_seite', eid=p.einsatz.id) }}">Öffnen</a>{% endif %}
+      {% if not p.einsatz %}<form method="post" action="{{ url_for('notion_ausblenden', pid=p.id) }}"><button class="btn small" title="Hier nicht mehr anzeigen (z. B. schon in der alten App erledigt)">Ausblenden</button></form>{% endif %}
     </div>
   </div>
 {% else %}{% if eingerichtet and not fehler %}<div class="empty">Keine bestätigten Projekte im Zeitraum.</div>{% endif %}{% endfor %}
 </div>
+{% if ausgeblendet %}<details style="margin-top:10px"><summary class="small muted">{{ ausgeblendet|length }} ausgeblendet</summary>
+<div class="list">{% for p in ausgeblendet %}<div class="item"><div><b>{{ p.name }}</b><div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}</div></div>
+  <form method="post" action="{{ url_for('notion_ausblenden', pid=p.id) }}"><input type="hidden" name="zeigen" value="1"><button class="btn small">Wieder zeigen</button></form></div>{% endfor %}</div></details>{% endif %}
 
 <h2>Interne Aufgaben für die iPads</h2>
 <p class="muted small">Aus LST Aufgaben, wenn „iPad für“ gesetzt ist und der Status Zu tun, Läuft, Wartet oder Wenn Zeit dann tun ist. Wird alle 5 Minuten geholt{% if aufgaben_stand.zeit %}, zuletzt um {{ aufgaben_stand.zeit }} Uhr{% endif %}.</p>

@@ -409,21 +409,29 @@ def einsatz_loeschen(eid):
 @app.route("/buero/notion")
 @anmeldung(admin=True)
 def notion_seite():
-    liste, fehler = [], ""
+    liste, ausgeblendet, fehler = [], [], ""
     if notion.eingerichtet():
         try:
-            vorhanden = {(e.get("notion") or {}).get("id"): e for e in speicher.einsaetze()}
+            alle_e = speicher.einsaetze()
+            vorhanden = {}
+            for e in alle_e:
+                for nid in [(e.get("notion") or {}).get("id")] + list(e.get("notion_weitere") or []):
+                    if nid:
+                        vorhanden[nid] = e
+            weg = set(speicher.stamm("notion_ausgeblendet", []))
             for p in notion.projekte_abfragen():
                 k = notion.kurzinfo(p)
                 k["einsatz"] = vorhanden.get(p["id"])
-                liste.append(k)
+                if not k["einsatz"]:
+                    k["kandidaten"] = _passende_einsaetze(k, alle_e)
+                (ausgeblendet if p["id"] in weg else liste).append(k)
         except notion.NotionFehler as ex:
             fehler = str(ex)
     alle = speicher.stamm("intern", [])
     intern = [i for i in alle if str(i.get("id", "")).startswith("n-")]
     grenze = (date.today() - timedelta(days=14)).isoformat()
     leute = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
-    return render_template("notion.html", liste=liste, fehler=fehler, eingerichtet=notion.eingerichtet(),
+    return render_template("notion.html", liste=liste, ausgeblendet=ausgeblendet, fehler=fehler, eingerichtet=notion.eingerichtet(),
                            schreiben=bool(notion.einstellungen().get("schreiben")),
                            aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
                            aufgaben_erledigt=[i for i in alle if i.get("status") == "erledigt" and (
@@ -547,6 +555,56 @@ def notion_aufgaben():
         r = AUFGABEN_STAND["ergebnis"]
         flash(f"{r['anzahl']} Aufgaben für die iPads geholt." + (f" {r['unbekannt']} mit unbekanntem Namen bei „iPad für“ übersprungen." if r["unbekannt"] else ""), "ok")
     return redirect(request.referrer or url_for("notion_seite"))
+
+
+def _passende_einsaetze(k: dict, alle: list[dict]) -> list[dict]:
+    """Vorhandene Einsätze, die zu einem Notion-Projekt gehören könnten: Zeitraum überschneidet sich
+    (±3 Tage) und ein markantes Wort aus dem Projektnamen steckt im Einsatzort/Kunden."""
+    def woerter(t):
+        return {w for w in re.findall(r"[a-zäöüß0-9]{4,}", (t or "").lower()) if not w.isdigit()}
+    pw = woerter(k.get("name"))
+    try:
+        von = date.fromisoformat(k["von"]) - timedelta(days=3)
+        bis = date.fromisoformat(k["bis"] or k["von"]) + timedelta(days=3)
+    except (KeyError, ValueError):
+        return []
+    aus = []
+    for e in alle:
+        try:
+            ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
+        except ValueError:
+            continue
+        gemeinsam = pw & woerter(f"{e.get('einsatzort', '')} {e.get('kunde', '')} {(e.get('notion') or {}).get('name', '')}")
+        if ev <= bis and eb >= von and gemeinsam:
+            aus.append(e)
+    return aus
+
+
+@app.route("/buero/notion/<pid>/verknuepfen", methods=["POST"])
+@anmeldung(admin=True)
+def notion_verknuepfen(pid):
+    """Notion-Projekt einem vorhandenen Einsatz zuordnen (z. B. nachträglich in Notion angelegt)."""
+    e = _einsatz_oder_404(request.form.get("eid", ""))
+    if (e.get("notion") or {}).get("id") and e["notion"]["id"] != pid:
+        e["notion_weitere"] = sorted(set(e.get("notion_weitere") or []) | {pid})
+    else:
+        e["notion"] = {**(e.get("notion") or {}), "id": pid}
+    speicher.einsatz_speichern(e)
+    speicher.protokoll("notion_verknuepft", session.get("uid"), e["id"], notion=pid)
+    flash(f"Notion-Projekt mit „{e.get('einsatzort')}“ verknüpft.", "ok")
+    return redirect(url_for("notion_seite"))
+
+
+@app.route("/buero/notion/<pid>/ausblenden", methods=["POST"])
+@anmeldung(admin=True)
+def notion_ausblenden(pid):
+    weg = speicher.stamm("notion_ausgeblendet", [])
+    if request.form.get("zeigen"):
+        weg = [x for x in weg if x != pid]
+    elif pid not in weg:
+        weg.append(pid)
+    speicher.stamm_setzen("notion_ausgeblendet", weg)
+    return redirect(url_for("notion_seite"))
 
 
 @app.route("/buero/notion/<pid>/uebernehmen", methods=["POST"])
