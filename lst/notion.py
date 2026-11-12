@@ -337,6 +337,20 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
                   "tage": [], "trash": [], "zeitenAufLs": False, "tagesUnterschrift": False})
     elif zweiter and alt.get("status") == "vorbereitet":
         e.setdefault("team", {})["fach"] = _person_id(zweiter) or e["team"].get("fach")
+    # „Material für Job“ (Verknüpfung zu LST Werkzeug, Geräte, Material) → Zusatzmaterial.
+    # Von Hand im Büro eingetragene Zeilen bleiben, die aus Notion werden jedes Mal neu gesetzt.
+    if not alt or alt.get("status") == "vorbereitet":
+        aus_notion = []
+        for rid in eig(p, "Material für Job") or []:
+            try:
+                sp = seite(rid)
+            except NotionFehler:
+                continue
+            name = (eig(sp, "Name") or titel(sp) or "").strip()
+            if name:
+                aus_notion.append({"id": "nm-" + rid.replace("-", "")[:12], "name": name})
+        eigene = [z for z in e.get("zusatz") or [] if not str(z.get("id", "")).startswith("nm-")]
+        e["zusatz"] = aus_notion + eigene
     return e, blocks
 
 
