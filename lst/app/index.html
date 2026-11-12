@@ -210,7 +210,7 @@ const yymmdd=iso=>iso.slice(2,4)+iso.slice(5,7)+iso.slice(8,10);
 const toMin=t=>{if(!t)return null;const[a,b]=t.split(':');return +a*60+ +b};
 const fMin=m=>m==null||isNaN(m)?'–':`${Math.floor(m/60)}:${pad(Math.abs(m%60))}`;
 const nowQ=()=>{const d=new Date();let m=d.getHours()*60+Math.round(d.getMinutes()/15)*15;if(m>=1440)m=1425;return `${pad(Math.floor(m/60))}:${pad(m%60)}`};
-const num=v=>v===''||v==null||isNaN(+v)?null:+v;
+const num=v=>{if(v===''||v==null)return null;const x=+String(v).trim().replace(',','.');return isNaN(x)?null:x};
 
 /* ---------- Speicher: Zustand in localStorage, Fotos in IndexedDB ---------- */
 const KEY='lst-baustelle-app-v1';
@@ -888,11 +888,15 @@ function mangelSheet(){formSheet('Mangel melden',`${pickField('teil','Baugruppe'
     S.maengel.push({id:uid(),teil,art:d.art,notiz:d.notiz,ts:Date.now(),von:S.user,status:'offen'});save();toast('Mangel gemeldet');render()})}
 function tankSheet(){const e=V.id?E(V.id):null;const all=[...S.fahrzeuge.map(f=>['f:'+f.id,f.kz+' '+f.name]),...S.kompressoren.filter(k=>k.aktiv!==false).map(k=>['k:'+k.id,k.kz+' '+(k.eigen?'Kompressor':'Mietkompressor')])];
   const def=e?'f:'+e.geraete.fahrzeug:all[0][0];
-  formSheet('Tanken',`${pickField('g','Gerät',all,def)}
+  formSheet('Tanken',`<div onclick="setTimeout(()=>tkArt(this.closest('form')),0)">${pickField('g','Gerät',all,def)}</div>
   <div class="times"><div class="field"><label for="tk-l">Liter</label><input class="inp num" id="tk-l" name="l" inputmode="decimal" required></div><div class="field"><label for="tk-b">Betrag €</label><input class="inp num" id="tk-b" name="b" inputmode="decimal"></div></div>
-  <div class="field"><label for="tk-km">Kilometerstand (Sprinter)</label><input class="inp num" id="tk-km" name="km" inputmode="numeric" value="${fz(def.slice(2))?.km??''}"></div>
+  <div class="field" id="tk-kmf"${def[0]==='k'?' hidden':''}><label for="tk-km">Kilometerstand (Sprinter)</label><input class="inp num" id="tk-km" name="km" inputmode="numeric" value="${def[0]==='f'?fz(def.slice(2))?.km??'':''}"></div>
+  <div class="field" id="tk-hf"${def[0]==='f'?' hidden':''}><label for="tk-h">Betriebsstunden (Kompressor)</label><input class="inp num" id="tk-h" name="h" inputmode="decimal" value="${def[0]==='k'?kp(def.slice(2))?.h??'':''}"></div>
   <div class="field"><label for="tk-f">Foto vom Beleg</label><input class="inp" id="tk-f" name="beleg" type="file" accept="image/*" capture="environment"></div>`,'Speichern',d=>{if(!num(d.l))return'Bitte Liter eintragen.';
-    const [t,id]=d.g.split(':');S.tanken.push({id:uid(),geraet:d.g,l:+d.l,b:num(d.b),km:num(d.km),datum:today(),einsatz:e?.id||null,von:S.user});if(t==='f'&&num(d.km))fz(id).km=+d.km;save();toast('Tankvorgang gespeichert')})}
+    const [t,id]=d.g.split(':');S.tanken.push({id:uid(),geraet:d.g,l:num(d.l),b:num(d.b),km:t==='f'?num(d.km):null,h:t==='k'?num(d.h):null,datum:today(),einsatz:e?.id||null,von:S.user});if(t==='f'&&num(d.km))fz(id).km=+d.km;if(t==='k'&&num(d.h))kp(id).h=+d.h;save();toast('Tankvorgang gespeichert')})}
+function tkArt(f){if(!f)return;const v=f.elements.g.value||'';const k=v[0]==='k';f.querySelector('#tk-kmf').hidden=k;f.querySelector('#tk-hf').hidden=!k;
+  const km=f.querySelector('#tk-km'),h=f.querySelector('#tk-h');if(k){km.value='';h.value=kp(v.slice(2))?.h??''}else{h.value='';km.value=fz(v.slice(2))?.km??''}}
+window.tkArt=tkArt; // für onclick im Tankformular (Skript läuft gekapselt)
 function mieteSheet(e){formSheet('Mietkompressor hinzufügen',`<div class="field"><label for="mi-kz">Kennzeichen</label><input class="inp" id="mi-kz" name="kz" placeholder="MA XY 123" required></div>
   <div class="field"><label for="mi-v">Vermieter</label><input class="inp" id="mi-v" name="v" list="verm" placeholder="Name des Vermieters"><datalist id="verm">${[...new Set(S.kompressoren.filter(k=>!k.eigen&&k.vermieter).map(k=>k.vermieter))].map(v=>`<option value="${esc(v)}">`).join('')}</datalist></div>
   <div class="field"><label for="mi-h">Betriebsstunden bei Abholung</label><input class="inp num" id="mi-h" name="h" inputmode="decimal" required></div>

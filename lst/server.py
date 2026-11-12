@@ -978,6 +978,38 @@ def _unterschrift_felder(u: dict) -> dict:
     return {"datum": f"{m.group(3)}-{m.group(2)}-{m.group(1)}", "uhrzeit": m.group(4)} if m else {"datum": "", "uhrzeit": ""}
 
 
+@app.route("/buero/stunden")
+@anmeldung(admin=True)
+def stunden_seite():
+    """Arbeitszeiten, Kompressor- und Kilometerstände je Einsatz, Tankvorgänge für einen Zeitraum."""
+    from . import auswertung as aw
+    heute = date.today()
+    erster = heute.replace(day=1)
+    vormonat_ende = erster - timedelta(days=1)
+    lohn_bis = heute.replace(day=20)  # Stunden gehen um den 20. an den Steuerberater
+    lohn_von = (lohn_bis.replace(day=1) - timedelta(days=1)).replace(day=21)
+    schnell = [("Dieser Monat", erster, heute), ("Letzter Monat", vormonat_ende.replace(day=1), vormonat_ende),
+               ("21.–20. (Lohn)", lohn_von, lohn_bis)]
+    try:
+        von = date.fromisoformat(request.args.get("von", "")).isoformat()
+    except ValueError:
+        von = erster.isoformat()
+    try:
+        bis = date.fromisoformat(request.args.get("bis", "")).isoformat()
+    except ValueError:
+        bis = heute.isoformat()
+    wer = request.args.get("wer") or None
+    zeilen = aw.arbeitszeiten(von, bis, wer)
+    if request.args.get("csv"):
+        return send_file(io.BytesIO(aw.csv_arbeitszeiten(zeilen)), mimetype="text/csv",
+                         download_name=f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]} LST Arbeitszeiten.csv")
+    tank = aw.tankvorgaenge(von, bis)
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    return render_template("stunden.html", von=von, bis=bis, wer=wer, leute=leute, schnell=schnell,
+                           zeilen=zeilen, summen=aw.summen(zeilen), geraete=aw.geraete_je_einsatz(von, bis),
+                           tank=tank, tank_summen=aw.tank_summen(tank), hm=aw.hm, zahl=aw.zahl)
+
+
 @app.route("/buero/einsatz/<eid>/unterschrift", methods=["POST"])
 @anmeldung(admin=True)
 def unterschrift_aendern(eid):

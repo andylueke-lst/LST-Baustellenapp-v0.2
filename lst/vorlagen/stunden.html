@@ -1,0 +1,70 @@
+{% extends "basis.html" %}
+{% block titel %}Stunden & Tanken · LST Baustelle{% endblock %}
+{% block pfad %} › Stunden &amp; Tanken{% endblock %}
+{% block inhalt %}
+<div class="icon">⏱️</div>
+<h1>Stunden &amp; Tanken</h1>
+<p class="muted">Arbeitszeiten von den iPads, Kompressorstunden und Kilometer je Einsatz, Tankvorgänge. Gerechnet wie auf dem iPad (Pause nach Arbeitszeitgesetz, wenn nicht bestätigt).</p>
+
+<form method="get" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+  <div class="field"><label for="s-v">Von</label><input class="inp" id="s-v" type="date" name="von" value="{{ von }}"></div>
+  <div class="field"><label for="s-b">Bis</label><input class="inp" id="s-b" type="date" name="bis" value="{{ bis }}"></div>
+  <div class="field"><label for="s-w">Mitarbeiter</label><select class="inp" id="s-w" name="wer"><option value="">alle</option>
+    {% for m in leute %}<option value="{{ m.id }}"{% if wer == m.id %} selected{% endif %}>{{ voller_name(m) }}</option>{% endfor %}</select></div>
+  <button class="btn pri">Anzeigen</button>
+</form>
+<p class="small" style="margin-top:8px">{% for t, a, b in schnell %}<a href="?von={{ a.isoformat() }}&bis={{ b.isoformat() }}{% if wer %}&wer={{ wer }}{% endif %}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+
+<h2>Arbeitszeiten {{ datum(von) }} – {{ datum(bis) }}
+  {% if zeilen %}<a class="btn small" style="margin-left:8px" href="?von={{ von }}&bis={{ bis }}{% if wer %}&wer={{ wer }}{% endif %}&csv=1">Als Tabelle (CSV) laden</a>{% endif %}</h2>
+{% if summen %}
+<table class="tab">
+  <tr><th>Mitarbeiter</th><th>Tage</th><th>Gesamt</th><th>davon vor Ort</th><th>Fahrt</th><th>Reisetage</th><th>Intern</th><th></th></tr>
+  {% for s in summen %}<tr><td><b>{{ s.name }}</b></td><td>{{ s.tage }}</td><td><b>{{ hm(s.gesamt) }} h</b></td><td>{{ hm(s.ort) }}</td><td>{{ hm(s.fahrt) }}</td><td>{{ hm(s.reise) }}</td><td>{{ hm(s.intern) }}</td>
+    <td>{% if s.offen %}<span class="tag yellow">{{ s.offen }} unvollständig</span>{% endif %}</td></tr>{% endfor %}
+</table>
+<details style="margin-top:12px" open><summary class="small">Einzelne Tage</summary>
+<table class="tab" style="margin-top:8px">
+  <tr><th>Datum</th><th>Wer</th><th>Was</th><th>Beginn</th><th>Ende</th><th>Pause</th><th>Fahrt</th><th>vor Ort</th><th>Gesamt</th></tr>
+  {% for z in zeilen %}<tr>
+    <td>{{ datum(z.datum) }}</td><td>{{ z.name }}</td>
+    <td>{% if z.eid and z.art == 'Einsatz' %}<a href="{{ url_for('einsatz_seite', eid=z.eid) }}">{{ z.wo }}</a>{% else %}{{ z.art }}{% if z.wo %} · {{ z.wo }}{% endif %}{% endif %}
+      {% if z.offen %} <span class="tag blue">läuft</span>{% endif %}
+      {% if z.fehlt %}<div class="small muted">fehlt: {{ z.fehlt|join(', ') }}</div>{% endif %}</td>
+    <td>{{ z.beginn or '–' }}{% if z.start_hotel %} <span class="small muted">Hotel</span>{% endif %}</td>
+    <td>{{ z.ende or '–' }}{% if z.ende_hotel %} <span class="small muted">Hotel</span>{% endif %}</td>
+    <td>{{ hm(z.pause) }}</td><td>{{ hm(z.fahrt) }}</td><td>{{ hm(z.ort) }}</td><td><b>{{ hm(z.gesamt) }}</b></td></tr>{% endfor %}
+</table></details>
+{% else %}<div class="empty">Keine Zeiten in diesem Zeitraum.</div>{% endif %}
+
+<h2>Kompressor und Kilometer je Einsatz</h2>
+{% if geraete %}
+<table class="tab">
+  <tr><th>Einsatz</th><th>Zeitraum</th><th>Kompressor</th><th>Betriebsstd. Start → Ende</th><th>Std.</th><th>Fahrzeug</th><th>km Start → Ende</th><th>km</th></tr>
+  {% for g in geraete %}<tr>
+    <td><a href="{{ url_for('einsatz_seite', eid=g.eid) }}">{{ g.wo }}</a>{% if g.status != 'abgeschlossen' %} <span class="tag blue">läuft</span>{% endif %}</td>
+    <td>{{ zeitraum(g.von, g.bis) }}</td>
+    <td>{{ g.kompressor or '–' }}</td>
+    <td>{% if g.kompressor %}{{ zahl(g.h_start) }} → {{ zahl(g.h_ende) }}{% endif %}</td>
+    <td><b>{{ zahl(g.h) if g.h is not none else '' }}</b></td>
+    <td>{{ g.fahrzeug or '–' }}</td>
+    <td>{{ zahl(g.km_start) }} → {{ zahl(g.km_ende) }}</td>
+    <td><b>{{ zahl(g.km) if g.km is not none else '' }}</b></td></tr>{% endfor %}
+</table>
+{% else %}<div class="empty">Keine Einsätze mit Start- oder Endstand in diesem Zeitraum.</div>{% endif %}
+
+<h2>Tankvorgänge</h2>
+{% if tank %}
+<table class="tab">
+  <tr><th>Datum</th><th>Gerät</th><th>Liter</th><th>Betrag</th><th>Stand</th><th>Wer</th><th>Einsatz</th></tr>
+  {% for t in tank %}<tr><td>{{ datum(t.datum) }}</td><td>{{ t.geraet }}</td><td>{{ zahl(t.liter) }} l</td>
+    <td>{{ zahl(t.betrag, 2) ~ ' €' if t.betrag is not none else '–' }}</td>
+    <td>{% if t.stand is not none %}{{ zahl(t.stand) }} {{ 'km' if t.art == 'km' else 'Betriebsstd.' }}{% else %}–{% endif %}</td>
+    <td>{{ t.wer }}</td><td>{% if t.eid %}<a href="{{ url_for('einsatz_seite', eid=t.eid) }}">{{ t.wo }}</a>{% endif %}</td></tr>{% endfor %}
+</table>
+<table class="tab" style="margin-top:12px">
+  <tr><th>Summe je Gerät</th><th>Tankvorgänge</th><th>Liter</th><th>Betrag</th></tr>
+  {% for s in tank_summen %}<tr><td>{{ s.geraet }}</td><td>{{ s.anzahl }}</td><td>{{ zahl(s.liter) }} l</td><td>{{ zahl(s.betrag, 2) }} €</td></tr>{% endfor %}
+</table>
+{% else %}<div class="empty">Keine Tankvorgänge in diesem Zeitraum.</div>{% endif %}
+{% endblock %}
