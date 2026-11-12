@@ -38,6 +38,7 @@ lst/notion.py            Projekte aus Notion lesen (nur lesend)
 lst/sicherung.py         Nächtliche Sicherung, optional Spiegel nach iCloud
 lst/verwaltung.py        PIN setzen, Mitarbeiterliste, Adresse anzeigen
 einrichten.command       Einrichtung auf dem Mac mini (Doppelklick)
+linux/                   Einrichtung auf Proxmox/Debian (Container, systemd, Tailscale)
 aktualisieren.command    Neue Version holen und Server neu starten
 tests/                   Prüfungen (z. B. Notion-Übernahme mit nachgebauter API)
 beispiele/               Skript für Beispiel-Dokumente
@@ -68,6 +69,22 @@ Lexware-Belegen. Sonst greift DejaVu Sans.
 pip install -r requirements.txt
 python3 beispiele/erzeuge_beispiele.py <lexware-lieferschein.pdf> <ordner-mit-fotos>
 ```
+
+## Einrichtung auf Proxmox (Linux, empfohlen)
+
+Die App läuft in einem eigenen Debian-Container neben ioBroker. Auf dem Proxmox-Rechner als root:
+
+```
+bash <(curl -fsSL https://raw.githubusercontent.com/andylueke-lst/LST-Baustellenapp-v0.2/main/linux/proxmox-einrichten.sh)
+```
+
+Das Skript legt den Container „baustelle“ an (2 Kerne, 2 GB, 100 GB), installiert die App unter
+`/opt/lst-baustelle` (Daten unter `/var/lib/lst-baustelle`), richtet Autostart, die nächtliche
+Datenbank-Sicherung, Tailscale mit HTTPS und eine nächtliche Proxmox-Sicherung des ganzen
+Containers nach `macmini-backup` ein. Es fragt nur die PINs für Andy und Tina und die
+Tailscale-Anmeldung ab und kann gefahrlos mehrfach laufen.
+
+Aktualisieren vom Proxmox-Rechner aus: `pct exec <Nummer> -- baustelle-aktualisieren`
 
 ## Server starten
 
