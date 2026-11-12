@@ -264,8 +264,10 @@ def anlagen_vorschlag(technik: str) -> list[str]:
     return [art] if n == 1 else [f"{art} {i}" for i in range(1, n + 1)]
 
 
-def lieferschein_datei(seiten_blocks: list[dict]) -> tuple[str, str] | None:
-    """PDF unter Projektinfos → Unterlagen → Lieferschein (nicht im kaufmännischen Teil)."""
+def lieferschein_datei(seiten_blocks: list[dict], datum: str | None = None) -> tuple[str, str] | None:
+    """PDF unter Projektinfos → Unterlagen → Lieferschein (nicht im kaufmännischen Teil).
+    Liegen mehrere dort (z. B. ein Projekt mit zwei Einsätzen), gewinnt der mit dem Einsatzdatum
+    vorn im Dateinamen (JJMMTT_…), sonst der neueste."""
     pi = _suche(seiten_blocks, "Projektinfos")
     if not pi:
         return None
@@ -275,14 +277,23 @@ def lieferschein_datei(seiten_blocks: list[dict]) -> tuple[str, str] | None:
     ls = _suche(kinder(unt["id"]), "Lieferschein")
     if not ls or not ls.get("has_children"):
         return None
+    gefunden = []
     for b in kinder(ls["id"]):
         if b.get("type") in ("file", "pdf"):
             f = b[b["type"]]
             url = (f.get("file") or f.get("external") or {}).get("url")
             name = f.get("name") or _text(f.get("caption")) or "lieferschein.pdf"
             if url and (b["type"] == "pdf" or name.lower().endswith(".pdf")):
-                return name, url
-    return None
+                gefunden.append((name, url))
+    if not gefunden:
+        return None
+    if datum:
+        kurz = datum[2:4] + datum[5:7] + datum[8:10]
+        passend = [g for g in gefunden if g[0].startswith(kurz)]
+        if passend:
+            return passend[-1]
+    mit_datum = [g for g in gefunden if re.match(r"\d{6}", g[0])]
+    return max(mit_datum, key=lambda g: g[0][:6]) if mit_datum else gefunden[-1]
 
 
 def herunterladen(url: str) -> bytes:
@@ -375,7 +386,7 @@ def uebernehmen(pid: str) -> tuple[dict, str]:
     hinweis = ""
     if not e.get("ls"):
         try:
-            ls = lieferschein_datei(blocks)
+            ls = lieferschein_datei(blocks, e.get("von"))
         except NotionFehler:
             ls = None
         if ls:
