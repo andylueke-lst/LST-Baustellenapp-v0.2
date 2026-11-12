@@ -24,8 +24,8 @@
 {% if gruppen %}
 <h2>Übersicht</h2>
 <table class="tab">
-  <tr><th>Mitarbeiter</th><th>Tage</th><th>Gesamt</th><th>davon vor Ort</th><th>Fahrt</th><th>Reisetage</th><th>Intern</th><th></th></tr>
-  {% for g in gruppen %}{% set s = g.summe %}<tr><td><a href="#ma-{{ g.mid }}"><b>{{ s.name }}</b></a></td><td>{{ s.tage }}</td><td><b>{{ hm(s.gesamt) }} h</b></td><td>{{ hm(s.ort) }}</td><td>{{ hm(s.fahrt) }}</td><td>{{ hm(s.reise) }}</td><td>{{ hm(s.intern) }}</td>
+  <tr><th>Mitarbeiter</th><th>Tage</th><th>Gesamt</th><th>davon vor Ort</th><th>Fahrt</th><th>Reisetage</th><th>Intern</th><th>von Hand</th><th></th></tr>
+  {% for g in gruppen %}{% set s = g.summe %}<tr><td><a href="#ma-{{ g.mid }}"><b>{{ s.name }}</b></a></td><td>{{ s.tage }}</td><td><b>{{ hm(s.gesamt) }} h</b></td><td>{{ hm(s.ort) }}</td><td>{{ hm(s.fahrt) }}</td><td>{{ hm(s.reise) }}</td><td>{{ hm(s.intern) }}</td><td>{{ hm(s.hand) }}</td>
     <td>{% if s.offen %}<span class="tag yellow">{{ s.offen }} unvollständig</span>{% endif %}</td></tr>{% endfor %}
 </table>
 
@@ -33,7 +33,7 @@
 <h2 id="ma-{{ g.mid }}">{{ g.name }} <span class="tag">{{ hm(g.summe.gesamt) }} h</span>
   <a class="btn small" style="margin-left:8px" href="?von={{ von }}&bis={{ bis }}&wer={{ g.mid }}&pdf=1" target="_blank" rel="noopener">PDF nur {{ g.name.split(' ')[0] }}</a></h2>
 <table class="tab">
-  <tr><th>Datum</th><th>Was</th><th>Beginn</th><th>Ende</th><th>Pause</th><th>Fahrt</th><th>vor Ort</th><th>Gesamt</th></tr>
+  <tr><th>Datum</th><th>Was</th><th>Beginn</th><th>Ende</th><th>Pause</th><th>Fahrt</th><th>vor Ort</th><th>Gesamt</th><th></th></tr>
   {% for z in g.zeilen %}<tr>
     <td style="white-space:nowrap">{{ ['Mo','Di','Mi','Do','Fr','Sa','So'][z.datum_d.weekday()] if z.datum_d else '' }} {{ datum(z.datum) }}</td>
     <td>{% if z.eid and z.art == 'Einsatz' %}<a href="{{ url_for('einsatz_seite', eid=z.eid) }}">{{ z.wo }}</a>{% else %}{{ z.art }}{% if z.wo %} · {{ z.wo }}{% endif %}{% endif %}
@@ -41,8 +41,24 @@
       {% if z.fehlt %}<div class="small muted">fehlt: {{ z.fehlt|join(', ') }}</div>{% endif %}</td>
     <td>{{ z.beginn or '–' }}{% if z.start_hotel %} <span class="small muted">Hotel</span>{% endif %}</td>
     <td>{{ z.ende or '–' }}{% if z.ende_hotel %} <span class="small muted">Hotel</span>{% endif %}</td>
-    <td>{{ hm(z.pause) }}</td><td>{{ hm(z.fahrt) }}</td><td>{{ hm(z.ort) }}</td><td><b>{{ hm(z.gesamt) }}</b></td></tr>{% endfor %}
+    <td>{{ hm(z.pause) }}</td><td>{{ hm(z.fahrt) }}</td><td>{{ hm(z.ort) }}</td><td><b>{{ hm(z.gesamt) }}</b></td>
+    <td>{% if z.hid %}<form method="post" action="{{ url_for('stunden_eintrag_loeschen', hid=z.hid) }}" onsubmit="return confirm('Eintrag löschen?')"><button class="btn small" title="Eintrag löschen" aria-label="Eintrag löschen">🗑</button></form>{% endif %}</td></tr>{% endfor %}
 </table>
 {% endfor %}
 {% else %}<div class="empty">Keine Zeiten in diesem Zeitraum.</div>{% endif %}
+
+<h2 id="eintragen">Stunden von Hand eintragen</h2>
+<p class="small muted">Für alle, die nicht mit dem iPad arbeiten (z. B. Minijob), oder zum Nachtragen. Entweder Von/Bis mit Pause oder direkt die Stunden.</p>
+<form method="post" action="{{ url_for('stunden_eintragen') }}" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+  <input type="hidden" name="z_von" value="{{ von }}"><input type="hidden" name="z_bis" value="{{ bis }}"><input type="hidden" name="z_wer" value="{{ wer or '' }}">
+  <div class="field"><label for="h-m">Mitarbeiter</label><select class="inp" id="h-m" name="mid" required>
+    {% for m in leute %}<option value="{{ m.id }}"{% if (wer and wer == m.id) or (not wer and m.minijob) %} selected{% endif %}>{{ voller_name(m) }}{% if m.minijob %} (Minijob){% endif %}</option>{% endfor %}</select></div>
+  <div class="field"><label for="h-d">Datum</label><input class="inp" id="h-d" type="date" name="datum" value="{{ heute }}" required></div>
+  <div class="field"><label for="h-v">Von</label><input class="inp" id="h-v" type="time" name="von"></div>
+  <div class="field"><label for="h-b">Bis</label><input class="inp" id="h-b" type="time" name="bis"></div>
+  <div class="field"><label for="h-p">Pause (Min.)</label><input class="inp" id="h-p" name="pause" inputmode="numeric" style="width:90px" placeholder="0"></div>
+  <div class="field"><label for="h-s">oder Stunden</label><input class="inp" id="h-s" name="stunden" inputmode="decimal" style="width:100px" placeholder="z. B. 4,5"></div>
+  <div class="field" style="flex:1;min-width:200px"><label for="h-t">Tätigkeit</label><input class="inp" id="h-t" name="taetigkeit" placeholder="z. B. Lager aufräumen, Fahrzeugpflege"></div>
+  <button class="btn pri">Eintragen</button>
+</form>
 {% endblock %}

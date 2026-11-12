@@ -71,9 +71,10 @@ def stundennachweis(gruppen: list[dict], von: str, bis: str) -> bytes:
                 _kopf(s)
             s.y -= ZEILE
             d = basis.d(z["datum"])
-            taet = z["art"] if z["art"] != "Einsatz" else (z["wo"] or "Einsatz")
-            if z["art"] not in ("Einsatz",) and z["wo"]:
-                taet += " · " + z["wo"]
+            if z["art"] in ("Einsatz", "Händisch"):
+                taet = z["wo"] or ("Einsatz" if z["art"] == "Einsatz" else "Arbeitszeit")
+            else:
+                taet = z["art"] + (" · " + z["wo"] if z["wo"] else "")
             _zelle(s, f"{basis.WOCHENTAGE[d.weekday()]} {d:%d.%m.}", 0)
             _zelle(s, taet, 1)
             _zelle(s, z.get("beginn") or "–", 2)

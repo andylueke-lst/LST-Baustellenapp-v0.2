@@ -110,6 +110,16 @@ def berechnen(z: dict) -> dict:
 
 
 # ---------------------------------------------------------------- Auswertung
+def handzeit(h: dict) -> int | None:
+    """Von Hand eingetragene Stunden: entweder Von/Bis abzüglich Pause oder direkt eine Dauer (Minuten)."""
+    if h.get("dauer") is not None:
+        return int(h["dauer"])
+    a, b = _min(h.get("von")), _min(h.get("bis"))
+    if a is None or b is None:
+        return None
+    return max(0, (b - a) % 1440 - int(h.get("pause") or 0))
+
+
 def _im_zeitraum(tag: str | None, von: str, bis: str) -> bool:
     return bool(tag) and von <= tag[:10] <= bis
 
@@ -149,6 +159,15 @@ def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
                            "eid": r.get("einsatz"), "beginn": r.get("ab"), "ende": r.get("an"), "ruest": 0,
                            "fahrt": dauer or 0, "ort": None, "pause": 0, "gesamt": dauer,
                            "fehlt": [] if dauer else ["Abfahrt/Ankunft"], "offen": False})
+    for h in speicher.stamm("stunden_manuell", []):
+        mid = (h or {}).get("mid")
+        if not _im_zeitraum(h.get("datum"), von, bis) or (wer and mid != wer):
+            continue
+        c = handzeit(h)
+        zeilen.append({"datum": h["datum"], "mid": mid, "name": namen.get(mid, mid or "?"), "art": "Händisch",
+                       "wo": h.get("taetigkeit", ""), "eid": None, "hid": h["id"], "beginn": h.get("von"),
+                       "ende": h.get("bis"), "ruest": 0, "fahrt": 0, "ort": c, "pause": h.get("pause") or 0,
+                       "gesamt": c, "fehlt": [], "offen": False})
     for i in speicher.stamm("intern", []):
         z = (i or {}).get("zeit") or {}
         mid = i.get("erledigt_von") or i.get("zust")
@@ -168,7 +187,7 @@ def summen(zeilen: list[dict]) -> list[dict]:
     s = {}
     for z in zeilen:
         x = s.setdefault(z["mid"], {"name": z["name"], "tage": set(), "gesamt": 0, "ort": 0, "fahrt": 0,
-                                    "reise": 0, "intern": 0, "offen": 0})
+                                    "reise": 0, "intern": 0, "hand": 0, "offen": 0})
         x["tage"].add(z["datum"])
         if z["gesamt"] is None or z["fehlt"]:
             x["offen"] += 1
@@ -179,6 +198,8 @@ def summen(zeilen: list[dict]) -> list[dict]:
             x["fahrt"] += z["fahrt"]
         elif z["art"] == "Intern":
             x["intern"] += g
+        elif z["art"] == "Händisch":
+            x["hand"] += g
         else:
             x["reise"] += g
     return sorted(({**v, "tage": len(v["tage"])} for v in s.values()), key=lambda v: v["name"])
@@ -231,7 +252,7 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
             stand = t.get("km")  # ältere Einträge: Stand stand im Kilometerfeld
         aus.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
                     "betrag": t.get("b"), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
-                    "oel_l": t.get("oel_l"),
+                    "oel_l": t.get("oel_l"), "id": t.get("id"),
                     "stand": stand, "wer": namen.get(t.get("von"), t.get("von") or ""),
                     "wo": orte.get(t.get("einsatz"), ""), "eid": t.get("einsatz")})
     aus.sort(key=lambda x: (x["datum"], x["geraet"]))

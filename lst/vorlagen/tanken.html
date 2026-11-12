@@ -28,16 +28,36 @@
 {% for x in gruppen %}
 <h2 id="g-{{ loop.index }}">{{ x.geraet }}{% if not g %} <a class="btn small" style="margin-left:8px" href="?von={{ von }}&bis={{ bis }}&g={{ x.gid|urlencode }}">nur dieses</a>{% endif %}</h2>
 <table class="tab">
-  <tr><th>Datum</th><th>{{ 'Kilometerstand' if x.art == 'km' else 'Betriebsstunden' }}</th><th>Diesel</th><th>Betrag</th><th>Öl</th><th>Wer</th><th>Einsatz</th></tr>
+  <tr><th>Datum</th><th>{{ 'Kilometerstand' if x.art == 'km' else 'Betriebsstunden' }}</th><th>Diesel</th><th>Betrag</th><th>Öl</th><th>Wer</th><th>Einsatz</th><th></th></tr>
   {% for t in x.eintraege %}<tr><td>{{ datum(t.datum) }}</td>
     <td>{{ zahl(t.stand) }}{% if t.stand is not none %} {{ 'km' if t.art == 'km' else 'Std.' }}{% endif %}</td>
     <td>{{ zahl(t.liter) ~ ' l' if t.liter else '–' }}</td>
     <td>{{ zahl(t.betrag, 2) ~ ' €' if t.betrag is not none else '–' }}</td>
     <td>{% if t.oel_l %}<span class="tag yellow">{{ zahl(t.oel_l) }} l nachgefüllt</span>{% elif t.oel_geprueft %}<span class="tag green">geprüft</span>{% else %}–{% endif %}</td>
-    <td>{{ t.wer }}</td><td>{% if t.eid %}<a href="{{ url_for('einsatz_seite', eid=t.eid) }}">{{ t.wo }}</a>{% endif %}</td></tr>{% endfor %}
+    <td>{{ t.wer }}</td><td>{% if t.eid %}<a href="{{ url_for('einsatz_seite', eid=t.eid) }}">{{ t.wo }}</a>{% endif %}</td>
+    <td><form method="post" action="{{ url_for('tanken_eintrag_loeschen', tid=t.id) }}" onsubmit="return confirm('Eintrag löschen?')"><button class="btn small" title="Eintrag löschen" aria-label="Eintrag löschen">🗑</button></form></td></tr>{% endfor %}
 </table>
 {% endfor %}
 {% else %}<h2>Tanken und Öl</h2><div class="empty">Keine Einträge in diesem Zeitraum.</div>{% endif %}
+
+<h2 id="eintragen">Tanken oder Öl im Büro eintragen</h2>
+<form method="post" action="{{ url_for('tanken_eintragen') }}" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+  <input type="hidden" name="z_von" value="{{ von }}"><input type="hidden" name="z_bis" value="{{ bis }}"><input type="hidden" name="z_g" value="{{ g or '' }}">
+  <div class="field"><label for="t-d">Datum</label><input class="inp" id="t-d" type="date" name="datum" value="{{ heute }}" required></div>
+  <div class="field"><label for="t-g">Gerät / Fahrzeug</label><select class="inp" id="t-g" name="geraet" required>
+    {% for gid, name in auswahl %}<option value="{{ gid }}"{% if g == gid %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="t-s">Stand (km bzw. Betriebsstd.)</label><input class="inp" id="t-s" name="stand" inputmode="decimal" style="width:150px"></div>
+  <div class="field"><label for="t-l">Diesel Liter</label><input class="inp" id="t-l" name="l" inputmode="decimal" style="width:100px"></div>
+  <div class="field"><label for="t-b">Betrag €</label><input class="inp" id="t-b" name="b" inputmode="decimal" style="width:100px"></div>
+  <label class="row small" style="gap:6px;align-items:center;min-height:44px"><input type="checkbox" name="oel_geprueft" style="width:22px;height:22px"> Öl geprüft</label>
+  <div class="field"><label for="t-o">Öl nachgefüllt (l)</label><input class="inp" id="t-o" name="oel_l" inputmode="decimal" style="width:100px"></div>
+  <div class="field"><label for="t-w">Wer</label><select class="inp" id="t-w" name="wer">
+    {% for m in leute %}<option value="{{ m.id }}"{% if m.id == ich.id %} selected{% endif %}>{{ m.vorname }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="t-e">Einsatz (optional)</label><select class="inp" id="t-e" name="einsatz"><option value="">–</option>
+    {% for e in einsaetze %}<option value="{{ e.id }}">{{ e.einsatzort }} ({{ datum(e.von) if e.von else '' }})</option>{% endfor %}</select></div>
+  <button class="btn pri">Speichern</button>
+</form>
+<p class="small muted">Nur Öl geprüft oder nachgefüllt? Dann Diesel leer lassen. Ein höherer Stand wird als aktueller Stand des Geräts übernommen.</p>
 
 <h2>Kompressor und Kilometer je Einsatz</h2>
 {% if geraete %}

@@ -9,7 +9,7 @@
 <form method="post">
 <div style="overflow-x:auto">
 <table class="tab">
-  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Aktiv</th></tr></thead>
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>iPad</th><th>Minijob</th><th>Aktiv</th></tr></thead>
   <tbody>
   {% for m in leute %}
   <tr>
@@ -22,6 +22,8 @@
     <td><input class="inp" type="email" name="mail_{{ m.id }}" value="{{ m.mail or '' }}" aria-label="E-Mail"></td>
     <td><input class="inp" name="pin_{{ m.id }}" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"
         placeholder="{{ 'vergeben' if m.pin_hash else 'fehlt' }}" aria-label="Neue PIN"></td>
+    <td><input type="checkbox" name="ipad_{{ m.id }}"{% if m.ipad != false %} checked{% endif %} aria-label="Nutzt die iPad-App" style="width:22px;height:22px"></td>
+    <td><input type="checkbox" name="minijob_{{ m.id }}"{% if m.minijob %} checked{% endif %} aria-label="Minijob" style="width:22px;height:22px"></td>
     <td><input type="checkbox" name="aktiv_{{ m.id }}"{% if m.aktiv != false %} checked{% endif %} aria-label="Aktiv" style="width:22px;height:22px"></td>
   </tr>
   {% endfor %}
@@ -32,12 +34,14 @@
     <td><select class="inp" name="team_neu" aria-label="Im Team meist"><option>Facharbeiter</option><option>Vorarbeiter</option></select></td>
     <td><input class="inp" type="email" name="mail_neu" aria-label="E-Mail"></td>
     <td><input class="inp" name="pin_neu" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="PIN" aria-label="PIN"></td>
+    <td><input type="checkbox" name="ipad_neu" checked aria-label="Nutzt die iPad-App" style="width:22px;height:22px"></td>
+    <td><input type="checkbox" name="minijob_neu" aria-label="Minijob" style="width:22px;height:22px"></td>
     <td></td>
   </tr>
   </tbody>
 </table>
 </div>
-<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. Ohne Haken bei „iPad“ erscheint jemand nicht auf den iPads (z. B. Minijobber); seine Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
 <button class="btn pri">Speichern</button>
 </form>
 {% endblock %}

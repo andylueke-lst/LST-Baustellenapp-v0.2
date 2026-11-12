@@ -102,7 +102,7 @@ def adresse_ok(a: str) -> bool:
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
     fehler = ""
     if request.method == "POST":
         m = next((x for x in leute if x["id"] == request.form.get("wer")), None)
@@ -198,6 +198,8 @@ def mitarbeiter_seite():
             m["team"] = f.get(f"team_{i}", m.get("team"))
             m["mail"] = f.get(f"mail_{i}", "").strip()
             m["aktiv"] = bool(f.get(f"aktiv_{i}"))
+            m["ipad"] = bool(f.get(f"ipad_{i}"))
+            m["minijob"] = bool(f.get(f"minijob_{i}"))
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -212,12 +214,13 @@ def mitarbeiter_seite():
                 n += 1
             neu = {"id": f"m{n}", "vorname": f["vorname_neu"].strip(), "nachname": f.get("nachname_neu", "").strip(),
                    "rolle": f.get("rolle_neu", "mitarbeiter"), "team": f.get("team_neu", "Facharbeiter"),
-                   "mail": f.get("mail_neu", "").strip(), "aktiv": True}
+                   "mail": f.get("mail_neu", "").strip(), "aktiv": True, "ipad": bool(f.get("ipad_neu")),
+                   "minijob": bool(f.get("minijob_neu"))}
             pin = f.get("pin_neu", "").strip()
             if pin.isdigit() and 4 <= len(pin) <= 6:
                 neu["pin_hash"] = generate_password_hash(pin)
             leute.append(neu)
-        if not any(m.get("rolle") == "admin" and m.get("aktiv") and m.get("pin_hash") for m in leute):
+        if not any(m.get("rolle") == "admin" and m.get("aktiv") and m.get("ipad", True) and m.get("pin_hash") for m in leute):
             flash("Mindestens ein aktiver Admin mit PIN muss bleiben. Nichts gespeichert.", "fehler")
             return redirect(url_for("mitarbeiter_seite"))
         speicher.stamm_setzen("mitarbeiter", leute)
@@ -287,7 +290,7 @@ def einsatz_neu(eid=None):
 
 
 def _auswahl():
-    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)],
+    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)],
             "fahrzeuge": speicher.stamm("fahrzeuge", []),
             "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
             "strahlgeraete": speicher.stamm("strahlgeraete", [])}
@@ -717,7 +720,7 @@ def _fuer_app(m: dict) -> dict:
 @app.route("/api/leute")
 def api_leute():
     return jsonify([{"id": m["id"], "name": m.get("vorname", ""), "pin": bool(m.get("pin_hash"))}
-                    for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)])
+                    for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)])
 
 
 @app.route("/api/login", methods=["POST"])
@@ -760,7 +763,7 @@ def api_stand():
         e = _einsatz_mit_fotos(e)
         e["docs"] = _docs_fuer_app(e["id"])
         es.append(e)
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
     aus = {"ich": _fuer_app(ich()), "mitarbeiter": [_fuer_app(m) for m in leute], "einsaetze": es,
            "strahlgeraete": speicher.stamm("strahlgeraete", []), "typen": speicher.stamm("geraetetypen", {}),
            "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}
@@ -781,8 +784,9 @@ def api_listen():
         if not isinstance(d.get(k), list):
             continue
         alt = {x["id"]: x for x in speicher.stamm(k, []) if isinstance(x, dict) and x.get("id")}
+        weg = set(speicher.stamm("geloescht_im_buero", {}).get(k, []))
         for x in d[k]:
-            if isinstance(x, dict) and x.get("id"):
+            if isinstance(x, dict) and x.get("id") and x["id"] not in weg:
                 alt[x["id"]] = {**alt.get(x["id"], {}), **x}
         for wid in (d.get("geloescht") or {}).get(k, []):
             alt.pop(wid, None)
@@ -1019,7 +1023,128 @@ def stunden_seite():
                          download_name=f"{kurz} LST Stundennachweis{zusatz}.pdf")
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     return render_template("stunden.html", von=von, bis=bis, wer=wer, leute=leute, schnell=schnell,
-                           gruppen=gruppen, hm=aw.hm)
+                           gruppen=gruppen, hm=aw.hm, heute=date.today().isoformat())
+
+
+@app.route("/buero/stunden/eintrag", methods=["POST"])
+@anmeldung(admin=True)
+def stunden_eintragen():
+    """Stunden von Hand eintragen (z. B. Minijobber ohne iPad)."""
+    from .auswertung import handzeit
+    f = request.form
+    zurueck = redirect(url_for("stunden_seite", von=f.get("z_von") or None, bis=f.get("z_bis") or None,
+                                wer=f.get("z_wer") or None) + "#eintragen")
+    leute = {m["id"] for m in speicher.stamm("mitarbeiter", [])}
+    try:
+        tag = date.fromisoformat(f.get("datum", "")).isoformat()
+    except ValueError:
+        flash("Bitte ein Datum wählen.", "fehler")
+        return zurueck
+    if f.get("mid") not in leute:
+        flash("Bitte einen Mitarbeiter wählen.", "fehler")
+        return zurueck
+    h = {"id": speicher.neue_id(), "mid": f["mid"], "datum": tag, "taetigkeit": f.get("taetigkeit", "").strip(),
+         "von": f.get("von") or None, "bis": f.get("bis") or None, "pause": None, "dauer": None,
+         "eingetragen_von": session.get("uid"), "eingetragen_am": time.time()}
+    try:
+        h["pause"] = int(f.get("pause") or 0)
+        roh = (f.get("stunden") or "").strip().replace(",", ".")
+        if roh:
+            if ":" in roh:
+                st, mi = roh.split(":")
+                h["dauer"] = int(st) * 60 + int(mi)
+            else:
+                h["dauer"] = round(float(roh) * 60)
+    except ValueError:
+        flash("Pause in Minuten und Stunden als z. B. 4,5 oder 4:30 eintragen.", "fehler")
+        return zurueck
+    if h["dauer"] is None and not (h["von"] and h["bis"]):
+        flash("Bitte Von und Bis eintragen oder direkt die Stunden.", "fehler")
+        return zurueck
+    liste = speicher.stamm("stunden_manuell", [])
+    liste.append(h)
+    speicher.stamm_setzen("stunden_manuell", liste)
+    speicher.protokoll("stunden_eingetragen", session.get("uid"), mitarbeiter=h["mid"], datum=tag, minuten=handzeit(h))
+    flash(f"Eingetragen: {basis.datum(tag)}, {handzeit(h) // 60}:{handzeit(h) % 60:02d} h.", "ok")
+    return zurueck
+
+
+@app.route("/buero/stunden/eintrag/<hid>/loeschen", methods=["POST"])
+@anmeldung(admin=True)
+def stunden_eintrag_loeschen(hid):
+    liste = speicher.stamm("stunden_manuell", [])
+    speicher.stamm_setzen("stunden_manuell", [h for h in liste if h.get("id") != hid])
+    speicher.protokoll("stunden_geloescht", session.get("uid"), eintrag=hid)
+    flash("Eintrag gelöscht.", "ok")
+    return redirect(request.referrer or url_for("stunden_seite"))
+
+
+def _im_buero_loeschen(liste: str, eid: str):
+    """Löscht einen Listeneintrag und merkt sich die id, damit ein iPad ihn nicht wieder hochlädt."""
+    speicher.stamm_setzen(liste, [x for x in speicher.stamm(liste, []) if x.get("id") != eid])
+    weg = speicher.stamm("geloescht_im_buero", {})
+    weg.setdefault(liste, []).append(eid)
+    speicher.stamm_setzen("geloescht_im_buero", weg)
+
+
+@app.route("/buero/tanken/eintrag", methods=["POST"])
+@anmeldung(admin=True)
+def tanken_eintragen():
+    """Tankvorgang oder Ölkontrolle im Büro erfassen (gleiches Format wie vom iPad)."""
+    f = request.form
+    zurueck = redirect(url_for("tanken_seite", von=f.get("z_von") or None, bis=f.get("z_bis") or None,
+                                g=f.get("z_g") or None) + "#eintragen")
+    def zahl(name):
+        """„62,4“ → 62.4, „41.388“ oder „41.388,5“ → Tausenderpunkt, „3421.5“ → 3421.5"""
+        v = (f.get(name) or "").strip().replace(" ", "")
+        if not v:
+            return None
+        if "," in v:
+            v = v.replace(".", "").replace(",", ".")
+        elif re.fullmatch(r"\d{1,3}(\.\d{3})+", v):
+            v = v.replace(".", "")
+        return float(v)
+    try:
+        tag = date.fromisoformat(f.get("datum", "")).isoformat()
+        liter, betrag, stand, oel = zahl("l"), zahl("b"), zahl("stand"), zahl("oel_l")
+    except ValueError:
+        flash("Bitte Datum und Zahlen prüfen (z. B. 62,4).", "fehler")
+        return zurueck
+    gid = f.get("geraet", "")
+    art, _, gnr = gid.partition(":")
+    liste_name = {"f": "fahrzeuge", "k": "kompressoren"}.get(art)
+    geraete = speicher.stamm(liste_name, []) if liste_name else []
+    geraet = next((x for x in geraete if x.get("id") == gnr), None)
+    if not geraet:
+        flash("Bitte Gerät oder Fahrzeug wählen.", "fehler")
+        return zurueck
+    og = bool(f.get("oel_geprueft")) or bool(oel)
+    if not liter and not og:
+        flash("Bitte Diesel-Liter eintragen oder Öl geprüft/nachgefüllt angeben.", "fehler")
+        return zurueck
+    t = {"id": speicher.neue_id(), "geraet": gid, "l": liter, "b": betrag,
+         "km": stand if art == "f" else None, "h": stand if art == "k" else None,
+         "oel_geprueft": og, "oel_l": oel, "datum": tag, "einsatz": f.get("einsatz") or None,
+         "von": f.get("wer") or session.get("uid"), "im_buero": True}
+    liste = speicher.stamm("tanken", [])
+    liste.append(t)
+    speicher.stamm_setzen("tanken", liste)
+    feld = "km" if art == "f" else "h"
+    if stand is not None and (geraet.get(feld) is None or stand > float(geraet.get(feld) or 0)):
+        geraet[feld] = stand
+        speicher.stamm_setzen(liste_name, geraete)
+    speicher.protokoll("tanken_im_buero", session.get("uid"), geraet=gid, datum=tag)
+    flash("Tankvorgang gespeichert." if liter else "Ölkontrolle gespeichert.", "ok")
+    return zurueck
+
+
+@app.route("/buero/tanken/eintrag/<tid>/loeschen", methods=["POST"])
+@anmeldung(admin=True)
+def tanken_eintrag_loeschen(tid):
+    _im_buero_loeschen("tanken", tid)
+    speicher.protokoll("tanken_geloescht", session.get("uid"), eintrag=tid)
+    flash("Eintrag gelöscht.", "ok")
+    return redirect(request.referrer or url_for("tanken_seite"))
 
 
 @app.route("/buero/tanken")
@@ -1031,7 +1156,11 @@ def tanken_seite():
     g = request.args.get("g") or None
     tank = [t for t in aw.tankvorgaenge(von, bis) if not g or t["gid"] == g]
     geraete = [x for x in aw.geraete_je_einsatz(von, bis) if not g or g in (x["k_id"], x["f_id"])]
+    letzte = sorted((e for e in speicher.einsaetze() if e.get("art", "kunde") != "intern"),
+                    key=lambda e: e.get("von") or "", reverse=True)[:15]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     return render_template("tanken.html", von=von, bis=bis, schnell=schnell, g=g, auswahl=aw.geraete_auswahl(),
+                           heute=date.today().isoformat(), einsaetze=letzte, leute=leute,
                            geraete=geraete, gruppen=aw.tank_summen(tank), zahl=aw.zahl)
 
 
