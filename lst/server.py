@@ -1094,11 +1094,11 @@ def _im_buero_loeschen(liste: str, eid: str):
 def tanken_eintragen():
     """Tankvorgang oder Ölkontrolle im Büro erfassen (gleiches Format wie vom iPad)."""
     f = request.form
-    zurueck = redirect(url_for("tanken_seite", von=f.get("z_von") or None, bis=f.get("z_bis") or None,
-                                g=f.get("z_g") or None) + "#eintragen")
+    def fehler(text):
+        return _tanken_anzeigen(f.get("z_von"), f.get("z_bis"), f.get("z_g") or None, fehler=text, eingabe=f)
     def zahl(name):
-        """„62,4“ → 62.4, „41.388“ oder „41.388,5“ → Tausenderpunkt, „3421.5“ → 3421.5"""
-        v = (f.get(name) or "").strip().replace(" ", "")
+        """„62,4“ → 62.4, „41.388“ oder „41.388,5“ → Tausenderpunkt, „3421.5“ → 3421.5; Einheiten werden ignoriert"""
+        v = re.sub(r"[^\d,.\-]", "", f.get(name) or "")
         if not v:
             return None
         if "," in v:
@@ -1117,20 +1117,17 @@ def tanken_eintragen():
         elif preis is None and liter and betrag is not None:
             preis = round(betrag / liter, 3)
     except ValueError:
-        flash("Bitte Datum und Zahlen prüfen (z. B. 62,4).", "fehler")
-        return zurueck
+        return fehler("Bitte Datum und Zahlen prüfen (z. B. 62,4).")
     gid = f.get("geraet", "")
     art, _, gnr = gid.partition(":")
     liste_name = {"f": "fahrzeuge", "k": "kompressoren"}.get(art)
     geraete = speicher.stamm(liste_name, []) if liste_name else []
     geraet = next((x for x in geraete if x.get("id") == gnr), None)
     if not geraet:
-        flash("Bitte Gerät oder Fahrzeug wählen.", "fehler")
-        return zurueck
+        return fehler("Bitte Gerät oder Fahrzeug wählen.")
     og = bool(f.get("oel_geprueft")) or bool(oel)
     if not liter and not og:
-        flash("Bitte Diesel-Liter eintragen oder Öl geprüft/nachgefüllt angeben.", "fehler")
-        return zurueck
+        return fehler("Bitte Diesel-Liter (oder Betrag und €/Liter) eintragen oder Öl geprüft/nachgefüllt angeben.")
     t = {"id": speicher.neue_id(), "geraet": gid, "l": liter, "b": betrag, "p": preis,
          "km": stand if art == "f" else None, "h": stand if art == "k" else None,
          "oel_geprueft": og, "oel_l": oel, "datum": tag, "einsatz": f.get("einsatz") or None,
@@ -1143,8 +1140,12 @@ def tanken_eintragen():
         geraet[feld] = stand
         speicher.stamm_setzen(liste_name, geraete)
     speicher.protokoll("tanken_im_buero", session.get("uid"), geraet=gid, datum=tag)
-    flash("Tankvorgang gespeichert." if liter else "Ölkontrolle gespeichert.", "ok")
-    return zurueck
+    flash(("Tankvorgang" if liter else "Ölkontrolle") + f" vom {basis.datum(tag)} gespeichert ({geraet.get('kz', '')}).", "ok")
+    # Zeitraum so wählen, dass der neue Eintrag sicher sichtbar ist; Gerätefilter nur behalten, wenn er passt
+    von, bis = f.get("z_von") or tag, f.get("z_bis") or tag
+    von, bis = min(von, tag), max(bis, tag)
+    g = f.get("z_g") if f.get("z_g") == gid else None
+    return redirect(url_for("tanken_seite", von=von, bis=bis, g=g, neu=t["id"]) + "#neu")
 
 
 @app.route("/buero/tanken/eintrag/<tid>/loeschen", methods=["POST"])
@@ -1160,9 +1161,13 @@ def tanken_eintrag_loeschen(tid):
 @anmeldung(admin=True)
 def tanken_seite():
     """Tankvorgänge sowie Kompressor-Betriebsstunden und Kilometer je Einsatz."""
+    von, bis, _ = _zeitraum_auswahl()
+    return _tanken_anzeigen(von, bis, request.args.get("g") or None, neu=request.args.get("neu"))
+
+
+def _tanken_anzeigen(von, bis, g, fehler=None, eingabe=None, neu=None):
     from . import auswertung as aw
-    von, bis, schnell = _zeitraum_auswahl()
-    g = request.args.get("g") or None
+    _, _, schnell = _zeitraum_auswahl()
     tank = [t for t in aw.tankvorgaenge(von, bis) if not g or t["gid"] == g]
     geraete = [x for x in aw.geraete_je_einsatz(von, bis) if not g or g in (x["k_id"], x["f_id"])]
     letzte = sorted((e for e in speicher.einsaetze() if e.get("art", "kunde") != "intern"),
@@ -1170,7 +1175,8 @@ def tanken_seite():
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     return render_template("tanken.html", von=von, bis=bis, schnell=schnell, g=g, auswahl=aw.geraete_auswahl(),
                            heute=date.today().isoformat(), einsaetze=letzte, leute=leute,
-                           geraete=geraete, gruppen=aw.tank_summen(tank), zahl=aw.zahl)
+                           geraete=geraete, gruppen=aw.tank_summen(tank), zahl=aw.zahl,
+                           fehler=fehler, ein=eingabe or {}, neu=neu)
 
 
 @app.route("/buero/einsatz/<eid>/unterschrift", methods=["POST"])
