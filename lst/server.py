@@ -37,6 +37,28 @@ def voller_name(m: dict | None) -> str:
     return dok_abschluss.voller_name(m) if m else ""
 
 
+def darf_einsatz(e: dict | None, m: dict | None) -> bool:
+    """Wer einen Einsatz auf dem iPad sieht und bearbeiten darf: Admins (Andy, Tina) alle,
+    alle anderen nur Einsätze, in denen sie im Team stehen oder an einem Tag Zeiten haben."""
+    if not e or not m:
+        return False
+    if m.get("rolle") == "admin":
+        return True
+    uid = m["id"]
+    team = e.get("team") or {}
+    if uid in (team.get("vor"), team.get("fach")):
+        return True
+    return any(uid in (t.get("zeiten") or {}) for t in e.get("tage") or [])
+
+
+def _einsatz_fuer_mich(eid: str) -> dict:
+    """Einsatz laden, aber nur, wenn er dem Angemeldeten zugeteilt ist (sonst 404 wie nicht vorhanden)."""
+    e = speicher.einsatz(eid)
+    if not darf_einsatz(e, ich()):
+        abort(404)
+    return e
+
+
 def anmeldung(admin=False):
     def deko(f):
         @functools.wraps(f)
@@ -435,7 +457,7 @@ def _docs_fuer_app(eid: str) -> list[dict]:
 def api_dokument(did):
     """Lieferschein oder Fotodoku als PDF fürs iPad (Teilen, In Dateien sichern, AirDrop)."""
     d = next((x for x in speicher.dokumente() if x["id"] == did), None)
-    if not d or d["art"] not in APP_DOKUMENTE:
+    if not d or d["art"] not in APP_DOKUMENTE or not darf_einsatz(speicher.einsatz(d["einsatz_id"]), ich()):
         return jsonify(fehler="Dokument nicht gefunden."), 404
     p = speicher.DATEN / d["datei"]
     if not p.exists():
@@ -447,6 +469,7 @@ def api_dokument(did):
 @app.route("/foto/<eid>/<fid>")
 @anmeldung()
 def foto(eid, fid):
+    _einsatz_fuer_mich(eid)
     p = speicher.foto_datei(eid, fid, vorschau=request.args.get("v") == "1")
     if not p.exists():
         abort(404)
@@ -486,6 +509,8 @@ def api_einsatz_speichern():
     if not e.get("id"):
         return jsonify(fehler="id fehlt"), 400
     alt = speicher.einsatz(e["id"]) or {}
+    if alt and not darf_einsatz(alt, ich()):
+        return jsonify(fehler="Dieser Einsatz ist dir nicht zugeteilt."), 403
     liste = e.pop("fotos", None)
     for k in ("trash", "lsHtml", "sync_abschluss", "serverDocs"):
         e.pop(k, None)
@@ -547,7 +572,10 @@ def api_stand():
     """Alles, was das iPad zum Arbeiten braucht. Abgeschlossene Einsätze nur der letzten 30 Tage."""
     grenze = (date.today() - timedelta(days=30)).isoformat()
     es = []
+    m = ich()
     for e in speicher.einsaetze():
+        if not darf_einsatz(e, m):
+            continue
         if e.get("status") == "abgeschlossen" and (e.get("abschluss") or {}).get("datum", "9999") < grenze:
             continue
         e = _einsatz_mit_fotos(e)
@@ -584,7 +612,7 @@ def api_listen():
 @app.route("/api/einsatz/<eid>/foto", methods=["POST"])
 @anmeldung()
 def api_foto(eid):
-    _einsatz_oder_404(eid)
+    _einsatz_fuer_mich(eid)
     f = request.files.get("foto")
     if not f:
         return jsonify(fehler="foto fehlt"), 400
@@ -612,7 +640,7 @@ def _doku_datum(e):
 def api_abschluss(eid):
     """Job abschließen: Dokumente erzeugen, Lieferschein ggf. an den Einsatzort senden,
     Fotobericht in die Freigabe legen, Admins benachrichtigen."""
-    e = _einsatz_mit_fotos(_einsatz_oder_404(eid))
+    e = _einsatz_mit_fotos(_einsatz_fuer_mich(eid))
     sig = request.get_json(force=True)
     if sig.get("bild"):
         sig["bild"] = base64.b64decode(sig["bild"].split(",")[-1])
