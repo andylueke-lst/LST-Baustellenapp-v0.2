@@ -5,6 +5,7 @@
   python3 -m lst.verwaltung adresse         Adresse für das iPad anzeigen (über Tailscale)
   python3 -m lst.verwaltung notion          Notion-Schlüssel eintragen (verdeckte Eingabe)
   python3 -m lst.verwaltung mail            Zugang zum Postfach eintragen (verdeckte Eingabe)
+  python3 -m lst.verwaltung testmail <an>   Testmail schicken, um den Mailversand zu prüfen
 """
 from __future__ import annotations
 
@@ -108,6 +109,18 @@ def mail_eintragen():
     print("Gespeichert. Gilt sofort – im Büro im Postausgang „Jetzt senden“ probieren.")
 
 
+def testmail(an: str):
+    speicher.einrichten()
+    from . import mail
+    erg = mail.senden(an, "Test LST Baustellen-App",
+                      "Hallo,\n\ndiese Testmail kommt vom Server der LST Baustellen-App. Der Mailversand funktioniert.\n",
+                      [], None)
+    if erg["status"] == "versendet":
+        print(f"Testmail an {an} versendet. Bitte im Postfach (auch im Spam-Ordner) nachsehen.")
+    else:
+        print("Nicht versendet:", erg.get("fehler") or erg["status"])
+
+
 if __name__ == "__main__":
     befehl = sys.argv[1] if len(sys.argv) > 1 else ""
     if befehl == "pin" and len(sys.argv) > 2:
@@ -120,5 +133,7 @@ if __name__ == "__main__":
         notion_eintragen()
     elif befehl == "mail":
         mail_eintragen()
+    elif befehl == "testmail" and len(sys.argv) > 2:
+        testmail(sys.argv[2])
     else:
         print(__doc__)
