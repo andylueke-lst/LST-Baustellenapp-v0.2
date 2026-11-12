@@ -9,16 +9,16 @@
 <form method="get" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
   <div class="field"><label for="s-v">Von</label><input class="inp" id="s-v" type="date" name="von" value="{{ von }}"></div>
   <div class="field"><label for="s-b">Bis</label><input class="inp" id="s-b" type="date" name="bis" value="{{ bis }}"></div>
-  <div class="field"><label for="s-w">Mitarbeiter</label><select class="inp" id="s-w" name="wer"><option value="">alle</option>
-    {% for m in leute %}<option value="{{ m.id }}"{% if wer == m.id %} selected{% endif %}>{{ voller_name(m) }}</option>{% endfor %}</select></div>
+  <fieldset class="field" style="border:0;padding:0;margin:0"><legend class="small muted" style="padding:0;margin-bottom:6px">Mitarbeiter <span class="small">(keiner angehakt = alle)</span></legend>
+    <div class="row" style="flex-wrap:wrap;gap:6px">{% for m in leute %}<label class="tag" style="gap:6px;padding:8px 10px;cursor:pointer;font-size:14px"><input type="checkbox" name="wer" value="{{ m.id }}"{% if m.id in wer %} checked{% endif %}>{{ m.vorname }}{% if m.minijob %} <span class="small muted">Minijob</span>{% endif %}</label>{% endfor %}</div></fieldset>
   <button class="btn pri">Anzeigen</button>
 </form>
-<p class="small" style="margin-top:8px">{% for t, a, b in schnell %}<a href="?von={{ a.isoformat() }}&bis={{ b.isoformat() }}{% if wer %}&wer={{ wer }}{% endif %}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+<p class="small" style="margin-top:8px">{% for t, a, b in schnell %}<a href="?von={{ a.isoformat() }}&bis={{ b.isoformat() }}{{ wq }}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
 
 <div class="row" style="flex-wrap:wrap;gap:8px;margin:16px 0 4px">
-  <a class="btn pri" href="?von={{ von }}&bis={{ bis }}{% if wer %}&wer={{ wer }}{% endif %}&pdf=1" target="_blank" rel="noopener">📄 PDF für den Steuerberater</a>
-  <a class="btn" href="?von={{ von }}&bis={{ bis }}{% if wer %}&wer={{ wer }}{% endif %}&csv=1">📊 CSV für Auswertung / Arbeitszeitkonto</a>
-  <span class="small muted">{{ datum(von) }} – {{ datum(bis) }}{% if wer %} · nur ausgewählter Mitarbeiter{% endif %}</span>
+  <a class="btn pri" href="?von={{ von }}&bis={{ bis }}{{ wq }}&pdf=1" target="_blank" rel="noopener">📄 PDF für den Steuerberater</a>
+  <a class="btn" href="?von={{ von }}&bis={{ bis }}{{ wq }}&csv=1">📊 CSV für Auswertung / Arbeitszeitkonto</a>
+  <span class="small muted">{{ datum(von) }} – {{ datum(bis) }}{% if wer %} · {{ wer|length }} von {{ leute|length }} Mitarbeitern{% endif %}</span>
 </div>
 
 {% if gruppen %}
@@ -50,9 +50,9 @@
 <h2 id="eintragen">Stunden von Hand eintragen</h2>
 <p class="small muted">Für alle, die nicht mit dem iPad arbeiten (z. B. Minijob), oder zum Nachtragen. Entweder Von/Bis mit Pause oder direkt die Stunden.</p>
 <form method="post" action="{{ url_for('stunden_eintragen') }}" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
-  <input type="hidden" name="z_von" value="{{ von }}"><input type="hidden" name="z_bis" value="{{ bis }}"><input type="hidden" name="z_wer" value="{{ wer or '' }}">
+  <input type="hidden" name="z_von" value="{{ von }}"><input type="hidden" name="z_bis" value="{{ bis }}">{% for w in wer %}<input type="hidden" name="z_wer" value="{{ w }}">{% endfor %}
   <div class="field"><label for="h-m">Mitarbeiter</label><select class="inp" id="h-m" name="mid" required>
-    {% for m in leute %}<option value="{{ m.id }}"{% if (wer and wer == m.id) or (not wer and m.minijob) %} selected{% endif %}>{{ voller_name(m) }}{% if m.minijob %} (Minijob){% endif %}</option>{% endfor %}</select></div>
+    {% for m in leute %}<option value="{{ m.id }}"{% if (wer|length == 1 and wer[0] == m.id) or (wer|length != 1 and m.minijob) %} selected{% endif %}>{{ voller_name(m) }}{% if m.minijob %} (Minijob){% endif %}</option>{% endfor %}</select></div>
   <div class="field"><label for="h-d">Datum</label><input class="inp" id="h-d" type="date" name="datum" value="{{ heute }}" required></div>
   <div class="field"><label for="h-v">Von</label><input class="inp" id="h-v" type="time" name="von"></div>
   <div class="field"><label for="h-b">Bis</label><input class="inp" id="h-b" type="time" name="bis"></div>

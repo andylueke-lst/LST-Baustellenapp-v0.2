@@ -1008,11 +1008,13 @@ def stunden_seite():
     """Arbeitszeiten je Mitarbeiter, Export als PDF (Steuerberater) und CSV (Arbeitszeitkonto)."""
     from . import auswertung as aw
     von, bis, schnell = _zeitraum_auswahl()
-    wer = request.args.get("wer") or None
+    wer = [w for w in request.args.getlist("wer") if w]
     zeilen = aw.arbeitszeiten(von, bis, wer)
+    from urllib.parse import urlencode
+    wq = ("&" + urlencode([("wer", w) for w in wer])) if wer else ""
     kurz = f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]}"
     namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
-    zusatz = f" {namen.get(wer, '')}" if wer else ""
+    zusatz = (" " + ", ".join(namen.get(w, "") for w in wer)) if 0 < len(wer) <= 3 else ""
     if request.args.get("csv"):
         return send_file(io.BytesIO(aw.csv_arbeitszeiten(zeilen)), mimetype="text/csv", as_attachment=True,
                          download_name=f"{kurz} LST Arbeitszeiten{zusatz}.csv")
@@ -1022,7 +1024,7 @@ def stunden_seite():
         return send_file(io.BytesIO(dok_stunden.stundennachweis(gruppen, von, bis)), mimetype="application/pdf",
                          download_name=f"{kurz} LST Stundennachweis{zusatz}.pdf")
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
-    return render_template("stunden.html", von=von, bis=bis, wer=wer, leute=leute, schnell=schnell,
+    return render_template("stunden.html", von=von, bis=bis, wer=wer, wq=wq, leute=leute, schnell=schnell,
                            gruppen=gruppen, hm=aw.hm, heute=date.today().isoformat())
 
 
@@ -1033,7 +1035,7 @@ def stunden_eintragen():
     from .auswertung import handzeit
     f = request.form
     zurueck = redirect(url_for("stunden_seite", von=f.get("z_von") or None, bis=f.get("z_bis") or None,
-                                wer=f.get("z_wer") or None) + "#eintragen")
+                                wer=[w for w in f.getlist("z_wer") if w] or None) + "#eintragen")
     leute = {m["id"] for m in speicher.stamm("mitarbeiter", [])}
     try:
         tag = date.fromisoformat(f.get("datum", "")).isoformat()

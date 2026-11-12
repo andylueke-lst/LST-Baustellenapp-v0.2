@@ -129,7 +129,9 @@ def _namen() -> dict:
             for m in speicher.stamm("mitarbeiter", [])}
 
 
-def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
+def arbeitszeiten(von: str, bis: str, wer: str | list[str] | None = None) -> list[dict]:
+    """wer: eine Mitarbeiter-id, mehrere oder None für alle."""
+    wer = {wer} if isinstance(wer, str) else set(wer or [])
     namen = _namen()
     zeilen = []
     for e in speicher.einsaetze():
@@ -137,7 +139,7 @@ def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
             if not _im_zeitraum(t.get("datum"), von, bis):
                 continue
             for mid, z in (t.get("zeiten") or {}).items():
-                if wer and mid != wer:
+                if wer and mid not in wer:
                     continue
                 c = berechnen(z or {})
                 zeilen.append({"datum": t["datum"], "mid": mid, "name": namen.get(mid, mid), "art": "Einsatz",
@@ -152,7 +154,7 @@ def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
         a, b = _min(r.get("ab")), _min(r.get("an"))
         dauer = b - a if a is not None and b is not None and b > a else None
         for mid in r.get("ma") or []:
-            if wer and mid != wer:
+            if wer and mid not in wer:
                 continue
             zeilen.append({"datum": r["datum"], "mid": mid, "name": namen.get(mid, mid),
                            "art": arten.get(r.get("art"), "Reise"), "wo": einsatz_ort.get(r.get("einsatz"), ""),
@@ -161,7 +163,7 @@ def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
                            "fehlt": [] if dauer else ["Abfahrt/Ankunft"], "offen": False})
     for h in speicher.stamm("stunden_manuell", []):
         mid = (h or {}).get("mid")
-        if not _im_zeitraum(h.get("datum"), von, bis) or (wer and mid != wer):
+        if not _im_zeitraum(h.get("datum"), von, bis) or (wer and mid not in wer):
             continue
         c = handzeit(h)
         zeilen.append({"datum": h["datum"], "mid": mid, "name": namen.get(mid, mid or "?"), "art": "Händisch",
@@ -171,7 +173,7 @@ def arbeitszeiten(von: str, bis: str, wer: str | None = None) -> list[dict]:
     for i in speicher.stamm("intern", []):
         z = (i or {}).get("zeit") or {}
         mid = i.get("erledigt_von") or i.get("zust")
-        if not z.get("von") or not _im_zeitraum(z.get("datum"), von, bis) or (wer and mid != wer):
+        if not z.get("von") or not _im_zeitraum(z.get("datum"), von, bis) or (wer and mid not in wer):
             continue
         a, b = _min(z.get("von")), _min(z.get("bis"))
         dauer = (b - a) % 1440 if a is not None and b is not None else None
