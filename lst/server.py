@@ -1109,6 +1109,13 @@ def tanken_eintragen():
     try:
         tag = date.fromisoformat(f.get("datum", "")).isoformat()
         liter, betrag, stand, oel = zahl("l"), zahl("b"), zahl("stand"), zahl("oel_l")
+        preis = zahl("p")
+        if liter is None and betrag is not None and preis:
+            liter = round(betrag / preis, 2)
+        elif betrag is None and liter is not None and preis is not None:
+            betrag = round(liter * preis, 2)
+        elif preis is None and liter and betrag is not None:
+            preis = round(betrag / liter, 3)
     except ValueError:
         flash("Bitte Datum und Zahlen prüfen (z. B. 62,4).", "fehler")
         return zurueck
@@ -1124,7 +1131,7 @@ def tanken_eintragen():
     if not liter and not og:
         flash("Bitte Diesel-Liter eintragen oder Öl geprüft/nachgefüllt angeben.", "fehler")
         return zurueck
-    t = {"id": speicher.neue_id(), "geraet": gid, "l": liter, "b": betrag,
+    t = {"id": speicher.neue_id(), "geraet": gid, "l": liter, "b": betrag, "p": preis,
          "km": stand if art == "f" else None, "h": stand if art == "k" else None,
          "oel_geprueft": og, "oel_l": oel, "datum": tag, "einsatz": f.get("einsatz") or None,
          "von": f.get("wer") or session.get("uid"), "im_buero": True}

@@ -29,7 +29,7 @@ def zahl(x, stellen: int = 1) -> str:
         x = float(x)
     except (TypeError, ValueError):
         return str(x)
-    t = f"{x:,.{stellen}f}" if x != int(x) or stellen == 2 else f"{x:,.0f}"
+    t = f"{x:,.{stellen}f}" if x != int(x) or stellen >= 2 else f"{x:,.0f}"
     return t.replace(",", "#").replace(".", ",").replace("#", ".")
 
 
@@ -237,6 +237,18 @@ def geraete_je_einsatz(von: str, bis: str) -> list[dict]:
     return aus
 
 
+def _betrag(t: dict):
+    if t.get("b") is not None:
+        return t["b"]
+    return round(t["l"] * t["p"], 2) if t.get("l") and t.get("p") else None
+
+
+def _preis(t: dict):
+    if t.get("p"):
+        return t["p"]
+    return round(t["b"] / t["l"], 3) if t.get("l") and t.get("b") else None
+
+
 def tankvorgaenge(von: str, bis: str) -> list[dict]:
     namen = _namen()
     geraet = {"f:" + f["id"]: (f"{f.get('kz', '')} {f.get('name', '')}".strip(), "km")
@@ -253,7 +265,7 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
         if art == "h" and stand is None and t.get("km") is not None:
             stand = t.get("km")  # ältere Einträge: Stand stand im Kilometerfeld
         aus.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
-                    "betrag": t.get("b"), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
+                    "betrag": _betrag(t), "preis": _preis(t), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
                     "oel_l": t.get("oel_l"), "id": t.get("id"),
                     "stand": stand, "wer": namen.get(t.get("von"), t.get("von") or ""),
                     "wo": orte.get(t.get("einsatz"), ""), "eid": t.get("einsatz")})
