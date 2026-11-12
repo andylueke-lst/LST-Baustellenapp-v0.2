@@ -651,7 +651,7 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
   <div class="g"><span>Einsatzort</span><span>${esc(e.einsatzort)}, ${esc(e.adresse)}</span><span>Kunde</span><span>${esc(e.kunde)}</span><span>Zeitraum</span><span>${tl.length?fDY(tl[0].datum)+(tl.length>1?' – '+fDY(tl[tl.length-1].datum):''):fDY(e.von)}</span></div>
   <div style="margin-top:12px"><b>Arbeitsbericht</b>${tl.map((t,i)=>`<div>${tl.length>1?`Tag ${i+1} (${fDY(t.datum)}): `:''}${esc(t.bericht.text||'–')}${t.bericht.bes?` ${esc(t.bericht.bes)}`:''}${tl.length>1&&tagAnlagen(e,t).length?` <span style="color:#666">(${tagAnlagen(e,t).map(a=>esc(a.name)).join(', ')})</span>`:''}${t.unterschrift?' <span style="color:#666">(Tagesbericht unterschrieben)</span>':''}</div>`).join('')||'<div>–</div>'}</div>
   <div class="g">${mitarbeiterZeilen(e).map(r=>`<span>${r.rolle}</span><span>${esc(r.name)}${r.tage?` <span style="color:#666">(${r.tage})</span>`:''}</span>`).join('')}
-  ${(e.zusatz||[]).length?`<span>Material/Geräte</span><span>${e.zusatz.map(z=>esc(z.name)).join(', ')}</span>`:''}
+  ${(e.zusatz||[]).length?`<span>Material/Geräte</span><span>${(()=>{const n={};e.zusatz.forEach(z=>{const k=(z.basis||z.name||'').trim();if(k)n[k]=(n[k]||0)+1});return Object.entries(n).map(([k,c])=>esc(c>1?c+' × '+k:k)).join(', ')})()}</span>`:''}
   ${smArt.size?`<span>Strahlmittel</span><span>${[...smArt].map(esc).join(', ')}</span><span>Menge</span><span>${grund?'☒ Grundmenge':'☐ Grundmenge · '+kg+' kg'}</span>`:''}${einst?`<span>Einstellungen</span><span>${einst}</span>`:''}</div>
   ${zeiten}
   <div style="margin-top:12px">Fotodokumentation ${fd} (${e.fotos.length} Fotos): ${seen?'☒':'☐'} vom Kunden vor Ort eingesehen</div>

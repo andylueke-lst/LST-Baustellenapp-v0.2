@@ -57,6 +57,16 @@ def _tage_text(nr: list[int]) -> str:
     return "Tag " + ", ".join(teile)
 
 
+def material_zeilen(zusatz: list[dict]) -> list[str]:
+    """Für den Lieferschein: gleiche Geräte zusammenfassen („2 × Hochdruckreiniger (Bosch)“)."""
+    anzahl: dict[str, int] = {}
+    for z in zusatz:
+        n = (z.get("basis") or z.get("name") or "").strip()
+        if n:
+            anzahl[n] = anzahl.get(n, 0) + 1
+    return [f"{k} × {n}" if k > 1 else n for n, k in anzahl.items()]
+
+
 def mitarbeiter_zeilen(e: dict, ma: dict) -> list[dict]:
     """Mitarbeiter für den Lieferschein. Wer nicht an allen Tagen dabei war, bekommt die Tage dazu."""
     tage = e.get("tage") or []
@@ -139,7 +149,7 @@ def einsatz_dokumente(e: dict, stamm: dict, foto_quelle, lexware_pdf: bytes | No
                   "unterschrieben": bool(t.get("unterschrift"))} for t in tage],
         "mitarbeiter": mitarbeiter_zeilen(e, ma),
         "strahlmittel": {"arten": arten, "grundmenge": grund, "kg": kg, "sonst_text": sonst_text},
-        "material": [z.get("name", "") for z in e.get("zusatz") or [] if z.get("name")],
+        "material": material_zeilen(e.get("zusatz") or []),
         "geraete": geraete, "zeiten": zeiten,
         "fotodoku": {"nummer": fd_nr, "anzahl": len(e["fotos"]), "eingesehen": bool(sig.get("eingesehen")),
                      "pruefsumme": fd_hash},

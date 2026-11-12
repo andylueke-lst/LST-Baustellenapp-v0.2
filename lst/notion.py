@@ -348,7 +348,16 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
                 continue
             name = (eig(sp, "Name") or titel(sp) or "").strip()
             if name:
-                aus_notion.append({"id": "nm-" + rid.replace("-", "")[:12], "name": name})
+                aus_notion.append({"id": "nm-" + rid.replace("-", "")[:12], "name": name, "basis": name})
+        # Jedes Stück Inventar ist ein eigener Eintrag: gleiche Namen fürs Abhaken durchnummerieren
+        gesamt = {}
+        for z in aus_notion:
+            gesamt[z["basis"]] = gesamt.get(z["basis"], 0) + 1
+        zaehler = {}
+        for z in aus_notion:
+            if gesamt[z["basis"]] > 1:
+                zaehler[z["basis"]] = zaehler.get(z["basis"], 0) + 1
+                z["name"] = f"{z['basis']} {zaehler[z['basis']]}/{gesamt[z['basis']]}"
         eigene = [z for z in e.get("zusatz") or [] if not str(z.get("id", "")).startswith("nm-")]
         e["zusatz"] = aus_notion + eigene
     return e, blocks
