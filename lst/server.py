@@ -11,6 +11,7 @@ import io
 import json
 import os
 from datetime import date, timedelta
+from pathlib import Path
 
 from flask import (Flask, abort, flash, jsonify, redirect, render_template, request, send_file, session,
                    url_for)
@@ -411,7 +412,36 @@ def dokument(did):
     d = next((x for x in speicher.dokumente() if x["id"] == did), None)
     if not d:
         abort(404)
-    return send_file(speicher.DATEN / d["datei"], mimetype="application/pdf")
+    p = speicher.DATEN / d["datei"]
+    return send_file(p, mimetype="application/pdf", download_name=p.name)
+
+
+# Dokumente, die auch auf dem iPad geladen werden dürfen (nicht nur im Büro)
+APP_DOKUMENTE = ("lieferschein", "fotodoku")
+
+
+def _docs_fuer_app(eid: str) -> list[dict]:
+    """Jeweils das neueste Dokument je Art, für die Teilen-Knöpfe auf dem iPad."""
+    aus, gesehen = [], set()
+    for d in speicher.dokumente(eid):   # neueste zuerst
+        if d["art"] in APP_DOKUMENTE and d["art"] not in gesehen:
+            gesehen.add(d["art"])
+            aus.append({"id": d["id"], "art": d["art"], "name": Path(d["datei"]).name, "status": d["status"]})
+    return sorted(aus, key=lambda d: APP_DOKUMENTE.index(d["art"]))
+
+
+@app.route("/api/dokument/<did>")
+@anmeldung()
+def api_dokument(did):
+    """Lieferschein oder Fotodoku als PDF fürs iPad (Teilen, In Dateien sichern, AirDrop)."""
+    d = next((x for x in speicher.dokumente() if x["id"] == did), None)
+    if not d or d["art"] not in APP_DOKUMENTE:
+        return jsonify(fehler="Dokument nicht gefunden."), 404
+    p = speicher.DATEN / d["datei"]
+    if not p.exists():
+        return jsonify(fehler="Datei fehlt auf dem Server."), 404
+    speicher.protokoll("dokument_geladen", session.get("uid"), d["einsatz_id"], art=d["art"])
+    return send_file(p, mimetype="application/pdf", download_name=p.name, max_age=0)
 
 
 @app.route("/foto/<eid>/<fid>")
@@ -520,7 +550,9 @@ def api_stand():
     for e in speicher.einsaetze():
         if e.get("status") == "abgeschlossen" and (e.get("abschluss") or {}).get("datum", "9999") < grenze:
             continue
-        es.append(_einsatz_mit_fotos(e))
+        e = _einsatz_mit_fotos(e)
+        e["docs"] = _docs_fuer_app(e["id"])
+        es.append(e)
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     aus = {"ich": _fuer_app(ich()), "mitarbeiter": [_fuer_app(m) for m in leute], "einsaetze": es,
            "strahlgeraete": speicher.stamm("strahlgeraete", []), "typen": speicher.stamm("geraetetypen", {}),
@@ -606,6 +638,7 @@ def api_abschluss(eid):
         speicher.dokument_status(did, ls_status, sig["mail"])
     e = speicher.einsatz(eid)
     e["status"] = "abgeschlossen"
+    e["ergebnis"] = "ausstehend" if sig.get("ohne_kunde") else "unterschrieben"   # für andere iPads
     e["abschluss"] = {"datum": datum, "name": sig.get("name"), "ohneKunde": bool(sig.get("ohne_kunde"))}
     speicher.einsatz_speichern(e)
     admins = [m for m in speicher.stamm("mitarbeiter", []) if m.get("rolle") == "admin" and m.get("mail")]
@@ -613,7 +646,8 @@ def api_abschluss(eid):
         mail.senden(a["mail"], f"Fotobericht zur Freigabe: {e['einsatzort']}",
                     f"Der Job {e['einsatzort']} ist abgeschlossen. Der Fotobericht wartet auf deine Freigabe.", [], eid)
     speicher.protokoll("job_abgeschlossen", session.get("uid"), eid, ohne_kunde=bool(sig.get("ohne_kunde")))
-    return jsonify(ok=True, lieferschein=ls_name, fotodoku=fd_name, versand=versand)
+    return jsonify(ok=True, lieferschein=ls_name, fotodoku=fd_name, versand=versand, docs=_docs_fuer_app(eid),
+                   lexware=bool(lex_pdf))
 
 
 def main():

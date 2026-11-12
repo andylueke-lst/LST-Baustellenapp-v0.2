@@ -38,7 +38,7 @@ async function api(path,opt={}){let r;try{r=await fetch(path,{credentials:'same-
   if(r.status===401){const e2=new Error('Bitte neu anmelden');e2.auth=true;throw e2}
   if(!r.ok)throw new Error((d&&d.fehler)||('Fehler '+r.status));return d}
 const jpost=(p,b)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
-function fuerServer(e){const c=JSON.parse(JSON.stringify(e));delete c.lsHtml;delete c.sync_abschluss;delete c.serverDocs;
+function fuerServer(e){const c=JSON.parse(JSON.stringify(e));delete c.lsHtml;delete c.sync_abschluss;delete c.serverDocs;delete c.docs;
   c.fotos=(c.fotos||[]).map(f=>({id:f.id,anlage:f.anlage,phase:f.phase,tag:f.tag||0,ts:f.ts}));return c}
 async function stempel(o){return sha(JSON.stringify(o))}
 function listen(){return {maengel:S.maengel,tanken:S.tanken,reisetage:S.reisetage,fahrzeuge:S.fahrzeuge,kompressoren:S.kompressoren,intern:S.intern,notizen:S.notizen||[],geloescht:S.weg||{}}}
@@ -54,8 +54,8 @@ async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.bu
         await api(`/api/einsatz/${encodeURIComponent(e.id)}/foto`,{method:'POST',body:fd});f.up=1;save0();zaehlen();chip()}
       if(e.sync_abschluss&&(e.fotos||[]).every(f=>f.up)){
         const r=await jpost(`/api/einsatz/${encodeURIComponent(e.id)}/abschluss`,e.sync_abschluss);
-        delete e.sync_abschluss;e.serverDocs={lieferschein:r.lieferschein,fotodoku:r.fotodoku};save0();
-        toast('Lieferschein und Fotodoku sind im Büro angekommen');if(V.id===e.id)render()}
+        delete e.sync_abschluss;e.serverDocs={lieferschein:r.lieferschein,fotodoku:r.fotodoku};e.docs=r.docs||[];e.ohneLexware=r.lexware===false;save0();
+        toast('Lieferschein und Fotodoku sind fertig');if(V.id===e.id)render()}
     }
     const L=listen();const hl=await stempel(L);if(sk().listen!==hl){await jpost('/api/listen',L);sk().listen=hl;S.weg={};save0()}
     SY.offline=false;SY.err='';SY.last=Date.now();
@@ -75,7 +75,7 @@ async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}cat
     if(unveraendert&&!le.sync_abschluss){const lokaleFotos=new Map((le.fotos||[]).map(f=>[f.id,f]));
       se.fotos=se.fotos.map(f=>({...(lokaleFotos.get(f.id)||{}),...f}));(le.fotos||[]).filter(f=>!f.up).forEach(f=>se.fotos.push(f));
       se.trash=le.trash||[];if(le.lsHtml)se.lsHtml=le.lsHtml;if(le.serverDocs)se.serverDocs=le.serverDocs;neu.push(se);sk()['e:'+se.id]=await stempel(fuerServer(se))}
-    else{if(se.ls&&!le.ls)le.ls=se.ls;if(se.status==='abgeschlossen'&&!le.sync_abschluss){le.status='abgeschlossen';le.abschluss=se.abschluss}neu.push(le)}}
+    else{if(se.docs)le.docs=se.docs;if(se.ls&&!le.ls)le.ls=se.ls;if(se.status==='abgeschlossen'&&!le.sync_abschluss){le.status='abgeschlossen';le.abschluss=se.abschluss}neu.push(le)}}
   for(const e of S.einsaetze){if(d.einsaetze.some(x=>x.id===e.id))continue;
     if(e.sync_abschluss||sk()['e:'+e.id]!==await stempel(fuerServer(e)))neu.push(e);else delete sk()['e:'+e.id]}
   S.einsaetze=neu;if(d.ich)S.ich=d.ich;save0();zaehlen();render();syncBald(200)}
@@ -91,6 +91,27 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 setInterval(()=>{if(document.visibilityState==='visible')holen()},120000);
 async function leuteLaden(){try{const l=await api('/api/leute');S.leute=l;save0();if(!S.user)render()}catch(err){SY.offline=!!err.netz}}
 async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
+/* ---------- Lieferschein und Fotodoku vom Server laden und teilen ----------
+   Erst laden, dann teilen: Safari erlaubt das Teilen nur direkt nach einem Fingertipp. */
+const DOKNAME={lieferschein:'Lieferschein',fotodoku:'Fotodoku'};
+function dokLeiste(e){const docs=e.docs||[];
+  if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier laden.</div></div>`;
+  if(!docs.length)return `<div class="row" style="margin-bottom:16px"><span class="small muted">Noch keine Dokumente vom Büro geladen.</span><button class="btn small" data-a="sync">Neu laden</button></div>`;
+  const alle=docs.length>1?`<button class="btn" data-a="dok" data-ids="${docs.map(d=>d.id).join(',')}">📦 Beide teilen</button>`:'';
+  return `<div class="stack" style="margin-bottom:16px"><div class="row" style="flex-wrap:wrap">${docs.map(d=>`<button class="btn" data-a="dok" data-ids="${d.id}">${d.art==='lieferschein'?'📄':'🖼️'} ${DOKNAME[d.art]||d.art}</button>`).join('')}${alle}</div>
+  <div class="small muted" id="dok-st" role="status">${e.ohneLexware&&!e.ls?'Hinweis: Beim Abschluss lag kein Lexware-Lieferschein im Büro vor, der Lieferschein enthält nur die Seite Arbeitsnachweis.':'Lieferschein mit den Lexware-Seiten und dem unterschriebenen Arbeitsnachweis. Teilen, dann z. B. „In Dateien sichern“, AirDrop oder Mail.'}</div></div>`}
+async function dokTeilen(b,e){const st=document.getElementById('dok-st');const say=t=>{if(st)st.textContent=t};
+  if(b.dataset.ready&&b._files){const fs=b._files;
+    try{if(navigator.canShare&&navigator.canShare({files:fs})){await navigator.share({files:fs,title:e.einsatzort});return}}catch(err){if(err&&err.name==='AbortError')return}
+    fs.forEach(f=>{const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove()});return}
+  const ids=b.dataset.ids.split(',');const docs=(e.docs||[]).filter(d=>ids.includes(d.id));
+  b.disabled=true;say('Wird geladen …');
+  try{const fs=[];for(const d of docs){let r;try{r=await fetch('/api/dokument/'+encodeURIComponent(d.id),{credentials:'same-origin',cache:'no-store'})}catch(err){throw new Error('Keine Verbindung zum Büro')}
+      if(r.status===401)throw new Error('Bitte neu anmelden');if(!r.ok)throw new Error(DOKNAME[d.art]+' nicht gefunden');
+      fs.push(new File([await r.blob()],d.name,{type:'application/pdf'}))}
+    const mb=fs.reduce((n,f)=>n+f.size,0)/1048576;
+    b._files=fs;b.dataset.ready=1;b.classList.add('pri');b.textContent='📤 Jetzt teilen';say(`Bereit (${mb.toFixed(1).replace('.',',')} MB). Noch einmal antippen zum Teilen.`)}
+  catch(err){say(err.message)}finally{b.disabled=false}}
 """
 
 ERSETZUNGEN = [
@@ -106,6 +127,10 @@ ERSETZUNGEN = [
      "maengel:[],tanken:[],reisetage:[],sync:{},weg:{},pins:{}}}\n"
      "let S=load()||leer();['reisetage','maengel','tanken','intern','einsaetze','fahrzeuge','kompressoren'].forEach(k=>{S[k]=S[k]||[]});S.pins=S.pins||{};S.weg=S.weg||{};"
      + SYNC),
+    # Abgeschlossener Einsatz: Lieferschein und Fotodoku zum Teilen
+    ("${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}",
+     "${dokLeiste(e)}${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}"),
+    ("case 'fteilen':teilenSheet(e);break;", "case 'fteilen':teilenSheet(e);break;\n  case 'dok':dokTeilen(b,e);break;"),
     ("const me=()=>S.mitarbeiter.find(m=>m.id===S.user);",
      "const me=()=>S.mitarbeiter.find(m=>m.id===S.user)||S.ich||{id:S.user,name:'',rolle:'mitarbeiter'};"),
     ("hydrateImages();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();", "hydrateImages();chip();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();"),
