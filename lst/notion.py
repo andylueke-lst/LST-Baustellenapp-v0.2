@@ -454,9 +454,9 @@ def aufgaben_abgleichen() -> dict:
              "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert}}
         if vorher.get("status") == "erledigt":
             a["status"] = "erledigt"
-            a["erledigt_am"] = vorher.get("erledigt_am")
-        if vorher.get("notiz"):
-            a["notiz"] = vorher["notiz"]
+        for k in ("notiz", "zeit", "material", "fotos", "erledigt_am", "erledigt_von"):   # Arbeitsbericht vom iPad
+            if vorher.get(k):
+                a[k] = vorher[k]
         if zust is None and vorher.get("zust"):      # bei „Alle“: wer „Mache ich“ getippt hat, bleibt zuständig
             a["zust"] = vorher["zust"]
         neu[aid] = a

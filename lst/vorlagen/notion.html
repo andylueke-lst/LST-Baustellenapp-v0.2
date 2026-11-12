@@ -31,10 +31,14 @@
 {% if aufgaben_stand.fehler %}<div class="callout fehler" role="alert">{{ aufgaben_stand.fehler }}</div>{% endif %}
 {% if eingerichtet %}<form method="post" action="{{ url_for('notion_aufgaben') }}" style="margin-bottom:12px"><button class="btn small">Jetzt holen</button></form>{% endif %}
 {% if aufgaben_erledigt %}
-<div class="callout hinweis">Auf dem iPad erledigt – bitte in Notion abhaken, dann verschwinden sie hier:</div>
+<h3>Auf dem iPad erledigt</h3>
+<p class="muted small">Aufgaben aus Notion bitte dort abhaken, dann verschwinden sie hier. Interne Aufträge ohne Notion stehen 14 Tage hier.</p>
 <div class="list">{% for i in aufgaben_erledigt %}
-  <div class="item"><div><b>{{ i.titel }}</b><div class="meta">{{ leute.get(i.zust, 'alle') if i.zust else 'alle' }}{% if i.notiz %} · {{ i.notiz }}{% endif %}</div></div>
-  {% if i.notion and i.notion.url %}<a class="btn small" href="{{ i.notion.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}</div>
+  <div class="item"><div><b>{{ i.titel }}</b>
+    <div class="meta">{{ leute.get(i.erledigt_von or i.zust, '') }}{% if i.erledigt_am %} · {{ datum(i.erledigt_am) }}{% endif %}{% if i.zeit and i.zeit.von and i.zeit.bis %} · {{ i.zeit.von }}–{{ i.zeit.bis }} Uhr{% endif %}{% if i.fotos %} · {{ i.fotos|length }} Fotos{% endif %}</div>
+    {% if i.notiz %}<div class="small" style="white-space:pre-line">{{ i.notiz }}</div>{% endif %}</div>
+  <div class="row"><a class="btn small" href="{{ url_for('intern_bericht', iid=i.id) }}" target="_blank" rel="noopener">Arbeitsbericht</a>
+  {% if i.notion and i.notion.url %}<a class="btn small" href="{{ i.notion.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}</div></div>
 {% endfor %}</div>
 {% endif %}
 <div class="list">{% for i in aufgaben_offen %}

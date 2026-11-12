@@ -99,6 +99,45 @@ function internKey(i){const d=i.datum||'';if(d&&d<=today())return [0,d];if(d)ret
 function internSort(a,b){const x=internKey(a),y=internKey(b);return x[0]-y[0]||String(x[1]).localeCompare(String(y[1]))}
 function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · überfällig':d===today()?' · heute':''):'ohne Termin');
   if(i.nstatus)t.push(i.nstatus);if(i.prio)t.push('Priorität '+i.prio);if(i.projekt)t.push(i.projekt);return t.join(' · ')}
+/* ---------- Interner Auftrag mit Arbeitsbericht ----------
+   Pflicht zum Abhaken ist nur „Was wurde gemacht?“. Zeit, Material und Fotos sind freiwillig.
+   Fotos gehen direkt zum Büro (brauchen also Verbindung). */
+function dauerText(z){if(!z||!z.von||!z.bis)return '–';const m0=(+z.bis.slice(0,2)*60+ +z.bis.slice(3,5))-(+z.von.slice(0,2)*60+ +z.von.slice(3,5));const m=m0<0?m0+1440:m0;return `${Math.floor(m/60)}:${pad(m%60)} h`}
+function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const offen=i.status==='offen';const z=i.zeit||{};const ro=offen?'':' disabled';
+  const fotos=ph=>(i.fotos||[]).filter(f=>f.phase===ph).map(f=>`<img src="/intern-foto/${encodeURIComponent(i.id)}/${encodeURIComponent(f.id)}?v=1" alt="Foto ${ph}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px">`).join('');
+  return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
+  <div class="props"><div class="k">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>
+  ${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}
+  ${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}
+  <div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div>
+  <div class="k">Status</div><div>${offen?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
+  ${i.beschreibung?`<div class="hr"></div><p style="white-space:pre-line">${esc(i.beschreibung)}</p>`:''}
+  <div class="hr"></div><h2>Arbeitsbericht</h2>
+  <div class="field"><label for="ib-t">Was wurde gemacht? <span class="small muted">(nötig zum Abhaken)</span></label><textarea class="inp" id="ib-t" data-ib="notiz" placeholder="z. B. Kupplung getauscht, neue bestellt"${ro}>${esc(i.notiz||'')}</textarea></div>
+  <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <div class="field"><label for="ib-d">Datum</label><input class="inp" type="date" id="ib-d" data-ib="z.datum" value="${z.datum||today()}"${ro}></div>
+    <div class="field"><label for="ib-v">von</label><input class="inp" type="time" id="ib-v" data-ib="z.von" value="${z.von||''}"${ro}></div>
+    <div class="field"><label for="ib-b">bis</label><input class="inp" type="time" id="ib-b" data-ib="z.bis" value="${z.bis||''}"${ro}></div>
+    <div class="field"><label>Dauer</label><div id="ib-dauer" style="padding:10px 2px">${dauerText(z)}</div></div></div>
+  <div class="field"><label for="ib-m">Material <span class="small muted">(freiwillig)</span></label><textarea class="inp" id="ib-m" data-ib="material" style="min-height:60px" placeholder="z. B. 2 m Druckluftschlauch, 1 Kupplung"${ro}>${esc(i.material||'')}</textarea></div>
+  <div class="field"><label>Fotos <span class="small muted">(freiwillig)</span></label>
+  ${['vorher','nachher'].map(ph=>`<div class="small muted" style="margin:6px 0">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${fotos(ph)}${offen?`<label class="btn small" style="cursor:pointer;justify-content:center">📷 Foto<input type="file" accept="image/*" multiple hidden data-ifoto="${ph}"></label>`:''}</div>`).join('')}
+  <div class="small muted" id="ib-st" role="status" style="min-height:18px"></div></div>
+  <div class="fab">${!i.zust&&offen?'<button class="btn" data-a="mache">Mache ich</button>':''}${offen?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
+function internErledigt(){const i=S.intern.find(x=>x.id===V.id);if(!i)return;
+  if(!(i.notiz||'').trim()){toast('Bitte kurz eintragen, was gemacht wurde.');const t=document.getElementById('ib-t');if(t)t.focus();return}
+  i.status='erledigt';i.erledigt_am=today();i.erledigt_von=S.user;i.zeit=i.zeit||{datum:today()};if(!i.zust)i.zust=S.user;
+  save();V={name:'start'};render();toast('Auftrag erledigt')}
+function internFeld(ev){const t=ev.target;if(!t||!t.dataset||!t.dataset.ib)return;const i=S.intern.find(x=>x.id===V.id);if(!i||i.status!=='offen')return;const k=t.dataset.ib;
+  if(k.startsWith('z.')){i.zeit=i.zeit||{datum:today()};i.zeit[k.slice(2)]=t.value;const d=document.getElementById('ib-dauer');if(d)d.textContent=dauerText(i.zeit)}else i[k]=t.value;save()}
+document.addEventListener('input',internFeld);document.addEventListener('change',internFeld);
+document.addEventListener('change',async ev=>{const t=ev.target;if(!t||!t.dataset||!t.dataset.ifoto)return;const i=S.intern.find(x=>x.id===V.id);if(!i)return;
+  const st=document.getElementById('ib-st');const files=[...t.files];const ph=t.dataset.ifoto;t.value='';
+  for(const [n,f] of files.entries()){if(st)st.textContent=`Foto ${n+1} von ${files.length} wird hochgeladen …`;
+    try{const blob=await shrink(f);const fd=new FormData();fd.append('foto',blob,'foto.jpg');fd.append('phase',ph);
+      const r=await api(`/api/intern/${encodeURIComponent(i.id)}/foto`,{method:'POST',body:fd});i.fotos=i.fotos||[];i.fotos.push({id:r.id,phase:ph});save()}
+    catch(err){if(st)st.textContent=err.netz?'Fotos gehen nur mit Verbindung zum Büro. Bitte später noch einmal.':err.message;render();return}}
+  render()});
 const DOKNAME={lieferschein:'Lieferschein',fotodoku:'Fotodoku'};
 function dokLeiste(e){const docs=e.docs||[];
   if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier laden.</div></div>`;
@@ -133,6 +172,10 @@ ERSETZUNGEN = [
      "maengel:[],tanken:[],reisetage:[],sync:{},weg:{},pins:{}}}\n"
      "let S=load()||leer();['reisetage','maengel','tanken','intern','einsaetze','fahrzeuge','kompressoren'].forEach(k=>{S[k]=S[k]||[]});S.pins=S.pins||{};S.weg=S.weg||{};"
      + SYNC),
+    # Interne Aufträge: neue Detailansicht mit Arbeitsbericht (vIntern steht im SYNC-Teil)
+    ("function vIntern(){const i=S.intern.find(x=>x.id===V.id)", "function vIntern_prototyp(){const i=S.intern.find(x=>x.id===V.id)"),
+    ("case 'erledigt':{const i=S.intern.find(x=>x.id===V.id);i.status='erledigt';save();V={name:'start'};render();toast('Auftrag erledigt');break}",
+     "case 'erledigt':internErledigt();break;"),
     # Interne Aufgaben (auch aus Notion): Reihenfolge, Termin optional, Status/Priorität/Projekt
     ("sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class=\"card\" data-a=\"intern\"",
      "sort(internSort).map(i=>`<button class=\"card\" data-a=\"intern\""),

@@ -344,6 +344,45 @@ function internKey(i){const d=i.datum||'';if(d&&d<=today())return [0,d];if(d)ret
 function internSort(a,b){const x=internKey(a),y=internKey(b);return x[0]-y[0]||String(x[1]).localeCompare(String(y[1]))}
 function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · überfällig':d===today()?' · heute':''):'ohne Termin');
   if(i.nstatus)t.push(i.nstatus);if(i.prio)t.push('Priorität '+i.prio);if(i.projekt)t.push(i.projekt);return t.join(' · ')}
+/* ---------- Interner Auftrag mit Arbeitsbericht ----------
+   Pflicht zum Abhaken ist nur „Was wurde gemacht?“. Zeit, Material und Fotos sind freiwillig.
+   Fotos gehen direkt zum Büro (brauchen also Verbindung). */
+function dauerText(z){if(!z||!z.von||!z.bis)return '–';const m0=(+z.bis.slice(0,2)*60+ +z.bis.slice(3,5))-(+z.von.slice(0,2)*60+ +z.von.slice(3,5));const m=m0<0?m0+1440:m0;return `${Math.floor(m/60)}:${pad(m%60)} h`}
+function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const offen=i.status==='offen';const z=i.zeit||{};const ro=offen?'':' disabled';
+  const fotos=ph=>(i.fotos||[]).filter(f=>f.phase===ph).map(f=>`<img src="/intern-foto/${encodeURIComponent(i.id)}/${encodeURIComponent(f.id)}?v=1" alt="Foto ${ph}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px">`).join('');
+  return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
+  <div class="props"><div class="k">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>
+  ${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}
+  ${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}
+  <div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div>
+  <div class="k">Status</div><div>${offen?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
+  ${i.beschreibung?`<div class="hr"></div><p style="white-space:pre-line">${esc(i.beschreibung)}</p>`:''}
+  <div class="hr"></div><h2>Arbeitsbericht</h2>
+  <div class="field"><label for="ib-t">Was wurde gemacht? <span class="small muted">(nötig zum Abhaken)</span></label><textarea class="inp" id="ib-t" data-ib="notiz" placeholder="z. B. Kupplung getauscht, neue bestellt"${ro}>${esc(i.notiz||'')}</textarea></div>
+  <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+    <div class="field"><label for="ib-d">Datum</label><input class="inp" type="date" id="ib-d" data-ib="z.datum" value="${z.datum||today()}"${ro}></div>
+    <div class="field"><label for="ib-v">von</label><input class="inp" type="time" id="ib-v" data-ib="z.von" value="${z.von||''}"${ro}></div>
+    <div class="field"><label for="ib-b">bis</label><input class="inp" type="time" id="ib-b" data-ib="z.bis" value="${z.bis||''}"${ro}></div>
+    <div class="field"><label>Dauer</label><div id="ib-dauer" style="padding:10px 2px">${dauerText(z)}</div></div></div>
+  <div class="field"><label for="ib-m">Material <span class="small muted">(freiwillig)</span></label><textarea class="inp" id="ib-m" data-ib="material" style="min-height:60px" placeholder="z. B. 2 m Druckluftschlauch, 1 Kupplung"${ro}>${esc(i.material||'')}</textarea></div>
+  <div class="field"><label>Fotos <span class="small muted">(freiwillig)</span></label>
+  ${['vorher','nachher'].map(ph=>`<div class="small muted" style="margin:6px 0">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${fotos(ph)}${offen?`<label class="btn small" style="cursor:pointer;justify-content:center">📷 Foto<input type="file" accept="image/*" multiple hidden data-ifoto="${ph}"></label>`:''}</div>`).join('')}
+  <div class="small muted" id="ib-st" role="status" style="min-height:18px"></div></div>
+  <div class="fab">${!i.zust&&offen?'<button class="btn" data-a="mache">Mache ich</button>':''}${offen?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
+function internErledigt(){const i=S.intern.find(x=>x.id===V.id);if(!i)return;
+  if(!(i.notiz||'').trim()){toast('Bitte kurz eintragen, was gemacht wurde.');const t=document.getElementById('ib-t');if(t)t.focus();return}
+  i.status='erledigt';i.erledigt_am=today();i.erledigt_von=S.user;i.zeit=i.zeit||{datum:today()};if(!i.zust)i.zust=S.user;
+  save();V={name:'start'};render();toast('Auftrag erledigt')}
+function internFeld(ev){const t=ev.target;if(!t||!t.dataset||!t.dataset.ib)return;const i=S.intern.find(x=>x.id===V.id);if(!i||i.status!=='offen')return;const k=t.dataset.ib;
+  if(k.startsWith('z.')){i.zeit=i.zeit||{datum:today()};i.zeit[k.slice(2)]=t.value;const d=document.getElementById('ib-dauer');if(d)d.textContent=dauerText(i.zeit)}else i[k]=t.value;save()}
+document.addEventListener('input',internFeld);document.addEventListener('change',internFeld);
+document.addEventListener('change',async ev=>{const t=ev.target;if(!t||!t.dataset||!t.dataset.ifoto)return;const i=S.intern.find(x=>x.id===V.id);if(!i)return;
+  const st=document.getElementById('ib-st');const files=[...t.files];const ph=t.dataset.ifoto;t.value='';
+  for(const [n,f] of files.entries()){if(st)st.textContent=`Foto ${n+1} von ${files.length} wird hochgeladen …`;
+    try{const blob=await shrink(f);const fd=new FormData();fd.append('foto',blob,'foto.jpg');fd.append('phase',ph);
+      const r=await api(`/api/intern/${encodeURIComponent(i.id)}/foto`,{method:'POST',body:fd});i.fotos=i.fotos||[];i.fotos.push({id:r.id,phase:ph});save()}
+    catch(err){if(st)st.textContent=err.netz?'Fotos gehen nur mit Verbindung zum Büro. Bitte später noch einmal.':err.message;render();return}}
+  render()});
 const DOKNAME={lieferschein:'Lieferschein',fotodoku:'Fotodoku'};
 function dokLeiste(e){const docs=e.docs||[];
   if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier laden.</div></div>`;
@@ -520,8 +559,8 @@ function geraeteForm(e){const ve=S.mitarbeiter;const opt=(list,sel,lab)=>list.ma
   <div class="field"><label for="g-fach">Facharbeiter</label><select class="inp" id="g-fach" data-f="fach"><option value="">– niemand –</option>${opt(ve,e.team.fach,m=>m.name)}</select></div></div>
   <h3 style="margin-top:8px">Geräte</h3>
   <div class="field"><label>Fahrzeug</label><div class="pickrow">${S.fahrzeuge.filter(f=>f.aktiv!==false).map(f=>`<button class="pick${e.geraete.fahrzeug===f.id?' on':''}" data-a="gsel" data-g="fahrzeug" data-id="${f.id}">${esc(f.kz)} <span class="small">${esc(f.name)}</span></button>`).join('')}<button class="pick" data-a="fremdfz">+ Fahrzeug hinzufügen</button></div></div>
-  <div class="field"><label>Kompressor</label><div class="pickrow">${S.kompressoren.filter(x=>x.aktiv!==false).map(x=>`<button class="pick${e.geraete.kompressor===x.id?' on':''}" data-a="gsel" data-g="kompressor" data-id="${x.id}">${x.eigen?'LST-Kompressor':'Mietgerät'} · ${esc(x.kz)}</button>`).join('')}<button class="pick" data-a="miete">+ Mietgerät hinzufügen</button></div></div>
-  <div class="field"><label>Strahlgeräte (ein oder zwei)</label><div class="pickrow">${S.strahlgeraete.map(s=>`<button class="pick${e.geraete.strahl.includes(s.id)?' on':''}" data-a="strahl" data-id="${s.id}">${esc(s.name)}</button>`).join('')}</div></div>
+  <div class="field"><label>Kompressor <span class="small muted">(nochmal antippen = ohne Kompressor)</span></label><div class="pickrow">${S.kompressoren.filter(x=>x.aktiv!==false).map(x=>`<button class="pick${e.geraete.kompressor===x.id?' on':''}" data-a="gsel" data-g="kompressor" data-id="${x.id}">${x.eigen?'LST-Kompressor':'Mietgerät'} · ${esc(x.kz)}</button>`).join('')}<button class="pick" data-a="miete">+ Mietgerät hinzufügen</button></div></div>
+  <div class="field"><label>Strahlgeräte <span class="small muted">(keins, eins oder zwei – antippen zum An- und Abwählen)</span></label><div class="pickrow">${S.strahlgeraete.map(s=>`<button class="pick${e.geraete.strahl.includes(s.id)?' on':''}" data-a="strahl" data-id="${s.id}">${esc(s.name)}</button>`).join('')}</div></div>
   ${k&&!k.eigen?`<div class="callout small">Mietgerät ${esc(k.kz)}${k.vermieter?' von '+esc(k.vermieter):''}: ${k.h} h bei Abholung.</div>`:''}
   </div>`}
 function vVorbereitung(e){return `<div class="hr"></div>
@@ -705,11 +744,11 @@ function wStaende(e){const k=kp(e.geraete.kompressor),f=fz(e.geraete.fahrzeug);e
   if(kh!==''&&e.start?.kompH!=null&&+kh<e.start.kompH)warn.push('Kompressor-Endstand liegt unter dem Startstand.');
   if(km!==''&&e.start?.km!=null&&+km<e.start.km)warn.push('Kilometerstand liegt unter dem Startstand.');
   return `<div class="stack">
-  <div class="field"><label for="s-k">Kompressor ${esc(k?.kz)} – Betriebsstunden jetzt <span class="small">(Start ${e.start?.kompH??'–'} h)</span></label><input class="inp num" id="s-k" inputmode="decimal" data-s="kompH" value="${kh}" placeholder="${e.start?.kompH??''}"></div>
+  ${k?`<div class="field"><label for="s-k">Kompressor ${esc(k?.kz)} – Betriebsstunden jetzt <span class="small">(Start ${e.start?.kompH??'–'} h)</span></label><input class="inp num" id="s-k" inputmode="decimal" data-s="kompH" value="${kh}" placeholder="${e.start?.kompH??''}"></div>`:'<div class="small muted">Ohne Kompressor unterwegs – kein Stand nötig.</div>'}
   <div class="field"><label for="s-km">${esc(f?.kz)} – Kilometerstand <span class="small">(Start ${e.start?.km??'–'} km, optional)</span></label><input class="inp num" id="s-km" inputmode="numeric" data-s="km" value="${km}" placeholder="${e.start?.km??''}"></div>
   ${warn.map(w=>`<div class="callout warn small">${w}</div>`).join('')}
   ${k&&!k.eigen?'<div class="callout small">Mietgerät: Dieser Stand gilt als Rückgabestand. Danach verschwindet es aus der Auswahl.</div>':''}
-  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${kh===''?' disabled':''}>Weiter zur Kundenansicht</button></div>`}
+  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${k&&kh===''?' disabled':''}>Weiter zur Kundenansicht</button></div>`}
 function wKunde(e){const sub=V.kv||'ls';
   return `<p class="muted" style="margin-top:0">Das iPad jetzt dem Kunden geben.</p>
   <div class="tabs"><button class="${sub==='ls'?'on':''}" data-a="kv" data-v="ls">Lieferschein</button><button class="${sub==='fd'?'on':''}" data-a="kv" data-v="fd">Fotodokumentation (${e.fotos.length})</button></div>
@@ -759,7 +798,7 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
   <div class="ft"><span>LST Lüke-Strahl-Technik GmbH · Am Hinkelstein 53a · 64665 Alsbach-Hähnlein</span><span>Prüfsumme Fotodoku: ${sig?.hash||'wird beim Abschluss berechnet'}</span><span>Seite 3/3</span></div></div>`}
 
 /* ---------- Interne Aufträge, Mängel ---------- */
-function vIntern(){const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
+function vIntern_prototyp(){const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
   return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
   <div class="props"><div class="k">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}<div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div><div class="k">Status</div><div>${i.status==='erledigt'?'<span class="tag green">Erledigt</span>':'<span class="tag yellow">Offen</span>'}</div></div>
   <div class="hr"></div><p>${esc(i.beschreibung)}</p>
@@ -962,8 +1001,8 @@ document.addEventListener('click',async ev=>{
   case 'importieren':importSheet();break;
   case 'notizen':notizenSheet();break;
   case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht. Die Notizen bleiben erhalten.','Zurücksetzen',()=>{const u=S.user;const nz=S.notizen||[];S=seed();S.user=u;S.notizen=nz;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
-  case 'gsel':e.geraete[b.dataset.g]=b.dataset.id;if(e.start&&b.dataset.g==='kompressor')e.start.kompH=kp(b.dataset.id).h;save();render();break;
-  case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){if(s.length>1)s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
+  case 'gsel':{const g=b.dataset.g;if(g==='kompressor'&&e.geraete.kompressor===b.dataset.id){e.geraete.kompressor=null;if(e.start)e.start.kompH=null}else{e.geraete[g]=b.dataset.id;if(e.start&&g==='kompressor')e.start.kompH=kp(b.dataset.id).h}save();render();break}
+  case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
   case 'miete':mieteSheet(e);break;
   case 'fremdfz':fremdFzSheet(e);break;
   case 'tu':e.tagesUnterschrift=b.dataset.v==='1';save();render();break;
@@ -1031,7 +1070,7 @@ document.addEventListener('click',async ev=>{
   case 'tanken':tankSheet();break;
   case 'beladen':{const f=fz(e.geraete.fahrzeug);const keys=Object.keys(S.strahlmittel).slice(0,2);const r=await wheelPick({title:'Säcke geladen',cols:[{labels:keys.map(k=>S.strahlmittel[k]),index:0},{labels:Array.from({length:21},(_,i)=>'+'+i),index:4}]});if(r){f.saecke=f.saecke||{};f.saecke[keys[r[0]]]=(f.saecke[keys[r[0]]]||0)+r[1];save();render();toast('Bestand aktualisiert')}break}
   case 'mache':{const i=S.intern.find(x=>x.id===V.id);i.zust=S.user;save();render();break}
-  case 'erledigt':{const i=S.intern.find(x=>x.id===V.id);i.status='erledigt';save();V={name:'start'};render();toast('Auftrag erledigt');break}
+  case 'erledigt':internErledigt();break;
   case 'm2a':{const m=S.maengel.find(x=>x.id===b.dataset.id);S.intern.push({id:uid(),titel:`${m.teil}: ${m.art}`,beschreibung:m.notiz||'Aus Mängelmeldung.',datum:today(),zust:'m1',status:'offen'});m.status='auftrag';save();render();toast('Interner Auftrag für Matthias angelegt');break}
   }});
 document.addEventListener('input',ev=>{const t=ev.target;const e=V.id?E(V.id):null;

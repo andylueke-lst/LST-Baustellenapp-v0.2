@@ -294,12 +294,15 @@ def notion_seite():
                 liste.append(k)
         except notion.NotionFehler as ex:
             fehler = str(ex)
-    intern = [i for i in speicher.stamm("intern", []) if str(i.get("id", "")).startswith("n-")]
+    alle = speicher.stamm("intern", [])
+    intern = [i for i in alle if str(i.get("id", "")).startswith("n-")]
+    grenze = (date.today() - timedelta(days=14)).isoformat()
     leute = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
     return render_template("notion.html", liste=liste, fehler=fehler, eingerichtet=notion.eingerichtet(),
                            schreiben=bool(notion.einstellungen().get("schreiben")),
                            aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
-                           aufgaben_erledigt=[i for i in intern if i.get("status") == "erledigt"],
+                           aufgaben_erledigt=[i for i in alle if i.get("status") == "erledigt" and (
+                               str(i.get("id", "")).startswith("n-") or (i.get("erledigt_am") or "") >= grenze)],
                            aufgaben_stand=AUFGABEN_STAND, leute=leute)
 
 
@@ -325,6 +328,67 @@ def _aufgaben_takt():
         except Exception as ex:   # der Takt darf nie stehen bleiben
             AUFGABEN_STAND["fehler"] = f"Unerwarteter Fehler: {ex}"
         time.sleep(300)
+
+
+# ---------------------------------------------------------------- Interne Aufträge: Fotos und Arbeitsbericht
+def _intern(iid: str) -> dict | None:
+    return next((i for i in speicher.stamm("intern", []) if i.get("id") == iid), None)
+
+
+def _darf_intern(iid: str) -> bool:
+    m = ich()
+    if not m:
+        return False
+    if m.get("rolle") == "admin":
+        return True
+    i = _intern(iid)
+    if i is None:          # gerade auf dem iPad angelegt, noch nicht abgeglichen
+        return True
+    return i.get("zust") in (None, m["id"]) or i.get("erledigt_von") == m["id"]
+
+
+@app.route("/api/intern/<iid>/foto", methods=["POST"])
+@anmeldung()
+def api_intern_foto(iid):
+    if not _darf_intern(iid):
+        return jsonify(fehler="Dieser Auftrag ist dir nicht zugeteilt."), 403
+    f = request.files.get("foto")
+    if not f:
+        return jsonify(fehler="foto fehlt"), 400
+    phase = request.form.get("phase") if request.form.get("phase") in ("vorher", "nachher") else "vorher"
+    fid = speicher.foto_speichern("intern-" + iid, f.read(), "", phase)
+    return jsonify(ok=True, id=fid)
+
+
+@app.route("/intern-foto/<iid>/<fid>")
+@anmeldung()
+def intern_foto(iid, fid):
+    if not _darf_intern(iid):
+        abort(404)
+    p = speicher.foto_datei("intern-" + iid, fid, vorschau=request.args.get("v") == "1")
+    if not p.exists():
+        abort(404)
+    return send_file(p, mimetype="image/jpeg", max_age=86400)
+
+
+@app.route("/buero/intern/<iid>/bericht")
+@anmeldung(admin=True)
+def intern_bericht(iid):
+    i = _intern(iid)
+    if not i:
+        abort(404)
+    from .dokumente import intern as dok_intern
+    z = i.get("zeit") or {}
+    wer = next((m for m in speicher.stamm("mitarbeiter", []) if m["id"] == (i.get("erledigt_von") or i.get("zust"))), None)
+    datum = z.get("datum") or i.get("erledigt_am") or date.today().isoformat()
+    fotos = [{"phase": f.get("phase"), "quelle": speicher.foto_datei("intern-" + iid, f["id"])}
+             for f in i.get("fotos") or [] if speicher.foto_datei("intern-" + iid, f["id"]).exists()]
+    pdf = dok_intern.arbeitsbericht({"titel": i.get("titel", ""), "projekt": i.get("projekt", ""),
+                                     "beschreibung": i.get("beschreibung", ""), "name": voller_name(wer),
+                                     "datum": datum, "von": z.get("von"), "bis": z.get("bis"),
+                                     "text": i.get("notiz", ""), "material": i.get("material", ""), "fotos": fotos})
+    name = basis.dateiname(datum, "LST", "intern", "Arbeitsbericht", i.get("titel", "")[:40])
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf", download_name=name)
 
 
 @app.route("/buero/notion/aufgaben", methods=["POST"])

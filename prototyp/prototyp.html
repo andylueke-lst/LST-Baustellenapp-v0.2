@@ -414,8 +414,8 @@ function geraeteForm(e){const ve=S.mitarbeiter;const opt=(list,sel,lab)=>list.ma
   <div class="field"><label for="g-fach">Facharbeiter</label><select class="inp" id="g-fach" data-f="fach"><option value="">– niemand –</option>${opt(ve,e.team.fach,m=>m.name)}</select></div></div>
   <h3 style="margin-top:8px">Geräte</h3>
   <div class="field"><label>Fahrzeug</label><div class="pickrow">${S.fahrzeuge.filter(f=>f.aktiv!==false).map(f=>`<button class="pick${e.geraete.fahrzeug===f.id?' on':''}" data-a="gsel" data-g="fahrzeug" data-id="${f.id}">${esc(f.kz)} <span class="small">${esc(f.name)}</span></button>`).join('')}<button class="pick" data-a="fremdfz">+ Fahrzeug hinzufügen</button></div></div>
-  <div class="field"><label>Kompressor</label><div class="pickrow">${S.kompressoren.filter(x=>x.aktiv!==false).map(x=>`<button class="pick${e.geraete.kompressor===x.id?' on':''}" data-a="gsel" data-g="kompressor" data-id="${x.id}">${x.eigen?'LST-Kompressor':'Mietgerät'} · ${esc(x.kz)}</button>`).join('')}<button class="pick" data-a="miete">+ Mietgerät hinzufügen</button></div></div>
-  <div class="field"><label>Strahlgeräte (ein oder zwei)</label><div class="pickrow">${S.strahlgeraete.map(s=>`<button class="pick${e.geraete.strahl.includes(s.id)?' on':''}" data-a="strahl" data-id="${s.id}">${esc(s.name)}</button>`).join('')}</div></div>
+  <div class="field"><label>Kompressor <span class="small muted">(nochmal antippen = ohne Kompressor)</span></label><div class="pickrow">${S.kompressoren.filter(x=>x.aktiv!==false).map(x=>`<button class="pick${e.geraete.kompressor===x.id?' on':''}" data-a="gsel" data-g="kompressor" data-id="${x.id}">${x.eigen?'LST-Kompressor':'Mietgerät'} · ${esc(x.kz)}</button>`).join('')}<button class="pick" data-a="miete">+ Mietgerät hinzufügen</button></div></div>
+  <div class="field"><label>Strahlgeräte <span class="small muted">(keins, eins oder zwei – antippen zum An- und Abwählen)</span></label><div class="pickrow">${S.strahlgeraete.map(s=>`<button class="pick${e.geraete.strahl.includes(s.id)?' on':''}" data-a="strahl" data-id="${s.id}">${esc(s.name)}</button>`).join('')}</div></div>
   ${k&&!k.eigen?`<div class="callout small">Mietgerät ${esc(k.kz)}${k.vermieter?' von '+esc(k.vermieter):''}: ${k.h} h bei Abholung.</div>`:''}
   </div>`}
 function vVorbereitung(e){return `<div class="hr"></div>
@@ -599,11 +599,11 @@ function wStaende(e){const k=kp(e.geraete.kompressor),f=fz(e.geraete.fahrzeug);e
   if(kh!==''&&e.start?.kompH!=null&&+kh<e.start.kompH)warn.push('Kompressor-Endstand liegt unter dem Startstand.');
   if(km!==''&&e.start?.km!=null&&+km<e.start.km)warn.push('Kilometerstand liegt unter dem Startstand.');
   return `<div class="stack">
-  <div class="field"><label for="s-k">Kompressor ${esc(k?.kz)} – Betriebsstunden jetzt <span class="small">(Start ${e.start?.kompH??'–'} h)</span></label><input class="inp num" id="s-k" inputmode="decimal" data-s="kompH" value="${kh}" placeholder="${e.start?.kompH??''}"></div>
+  ${k?`<div class="field"><label for="s-k">Kompressor ${esc(k?.kz)} – Betriebsstunden jetzt <span class="small">(Start ${e.start?.kompH??'–'} h)</span></label><input class="inp num" id="s-k" inputmode="decimal" data-s="kompH" value="${kh}" placeholder="${e.start?.kompH??''}"></div>`:'<div class="small muted">Ohne Kompressor unterwegs – kein Stand nötig.</div>'}
   <div class="field"><label for="s-km">${esc(f?.kz)} – Kilometerstand <span class="small">(Start ${e.start?.km??'–'} km, optional)</span></label><input class="inp num" id="s-km" inputmode="numeric" data-s="km" value="${km}" placeholder="${e.start?.km??''}"></div>
   ${warn.map(w=>`<div class="callout warn small">${w}</div>`).join('')}
   ${k&&!k.eigen?'<div class="callout small">Mietgerät: Dieser Stand gilt als Rückgabestand. Danach verschwindet es aus der Auswahl.</div>':''}
-  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${kh===''?' disabled':''}>Weiter zur Kundenansicht</button></div>`}
+  </div><div class="fab"><button class="btn" data-a="wback">Zurück</button><button class="btn pri" data-a="wnext"${k&&kh===''?' disabled':''}>Weiter zur Kundenansicht</button></div>`}
 function wKunde(e){const sub=V.kv||'ls';
   return `<p class="muted" style="margin-top:0">Das iPad jetzt dem Kunden geben.</p>
   <div class="tabs"><button class="${sub==='ls'?'on':''}" data-a="kv" data-v="ls">Lieferschein</button><button class="${sub==='fd'?'on':''}" data-a="kv" data-v="fd">Fotodokumentation (${e.fotos.length})</button></div>
@@ -853,8 +853,8 @@ document.addEventListener('click',async ev=>{
   case 'importieren':importSheet();break;
   case 'notizen':notizenSheet();break;
   case 'reset':confirmSheet('Testdaten zurücksetzen','Alle Eingaben in diesem Prototyp werden gelöscht. Die Notizen bleiben erhalten.','Zurücksetzen',()=>{const u=S.user;const nz=S.notizen||[];S=seed();S.user=u;S.notizen=nz;mem.clear();save();V={name:'start'};render();ensureSeedPhotos()});break;
-  case 'gsel':e.geraete[b.dataset.g]=b.dataset.id;if(e.start&&b.dataset.g==='kompressor')e.start.kompH=kp(b.dataset.id).h;save();render();break;
-  case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){if(s.length>1)s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
+  case 'gsel':{const g=b.dataset.g;if(g==='kompressor'&&e.geraete.kompressor===b.dataset.id){e.geraete.kompressor=null;if(e.start)e.start.kompH=null}else{e.geraete[g]=b.dataset.id;if(e.start&&g==='kompressor')e.start.kompH=kp(b.dataset.id).h}save();render();break}
+  case 'strahl':{const s=e.geraete.strahl;const id=b.dataset.id;if(s.includes(id)){s.splice(s.indexOf(id),1)}else if(s.length<2)s.push(id);else toast('Höchstens zwei Strahlgeräte');save();render();break}
   case 'miete':mieteSheet(e);break;
   case 'fremdfz':fremdFzSheet(e);break;
   case 'tu':e.tagesUnterschrift=b.dataset.v==='1';save();render();break;
