@@ -293,7 +293,7 @@ def _auswahl():
     return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)],
             "fahrzeuge": speicher.stamm("fahrzeuge", []),
             "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
-            "strahlgeraete": speicher.stamm("strahlgeraete", [])}
+            "strahlgeraete": [g for g in speicher.stamm("strahlgeraete", []) if g.get("aktiv", True)]}
 
 
 @app.route("/buero/einsatz/<eid>/loeschen", methods=["POST"])
@@ -786,8 +786,22 @@ def api_listen():
         alt = {x["id"]: x for x in speicher.stamm(k, []) if isinstance(x, dict) and x.get("id")}
         weg = set(speicher.stamm("geloescht_im_buero", {}).get(k, []))
         for x in d[k]:
-            if isinstance(x, dict) and x.get("id") and x["id"] not in weg:
-                alt[x["id"]] = {**alt.get(x["id"], {}), **x}
+            if not (isinstance(x, dict) and x.get("id") and x["id"] not in weg):
+                continue
+            if k in ("fahrzeuge", "kompressoren") and x["id"] in alt:
+                # Stammdaten (Kennzeichen, Name, Miete, aktiv) pflegt das Büro; vom iPad nur Stände übernehmen,
+                # und zwar nie kleiner als bekannt (ein iPad mit altem Stand soll nichts zurückdrehen)
+                a_ = alt[x["id"]]
+                for feld in ("km", "h"):
+                    try:
+                        if x.get(feld) is not None and (a_.get(feld) is None or float(x[feld]) > float(a_[feld])):
+                            a_[feld] = x[feld]
+                    except (TypeError, ValueError):
+                        pass
+                if isinstance(x.get("saecke"), dict):
+                    a_["saecke"] = x["saecke"]
+                continue
+            alt[x["id"]] = {**alt.get(x["id"], {}), **x}
         for wid in (d.get("geloescht") or {}).get(k, []):
             alt.pop(wid, None)
         speicher.stamm_setzen(k, list(alt.values()))
@@ -1155,6 +1169,69 @@ def tanken_eintrag_loeschen(tid):
     speicher.protokoll("tanken_geloescht", session.get("uid"), eintrag=tid)
     flash("Eintrag gelöscht.", "ok")
     return redirect(request.referrer or url_for("tanken_seite"))
+
+
+@app.route("/buero/geraete", methods=["GET", "POST"])
+@anmeldung(admin=True)
+def geraete_seite():
+    """Fahrzeuge, Kompressoren und Strahlgeräte verwalten (eigen oder gemietet, aktiv/inaktiv)."""
+    fz = speicher.stamm("fahrzeuge", [])
+    kp = speicher.stamm("kompressoren", [])
+    sg = speicher.stamm("strahlgeraete", [])
+    typen = speicher.stamm("geraetetypen", {})
+    if request.method == "POST":
+        f = request.form
+        def zahl(v):
+            v = re.sub(r"[^\d,.]", "", v or "")
+            if not v:
+                return None
+            if "," in v:
+                v = v.replace(".", "").replace(",", ".")
+            elif re.fullmatch(r"\d{1,3}(\.\d{3})+", v):
+                v = v.replace(".", "")
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        def neue_id(liste, buchstabe):
+            ids, n = {x["id"] for x in liste}, 1
+            while f"{buchstabe}{n}" in ids:
+                n += 1
+            return f"{buchstabe}{n}"
+        for liste, b, stand in ((fz, "f", "km"), (kp, "k", "h")):
+            for x in liste:
+                i = f"{b}_{x['id']}"
+                x["kz"] = (f.get(f"{i}_kz") or x.get("kz", "")).strip().upper()
+                x["name"] = (f.get(f"{i}_name") or "").strip() or x.get("name", "")
+                x["eigen"] = f.get(f"{i}_eigen") == "eigen"
+                x["vermieter"] = (f.get(f"{i}_vermieter") or "").strip()
+                x["aktiv"] = bool(f.get(f"{i}_aktiv"))
+                if (f.get(f"{i}_{stand}") or "").strip():
+                    x[stand] = zahl(f.get(f"{i}_{stand}"))
+            if (f.get(f"{b}_neu_kz") or "").strip():
+                neu = {"id": neue_id(liste, b), "kz": f[f"{b}_neu_kz"].strip().upper(),
+                       "name": (f.get(f"{b}_neu_name") or "").strip() or ("Fahrzeug" if b == "f" else "Kompressor"),
+                       stand: zahl(f.get(f"{b}_neu_{stand}")), "eigen": f.get(f"{b}_neu_eigen") == "eigen",
+                       "vermieter": (f.get(f"{b}_neu_vermieter") or "").strip(), "aktiv": True}
+                if b == "f":
+                    neu["saecke"] = {}
+                liste.append(neu)
+        for x in sg:
+            i = f"s_{x['id']}"
+            x["name"] = (f.get(f"{i}_name") or "").strip() or x["name"]
+            x["typ"] = f.get(f"{i}_typ") or x.get("typ")
+            x["aktiv"] = bool(f.get(f"{i}_aktiv"))
+        if (f.get("s_neu_name") or "").strip():
+            sg.append({"id": neue_id(sg, "s"), "name": f["s_neu_name"].strip(), "typ": f.get("s_neu_typ") or "loki",
+                       "aktiv": True})
+        speicher.stamm_setzen("fahrzeuge", fz)
+        speicher.stamm_setzen("kompressoren", kp)
+        speicher.stamm_setzen("strahlgeraete", sg)
+        speicher.protokoll("geraete_geaendert", session.get("uid"))
+        flash("Gespeichert. Die iPads übernehmen die Änderungen beim nächsten Abgleich.", "ok")
+        return redirect(url_for("geraete_seite"))
+    from .auswertung import zahl as zahl_text
+    return render_template("geraete.html", fz=fz, kp=kp, sg=sg, typen=typen, zahl=zahl_text)
 
 
 @app.route("/buero/tanken")

@@ -1,0 +1,58 @@
+{% extends "basis.html" %}
+{% block titel %}Fahrzeuge & Geräte · LST Baustelle{% endblock %}
+{% block pfad %} › Fahrzeuge &amp; Geräte{% endblock %}
+{% block inhalt %}
+<div class="icon">🚐</div>
+<h1>Fahrzeuge &amp; Geräte</h1>
+<p class="muted">Eigene und gemietete Fahrzeuge, Kompressoren und Strahlgeräte. Was zurückgegeben oder verkauft ist, auf „inaktiv“ setzen statt löschen: Tankvorgänge und Einsätze bleiben erhalten. Die iPads zeigen nur aktive Geräte.</p>
+
+{% macro stand_zelle(praefix, x, feld) %}<td><input class="inp" name="{{ praefix }}_{{ feld }}" value="{{ zahl(x[feld]) if x[feld] is not none else '' }}" inputmode="decimal" style="width:110px" aria-label="Stand"></td>{% endmacro %}
+{% macro besitz(name, eigen) %}<td><select class="inp" name="{{ name }}" aria-label="Eigen oder Miete" style="min-width:100px"><option value="eigen"{% if eigen %} selected{% endif %}>Eigen</option><option value="miete"{% if not eigen %} selected{% endif %}>Miete</option></select></td>{% endmacro %}
+
+<form method="post">
+<h2>Fahrzeuge</h2>
+<div style="overflow-x:auto"><table class="tab">
+  <tr><th>Kennzeichen</th><th>Bezeichnung</th><th>km-Stand</th><th>Eigen/Miete</th><th>Vermieter</th><th>Aktiv</th></tr>
+  {% for x in fz %}{% set i = 'f_' ~ x.id %}<tr{% if x.aktiv == false %} style="opacity:.55"{% endif %}>
+    <td><input class="inp" name="{{ i }}_kz" value="{{ x.kz }}" required aria-label="Kennzeichen" style="width:130px"></td>
+    <td><input class="inp" name="{{ i }}_name" value="{{ x.name }}" aria-label="Bezeichnung"></td>
+    {{ stand_zelle(i, x, 'km') }}{{ besitz(i ~ '_eigen', x.eigen != false) }}
+    <td><input class="inp" name="{{ i }}_vermieter" value="{{ x.vermieter or '' }}" aria-label="Vermieter"></td>
+    <td><input type="checkbox" name="{{ i }}_aktiv"{% if x.aktiv != false %} checked{% endif %} aria-label="Aktiv" style="width:22px;height:22px"></td></tr>{% endfor %}
+  <tr><td><input class="inp" name="f_neu_kz" placeholder="Neu: Kennzeichen" style="width:130px" aria-label="Kennzeichen neues Fahrzeug"></td>
+    <td><input class="inp" name="f_neu_name" placeholder="z. B. Mietwagen Sixt" aria-label="Bezeichnung"></td>
+    <td><input class="inp" name="f_neu_km" inputmode="decimal" style="width:110px" aria-label="km-Stand"></td>
+    {{ besitz('f_neu_eigen', false) }}<td><input class="inp" name="f_neu_vermieter" aria-label="Vermieter"></td><td></td></tr>
+</table></div>
+<p class="small muted">Kilometerzähler defekt? km-Stand leer lassen.</p>
+
+<h2>Kompressoren</h2>
+<div style="overflow-x:auto"><table class="tab">
+  <tr><th>Kennzeichen</th><th>Bezeichnung</th><th>Betriebsstd.</th><th>Eigen/Miete</th><th>Vermieter</th><th>Aktiv</th></tr>
+  {% for x in kp %}{% set i = 'k_' ~ x.id %}<tr{% if x.aktiv == false %} style="opacity:.55"{% endif %}>
+    <td><input class="inp" name="{{ i }}_kz" value="{{ x.kz }}" required aria-label="Kennzeichen" style="width:130px"></td>
+    <td><input class="inp" name="{{ i }}_name" value="{{ x.name }}" aria-label="Bezeichnung"></td>
+    {{ stand_zelle(i, x, 'h') }}{{ besitz(i ~ '_eigen', x.eigen != false) }}
+    <td><input class="inp" name="{{ i }}_vermieter" value="{{ x.vermieter or '' }}" aria-label="Vermieter"></td>
+    <td><input type="checkbox" name="{{ i }}_aktiv"{% if x.aktiv != false %} checked{% endif %} aria-label="Aktiv" style="width:22px;height:22px"></td></tr>{% endfor %}
+  <tr><td><input class="inp" name="k_neu_kz" placeholder="Neu: Kennzeichen" style="width:130px" aria-label="Kennzeichen neuer Kompressor"></td>
+    <td><input class="inp" name="k_neu_name" placeholder="z. B. Mietkompressor" aria-label="Bezeichnung"></td>
+    <td><input class="inp" name="k_neu_h" inputmode="decimal" style="width:110px" aria-label="Betriebsstunden"></td>
+    {{ besitz('k_neu_eigen', false) }}<td><input class="inp" name="k_neu_vermieter" aria-label="Vermieter"></td><td></td></tr>
+</table></div>
+
+<h2>Strahlgeräte</h2>
+<div style="overflow-x:auto"><table class="tab">
+  <tr><th>Name</th><th>Typ</th><th>Aktiv</th></tr>
+  {% for x in sg %}{% set i = 's_' ~ x.id %}<tr{% if x.aktiv == false %} style="opacity:.55"{% endif %}>
+    <td><input class="inp" name="{{ i }}_name" value="{{ x.name }}" required aria-label="Name"></td>
+    <td><select class="inp" name="{{ i }}_typ" aria-label="Typ">{% for k, t in typen.items() %}<option value="{{ k }}"{% if x.typ == k %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></td>
+    <td><input type="checkbox" name="{{ i }}_aktiv"{% if x.aktiv != false %} checked{% endif %} aria-label="Aktiv" style="width:22px;height:22px"></td></tr>{% endfor %}
+  <tr><td><input class="inp" name="s_neu_name" placeholder="Neu: z. B. Loki 2" aria-label="Name neues Strahlgerät"></td>
+    <td><select class="inp" name="s_neu_typ" aria-label="Typ">{% for k, t in typen.items() %}<option value="{{ k }}">{{ t.name }}</option>{% endfor %}</select></td><td></td></tr>
+</table></div>
+<p class="small muted">Gibt es zwei Lokis, heißen sie am besten unterscheidbar (z. B. „Loki 1“, „Loki 2“). Auf dem iPad lassen sich dann beide für einen Einsatz auswählen.</p>
+
+<button class="btn pri" style="margin-top:12px">Speichern</button>
+</form>
+{% endblock %}
