@@ -152,11 +152,107 @@ def _offene_freigaben() -> list[dict]:
 @anmeldung(admin=True)
 def buero():
     alle = speicher.einsaetze()
+    namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
+    kachel = lambda e: _kachel(e, namen)
+    fertig = sorted((e for e in alle if e.get("status") == "abgeschlossen"),
+                    key=lambda e: (e.get("abschluss") or {}).get("datum") or e.get("bis") or "", reverse=True)
+    aufgaben = _aufgaben_liste(namen)
     return render_template("buero.html", freigaben=_offene_freigaben(),
-                           laufend=[e for e in alle if e.get("status") == "inarbeit"],
-                           geplant=sorted([e for e in alle if e.get("status") == "vorbereitet"], key=lambda e: e.get("von", "")),
-                           fertig=[e for e in alle if e.get("status") == "abgeschlossen"][:15],
-                           post=mail.postausgang(nur_offen=True))
+                           laufend=[kachel(e) for e in alle if e.get("status") == "inarbeit"],
+                           geplant=[kachel(e) for e in sorted((e for e in alle if e.get("status") == "vorbereitet"),
+                                                               key=lambda e: e.get("von", ""))],
+                           fertig=[kachel(e) for e in fertig[:12]], fertig_mehr=max(0, len(fertig) - 12),
+                           aufgaben=[a for a in aufgaben if a["status"] != "erledigt"][:8],
+                           aufgaben_offen=sum(1 for a in aufgaben if a["status"] != "erledigt"),
+                           post=mail.postausgang(nur_offen=True), heute=date.today().isoformat())
+
+
+def _kachel(e: dict, namen: dict) -> dict:
+    """Was eine Einsatz-Kachel auf der Startseite zeigt: Team, heutiger Stand, Hinweise."""
+    from .auswertung import berechnen
+    team = [x for x in [(e.get("team") or {}).get("vor"), (e.get("team") or {}).get("fach")] if x]
+    for t in e.get("tage") or []:
+        team += [mid for mid in (t.get("zeiten") or {}) if mid not in team]
+    heute = date.today().isoformat()
+    jetzt = []
+    for t in e.get("tage") or []:
+        if t.get("datum") != heute:
+            continue
+        for mid, z in (t.get("zeiten") or {}).items():
+            p = (z or {}).get("p") or {}
+            if p.get("4") and not p.get("5"):
+                stand = f"unterwegs seit {p['4']}"
+            elif p.get("3") and not p.get("4"):
+                stand = f"vor Ort seit {p['3']}"
+            elif p.get("2") and not p.get("3"):
+                stand = f"fährt seit {p['2']}"
+            elif p.get("5") or p.get("6"):
+                c = berechnen(z)
+                stand = "Feierabend" + (f" ({c['gesamt'] // 60}:{c['gesamt'] % 60:02d} h)" if c["gesamt"] else "")
+            else:
+                stand = "noch keine Zeit"
+            jetzt.append(f"{namen.get(mid, mid)}: {stand}")
+    ab = e.get("abschluss") or {}
+    return {"e": e, "team": [namen.get(m, m) for m in team], "jetzt": jetzt,
+            "tage": len(e.get("tage") or []), "anlagen": len(e.get("anlagen") or []),
+            "ohne_unterschrift": bool(ab.get("ohneKunde")) if e.get("status") == "abgeschlossen" else False}
+
+
+def _aufgaben_liste(namen: dict) -> list[dict]:
+    """Alle internen Aufgaben (aus Notion und auf dem iPad angelegte), offene nach Termin."""
+    heute = date.today().isoformat()
+    aus = []
+    for i in speicher.stamm("intern", []):
+        if not isinstance(i, dict):
+            continue
+        wer = ([i["zust"]] if i.get("zust") else list(i.get("fuer") or []))
+        zeiten = list((i.get("zeiten") or {}).values()) or ([i["zeit"]] if i.get("zeit") else [])
+        minuten = 0
+        for z in zeiten:
+            try:
+                a, b = (int(x[:2]) * 60 + int(x[3:5]) for x in (z["von"], z["bis"]))
+                minuten += (b - a) % 1440
+            except (KeyError, TypeError, ValueError):
+                pass
+        aus.append({**i, "wer": [namen.get(m, m) for m in wer] or ["alle"], "minuten": minuten,
+                    "ueberfaellig": i.get("status") != "erledigt" and bool(i.get("datum")) and i["datum"] < heute,
+                    "heute": i.get("datum") == heute})
+    aus.sort(key=lambda a: (a.get("status") == "erledigt", not a.get("datum"), a.get("datum") or "", a.get("rang") or 9))
+    return aus
+
+
+@app.route("/buero/aufgaben")
+@anmeldung(admin=True)
+def aufgaben_seite():
+    namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
+    alle = _aufgaben_liste(namen)
+    wer = [w for w in request.args.getlist("wer") if w]
+    if wer:
+        alle = [a for a in alle if (a.get("zust") in wer) or any(f in wer for f in (a.get("fuer") or []))
+                or (not a.get("zust") and not a.get("fuer"))]
+    erledigt = sorted((a for a in alle if a["status"] == "erledigt"), key=lambda a: a.get("erledigt_am") or "", reverse=True)
+    offen = [a for a in alle if a["status"] != "erledigt"]
+    gruppen = [("Überfällig", [a for a in offen if a["ueberfaellig"]]),
+               ("Heute", [a for a in offen if a["heute"]]),
+               ("Demnächst", [a for a in offen if a.get("datum") and not a["ueberfaellig"] and not a["heute"]]),
+               ("Ohne Termin", [a for a in offen if not a.get("datum")])]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
+    return render_template("aufgaben.html", gruppen=gruppen, erledigt=erledigt[:30], leute=leute, wer=wer,
+                           stand=AUFGABEN_STAND, eingerichtet=notion.eingerichtet())
+
+
+@app.route("/buero/postausgang/<pid>/loeschen", methods=["POST"])
+@anmeldung(admin=True)
+def postausgang_loeschen(pid):
+    with speicher.db() as c:
+        c.execute("DELETE FROM postausgang WHERE id=?", (pid,))
+    try:
+        speicher.pfad("postausgang", f"{pid}.eml").unlink()
+    except OSError:
+        pass
+    speicher.protokoll("postausgang_geloescht", session.get("uid"), mail=pid)
+    flash("Mail aus dem Postausgang gelöscht.", "ok")
+    return redirect(request.referrer or url_for("buero"))
 
 
 def _einsatz_oder_404(eid: str) -> dict:
@@ -450,7 +546,7 @@ def notion_aufgaben():
     elif AUFGABEN_STAND["ergebnis"]:
         r = AUFGABEN_STAND["ergebnis"]
         flash(f"{r['anzahl']} Aufgaben für die iPads geholt." + (f" {r['unbekannt']} mit unbekanntem Namen bei „iPad für“ übersprungen." if r["unbekannt"] else ""), "ok")
-    return redirect(url_for("notion_seite"))
+    return redirect(request.referrer or url_for("notion_seite"))
 
 
 @app.route("/buero/notion/<pid>/uebernehmen", methods=["POST"])

@@ -89,3 +89,19 @@ table.tab .inp{min-height:40px;padding:6px 8px}
 .check-row{display:flex;gap:8px;align-items:center;min-height:44px}
 .check-row input{width:22px;height:22px}
 table.tab select.inp{min-width:140px}
+/* Startseite: Kacheln je Kategorie */
+.bereich{margin-top:26px}
+.bereich>h2{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.kachel{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--bg);
+  text-decoration:none;color:inherit;min-height:120px;position:relative}
+a.kachel:hover{background:var(--hover);border-color:rgba(55,53,47,.25)}
+.kachel .t{font-weight:600;font-size:16px;line-height:1.3}
+.kachel .s{font-size:13px;color:var(--muted)}
+.kachel .unten{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.kachel.warn{border-color:var(--warn)}.kachel.rot{border-color:var(--danger)}
+.kachel.live{border-left:4px solid var(--ok)}
+.kachel .jetzt{font-size:13px;background:var(--t-green);color:var(--t-green-fg);border-radius:6px;padding:4px 8px}
+.kachel.neu{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-weight:500}
+.leer{color:var(--faint);font-size:14px;border:1px dashed var(--line);border-radius:10px;padding:14px}
+.kopfzeile{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}

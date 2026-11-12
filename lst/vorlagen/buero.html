@@ -1,59 +1,75 @@
 {% extends "basis.html" %}
 {% block titel %}Büro · LST Baustelle{% endblock %}
 {% block inhalt %}
-<div class="icon">🗂️</div>
-<h1>Büro</h1>
-<p class="muted">Freigaben, Postausgang und Einsätze. · <a href="{{ url_for('altdaten_seite') }}">Aus alter App übernehmen</a></p>
+<div class="kopfzeile">
+  <div><h1>Büro</h1><p class="muted" style="margin:0">{{ datum(heute) }}</p></div>
+  <div class="row"><a class="btn pri small" href="{{ url_for('einsatz_neu') }}">＋ Neuer Einsatz</a>
+    <a class="btn small" href="{{ url_for('altdaten_seite') }}">Aus alter App übernehmen</a></div>
+</div>
 
 {% if not mail_eingerichtet %}
-<div class="callout hinweis">Der Mailversand ist noch nicht eingerichtet. Mails werden im Postausgang gesammelt und können später gesendet werden.</div>
+<div class="callout hinweis">Der Mailversand ist noch nicht eingerichtet. Mails werden im Postausgang gesammelt.</div>
 {% endif %}
 
-<h2>Freigaben <span class="tag">{{ freigaben|length }}</span></h2>
-<div class="list">
-{% for f in freigaben %}
-  <div class="item">
-    <div><b>{{ f.e.einsatzort }}</b> <span class="tag yellow">Fotobericht wartet</span>
-      <div class="meta">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }} · {{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div></div>
-    <a class="btn pri small" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">Fotos auswählen</a>
-  </div>
-{% else %}<div class="empty">Keine offenen Freigaben.</div>{% endfor %}
-</div>
+{% if freigaben or post %}
+<section class="bereich"><h2>Braucht dich <span class="tag yellow">{{ freigaben|length + post|length }}</span></h2>
+<div class="kacheln">
+  {% for f in freigaben %}
+  <a class="kachel warn" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">
+    <span class="tag yellow" style="align-self:flex-start">Fotobericht freigeben</span>
+    <div class="t">{{ f.e.einsatzort }}</div>
+    <div class="s">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }}</div>
+    <div class="unten s">{{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div></a>
+  {% endfor %}
+  {% for p in post %}
+  <div class="kachel {{ 'rot' if p.status == 'fehler' else 'warn' }}">
+    <span class="tag {{ 'red' if p.status == 'fehler' else 'yellow' }}" style="align-self:flex-start">Postausgang · {{ 'Fehler' if p.status == 'fehler' else 'wartet' }}</span>
+    <div class="t">{{ p.betreff }}</div>
+    <div class="s">an {{ p.an }}</div>
+    {% if p.fehler %}<div class="s" style="color:var(--danger)">{{ p.fehler[:140] }}</div>{% endif %}
+    <div class="unten">
+      <form method="post" action="{{ url_for('postausgang_senden', pid=p.id) }}"><button class="btn small">Erneut senden</button></form>
+      <form method="post" action="{{ url_for('postausgang_loeschen', pid=p.id) }}" onsubmit="return confirm('Diese Mail aus dem Postausgang löschen? Sie wird nicht verschickt.')"><button class="btn small">🗑 Löschen</button></form>
+    </div></div>
+  {% endfor %}
+</div></section>
+{% endif %}
 
-<h2>Postausgang <span class="tag">{{ post|length }}</span></h2>
-<div class="list">
-{% for p in post %}
-  <div class="item">
-    <div><b>{{ p.betreff }}</b> {% if p.status == 'fehler' %}<span class="tag red">Fehler</span>{% else %}<span class="tag yellow">wartet</span>{% endif %}
-      <div class="meta">an {{ p.an }}{% if p.fehler %} · {{ p.fehler }}{% endif %}</div></div>
-    <form method="post" action="{{ url_for('postausgang_senden', pid=p.id) }}"><button class="btn small">Jetzt senden</button></form>
-  </div>
-{% else %}<div class="empty">Alles versendet.</div>{% endfor %}
-</div>
+{% macro einsatz_kachel(k, live=false) %}{% set e = k.e %}
+<a class="kachel{% if live %} live{% endif %}{% if k.ohne_unterschrift %} warn{% endif %}" href="{{ url_for('einsatz_seite', eid=e.id) }}">
+  <div class="t">{{ e.einsatzort or e.kunde }}</div>
+  <div class="s">{{ e.kunde }}</div>
+  <div class="s">{{ zeitraum(e.von, e.bis) }}{% if e.ls %} · {{ e.ls }}{% endif %}</div>
+  {% for j in k.jetzt %}<div class="jetzt">{{ j }}</div>{% endfor %}
+  <div class="unten">
+    {% for n in k.team %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}
+    {% if e.status == 'abgeschlossen' %}{% if k.ohne_unterschrift %}<span class="tag yellow">Unterschrift fehlt</span>{% else %}<span class="tag green">unterschrieben</span>{% endif %}{% endif %}
+    {% if e.status == 'inarbeit' %}<span class="tag blue">Tag {{ k.tage }}</span>{% endif %}
+  </div></a>
+{% endmacro %}
 
-<h2>Vorbereitet <a class="btn small" href="{{ url_for('einsatz_neu') }}" style="margin-left:8px">＋ Neuer Einsatz</a></h2>
-<div class="list">
-{% for e in geplant %}
-  <div class="item"><div><b>{{ e.einsatzort }}</b><div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.anlagen|length }} Anlagen{% if e.ls %} · {{ e.ls }}{% endif %}</div></div>
-  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
-{% else %}<div class="empty">Kein Einsatz vorbereitet.</div>{% endfor %}
-</div>
+<section class="bereich"><h2>In Arbeit {% if laufend %}<span class="tag green">{{ laufend|length }}</span>{% endif %}</h2>
+{% if laufend %}<div class="kacheln">{% for k in laufend %}{{ einsatz_kachel(k, true) }}{% endfor %}</div>
+{% else %}<div class="leer">Gerade läuft kein Einsatz.</div>{% endif %}</section>
 
-<h2>In Arbeit</h2>
-<div class="list">
-{% for e in laufend %}
-  <div class="item"><div><b>{{ e.einsatzort }}</b><div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }}</div></div>
-  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
-{% else %}<div class="empty">Gerade läuft kein Einsatz.</div>{% endfor %}
-</div>
+<section class="bereich"><h2>Vorbereitet {% if geplant %}<span class="tag">{{ geplant|length }}</span>{% endif %}</h2>
+<div class="kacheln">{% for k in geplant %}{{ einsatz_kachel(k) }}{% endfor %}
+  <a class="kachel neu" href="{{ url_for('einsatz_neu') }}">＋ Neuer Einsatz</a>
+  <a class="kachel neu" href="{{ url_for('notion_seite') }}">Aus Notion übernehmen</a></div></section>
 
-<h2>Abgeschlossen</h2>
-<div class="list">
-{% for e in fertig %}
-  <div class="item"><div><b>{{ e.einsatzort }}</b>
-    {% if e.abschluss and e.abschluss.ohneKunde %}<span class="tag yellow">Unterschrift ausstehend</span>{% else %}<span class="tag green">Unterschrieben</span>{% endif %}
-    <div class="meta">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or '' }}</div></div>
-  <a class="btn small" href="{{ url_for('einsatz_seite', eid=e.id) }}">Öffnen</a></div>
-{% else %}<div class="empty">Noch nichts abgeschlossen.</div>{% endfor %}
-</div>
+<section class="bereich"><h2>Interne Aufgaben {% if aufgaben_offen %}<span class="tag">{{ aufgaben_offen }} offen</span>{% endif %}
+  <a class="btn small" href="{{ url_for('aufgaben_seite') }}" style="margin-left:auto">Alle Aufgaben</a></h2>
+{% if aufgaben %}<div class="kacheln">{% for a in aufgaben %}
+  <a class="kachel{% if a.ueberfaellig %} rot{% endif %}" href="{{ url_for('aufgaben_seite') }}#a-{{ a.id }}">
+    <div class="t">{{ a.titel }}</div>
+    <div class="s" {% if a.ueberfaellig %}style="color:var(--danger)"{% endif %}>{% if a.datum %}{{ datum(a.datum) }}{% if a.ueberfaellig %} · überfällig{% elif a.heute %} · heute{% endif %}{% else %}ohne Termin{% endif %}{% if a.nstatus %} · {{ a.nstatus }}{% endif %}</div>
+    {% if a.projekt %}<div class="s">{{ a.projekt }}</div>{% endif %}
+    <div class="unten">{% for n in a.wer %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}{% if a.gemeinsam %}<span class="tag blue">gemeinsam</span>{% endif %}</div></a>
+{% endfor %}</div>
+{% else %}<div class="leer">Keine offenen Aufgaben.</div>{% endif %}</section>
+
+<section class="bereich"><h2>Abgeschlossen</h2>
+{% if fertig %}<div class="kacheln">{% for k in fertig %}{{ einsatz_kachel(k) }}{% endfor %}</div>
+{% if fertig_mehr %}<p class="small muted">… und {{ fertig_mehr }} ältere.</p>{% endif %}
+{% else %}<div class="leer">Noch nichts abgeschlossen.</div>{% endif %}</section>
 {% endblock %}

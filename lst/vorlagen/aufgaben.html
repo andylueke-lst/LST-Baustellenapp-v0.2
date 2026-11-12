@@ -1,0 +1,40 @@
+{% extends "basis.html" %}
+{% block titel %}Aufgaben · LST Baustelle{% endblock %}
+{% block pfad %} › Aufgaben{% endblock %}
+{% block inhalt %}
+<div class="kopfzeile">
+  <div><h1>Interne Aufgaben</h1>
+  <p class="muted" style="margin:0">Aus LST Aufgaben (Notion, „iPad für“ gesetzt) und auf den iPads angelegte.{% if stand.zeit %} Zuletzt geholt um {{ stand.zeit }} Uhr.{% endif %}</p></div>
+  {% if eingerichtet %}<form method="post" action="{{ url_for('notion_aufgaben') }}"><button class="btn small">Jetzt aus Notion holen</button></form>{% endif %}
+</div>
+{% if stand.fehler %}<div class="callout fehler" role="alert">{{ stand.fehler }}</div>{% endif %}
+
+<form method="get" class="row" style="margin-top:16px">
+  {% for m in leute %}<label class="tag" style="gap:6px;padding:8px 10px;cursor:pointer;font-size:14px"><input type="checkbox" name="wer" value="{{ m.id }}"{% if m.id in wer %} checked{% endif %}>{{ m.vorname }}</label>{% endfor %}
+  <button class="btn small">Filtern</button>{% if wer %}<a class="small" href="{{ url_for('aufgaben_seite') }}">alle zeigen</a>{% endif %}
+</form>
+
+{% macro karte(a) %}
+<div class="kachel{% if a.ueberfaellig %} rot{% endif %}" id="a-{{ a.id }}">
+  <div class="t">{{ a.titel }}</div>
+  <div class="s">{% if a.datum %}{{ datum(a.datum) }}{% else %}ohne Termin{% endif %}{% if a.nstatus %} · {{ a.nstatus }}{% endif %}{% if a.prio %} · Priorität {{ a.prio }}{% endif %}</div>
+  {% if a.projekt %}<div class="s">{{ a.projekt }}</div>{% endif %}
+  {% if a.status == 'erledigt' %}<div class="s">Erledigt{% if a.erledigt_am %} am {{ datum(a.erledigt_am) }}{% endif %}{% if a.minuten %} · {{ a.minuten // 60 }}:{{ '%02d' % (a.minuten % 60) }} h{% endif %}</div>
+    {% if a.notiz %}<div class="small" style="white-space:pre-line">{{ a.notiz[:200] }}</div>{% endif %}{% endif %}
+  <div class="unten">{% for n in a.wer %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}{% if a.gemeinsam %}<span class="tag blue">gemeinsam</span>{% endif %}</div>
+  <div class="row">{% if a.status == 'erledigt' or a.notiz or a.fotos %}<a class="btn small" href="{{ url_for('intern_bericht', iid=a.id) }}" target="_blank" rel="noopener">Arbeitsbericht</a>{% endif %}
+    {% if a.notion and a.notion.url %}<a class="btn small" href="{{ a.notion.url }}" target="_blank" rel="noopener">In Notion bearbeiten</a>{% endif %}</div>
+</div>{% endmacro %}
+
+{% for titel, liste in gruppen %}{% if liste %}
+<section class="bereich"><h2>{{ titel }} <span class="tag{% if titel == 'Überfällig' %} red{% endif %}">{{ liste|length }}</span></h2>
+<div class="kacheln">{% for a in liste %}{{ karte(a) }}{% endfor %}</div></section>
+{% endif %}{% endfor %}
+{% if not gruppen|selectattr(1)|list %}<div class="leer" style="margin-top:20px">Keine offenen Aufgaben.</div>{% endif %}
+
+{% if erledigt %}
+<section class="bereich"><h2>Erledigt <span class="tag green">{{ erledigt|length }}</span></h2>
+<p class="small muted">Aufgaben aus Notion dort abhaken, dann verschwinden sie hier.</p>
+<div class="kacheln">{% for a in erledigt %}{{ karte(a) }}{% endfor %}</div></section>
+{% endif %}
+{% endblock %}
