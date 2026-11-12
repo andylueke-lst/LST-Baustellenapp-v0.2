@@ -978,11 +978,8 @@ def _unterschrift_felder(u: dict) -> dict:
     return {"datum": f"{m.group(3)}-{m.group(2)}-{m.group(1)}", "uhrzeit": m.group(4)} if m else {"datum": "", "uhrzeit": ""}
 
 
-@app.route("/buero/stunden")
-@anmeldung(admin=True)
-def stunden_seite():
-    """Arbeitszeiten, Kompressor- und Kilometerstände je Einsatz, Tankvorgänge für einen Zeitraum."""
-    from . import auswertung as aw
+def _zeitraum_auswahl():
+    """Von/Bis aus der Adresse (Standard: dieser Monat) und Schnellwahl-Links."""
     heute = date.today()
     erster = heute.replace(day=1)
     vormonat_ende = erster - timedelta(days=1)
@@ -990,24 +987,52 @@ def stunden_seite():
     lohn_von = (lohn_bis.replace(day=1) - timedelta(days=1)).replace(day=21)
     schnell = [("Dieser Monat", erster, heute), ("Letzter Monat", vormonat_ende.replace(day=1), vormonat_ende),
                ("21.–20. (Lohn)", lohn_von, lohn_bis)]
-    try:
-        von = date.fromisoformat(request.args.get("von", "")).isoformat()
-    except ValueError:
-        von = erster.isoformat()
-    try:
-        bis = date.fromisoformat(request.args.get("bis", "")).isoformat()
-    except ValueError:
-        bis = heute.isoformat()
+    def tag(name, standard):
+        try:
+            return date.fromisoformat(request.args.get(name, "")).isoformat()
+        except ValueError:
+            return standard.isoformat()
+    von, bis = tag("von", erster), tag("bis", heute)
+    if bis < von:
+        von, bis = bis, von
+    return von, bis, schnell
+
+
+@app.route("/buero/stunden")
+@anmeldung(admin=True)
+def stunden_seite():
+    """Arbeitszeiten je Mitarbeiter, Export als PDF (Steuerberater) und CSV (Arbeitszeitkonto)."""
+    from . import auswertung as aw
+    von, bis, schnell = _zeitraum_auswahl()
     wer = request.args.get("wer") or None
     zeilen = aw.arbeitszeiten(von, bis, wer)
+    kurz = f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]}"
+    namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
+    zusatz = f" {namen.get(wer, '')}" if wer else ""
     if request.args.get("csv"):
-        return send_file(io.BytesIO(aw.csv_arbeitszeiten(zeilen)), mimetype="text/csv",
-                         download_name=f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]} LST Arbeitszeiten.csv")
-    tank = aw.tankvorgaenge(von, bis)
+        return send_file(io.BytesIO(aw.csv_arbeitszeiten(zeilen)), mimetype="text/csv", as_attachment=True,
+                         download_name=f"{kurz} LST Arbeitszeiten{zusatz}.csv")
+    gruppen = aw.nach_mitarbeiter(zeilen)
+    if request.args.get("pdf"):
+        from .dokumente import stunden as dok_stunden
+        return send_file(io.BytesIO(dok_stunden.stundennachweis(gruppen, von, bis)), mimetype="application/pdf",
+                         download_name=f"{kurz} LST Stundennachweis{zusatz}.pdf")
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     return render_template("stunden.html", von=von, bis=bis, wer=wer, leute=leute, schnell=schnell,
-                           zeilen=zeilen, summen=aw.summen(zeilen), geraete=aw.geraete_je_einsatz(von, bis),
-                           tank=tank, tank_summen=aw.tank_summen(tank), hm=aw.hm, zahl=aw.zahl)
+                           gruppen=gruppen, hm=aw.hm)
+
+
+@app.route("/buero/tanken")
+@anmeldung(admin=True)
+def tanken_seite():
+    """Tankvorgänge sowie Kompressor-Betriebsstunden und Kilometer je Einsatz."""
+    from . import auswertung as aw
+    von, bis, schnell = _zeitraum_auswahl()
+    g = request.args.get("g") or None
+    tank = [t for t in aw.tankvorgaenge(von, bis) if not g or t["gid"] == g]
+    geraete = [x for x in aw.geraete_je_einsatz(von, bis) if not g or g in (x["k_id"], x["f_id"])]
+    return render_template("tanken.html", von=von, bis=bis, schnell=schnell, g=g, auswahl=aw.geraete_auswahl(),
+                           geraete=geraete, gruppen=aw.tank_summen(tank), zahl=aw.zahl)
 
 
 @app.route("/buero/einsatz/<eid>/unterschrift", methods=["POST"])

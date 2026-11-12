@@ -202,7 +202,8 @@ def geraete_je_einsatz(von: str, bis: str) -> list[dict]:
                 return round(float(b) - float(a), 1)
             except (TypeError, ValueError):
                 return None
-        aus.append({"eid": e["id"], "wo": e.get("einsatzort", ""), "von": anfang, "bis": ende,
+        aus.append({"eid": e["id"], "wo": e.get("einsatzort", ""), "k_id": "k:" + k["id"] if k else None,
+                    "f_id": "f:" + f["id"] if f else None, "von": anfang, "bis": ende,
                     "status": e.get("status"),
                     "kompressor": f"{k.get('kz', '')} {'' if k.get('eigen') else '(Miete)'}".strip() if k else "",
                     "h_start": st.get("kompH") if k else None, "h_ende": en.get("kompH") if k else None,
@@ -228,7 +229,9 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
         stand = t.get("h") if art == "h" else t.get("km")
         if art == "h" and stand is None and t.get("km") is not None:
             stand = t.get("km")  # ältere Einträge: Stand stand im Kilometerfeld
-        aus.append({"datum": t["datum"], "geraet": name, "art": art, "liter": t.get("l"), "betrag": t.get("b"),
+        aus.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
+                    "betrag": t.get("b"), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
+                    "oel_l": t.get("oel_l"),
                     "stand": stand, "wer": namen.get(t.get("von"), t.get("von") or ""),
                     "wo": orte.get(t.get("einsatz"), ""), "eid": t.get("einsatz")})
     aus.sort(key=lambda x: (x["datum"], x["geraet"]))
@@ -238,22 +241,55 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
 def tank_summen(tank: list[dict]) -> list[dict]:
     s = {}
     for t in tank:
-        x = s.setdefault(t["geraet"], {"geraet": t["geraet"], "anzahl": 0, "liter": 0.0, "betrag": 0.0})
-        x["anzahl"] += 1
+        x = s.setdefault(t["gid"], {"gid": t["gid"], "geraet": t["geraet"], "art": t["art"], "anzahl": 0, "liter": 0.0,
+                                    "betrag": 0.0, "oel_l": 0.0, "oel_kontrollen": 0, "eintraege": []})
+        x["eintraege"].append(t)
+        x["anzahl"] += 1 if t["liter"] else 0
+        x["oel_kontrollen"] += 1 if t["oel_geprueft"] else 0
+        x["oel_l"] += float(t["oel_l"] or 0)
         x["liter"] += float(t["liter"] or 0)
         x["betrag"] += float(t["betrag"] or 0)
-    return list(s.values())
+    return sorted(s.values(), key=lambda x: (x["art"] != "km", x["geraet"]))
+
+
+def geraete_auswahl() -> list[tuple[str, str]]:
+    return ([("f:" + f["id"], f"{f.get('kz', '')} {f.get('name', '')}".strip()) for f in speicher.stamm("fahrzeuge", [])]
+            + [("k:" + k["id"], f"{k.get('kz', '')} {'Kompressor' if k.get('eigen') else 'Mietkompressor'}")
+               for k in speicher.stamm("kompressoren", [])])
+
+
+def nach_mitarbeiter(zeilen: list[dict]) -> list[dict]:
+    """Zeilen je Mitarbeiter (Reihenfolge wie in der Mitarbeiterliste), jeweils nach Datum sortiert, mit Summe."""
+    reihenfolge = {m["id"]: n for n, m in enumerate(speicher.stamm("mitarbeiter", []))}
+    gruppen = {}
+    for z in zeilen:
+        gruppen.setdefault(z["mid"], []).append(z)
+    aus = []
+    for mid, zz in sorted(gruppen.items(), key=lambda kv: (reihenfolge.get(kv[0], 99), kv[1][0]["name"])):
+        zz.sort(key=lambda z: (z["datum"], z.get("beginn") or ""))
+        for z in zz:
+            z["datum_d"] = date.fromisoformat(z["datum"][:10])
+        aus.append({"mid": mid, "name": zz[0]["name"], "zeilen": zz, "summe": summen(zz)[0]})
+    return aus
+
+
+def _dez(m: int | None) -> str:
+    return f"{m / 60:.2f}".replace(".", ",") if m is not None else ""
 
 
 def csv_arbeitszeiten(zeilen: list[dict]) -> bytes:
+    """Für Excel (Semikolon, deutsche Kommazahlen). Dauern in Dezimalstunden zum Weiterrechnen."""
+    from .dokumente.basis import WOCHENTAGE
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";")
-    w.writerow(["Datum", "Mitarbeiter", "Art", "Einsatz/Aufgabe", "Beginn", "Ende", "Pause", "Fahrt", "vor Ort",
-                "Gesamt", "Gesamt (Dezimal)", "Hinweis"])
-    for z in zeilen:
-        g = z["gesamt"]
-        w.writerow([date.fromisoformat(z["datum"]).strftime("%d.%m.%Y"), z["name"], z["art"], z["wo"],
-                    z.get("beginn") or "", z.get("ende") or "", hm(z["pause"]), hm(z["fahrt"]), hm(z["ort"]),
-                    hm(g), f"{g / 60:.2f}".replace(".", ",") if g is not None else "",
-                    "fehlt: " + ", ".join(z["fehlt"]) if z["fehlt"] else ""])
-    return ("﻿" + buf.getvalue()).encode("utf-8")
+    w.writerow(["Mitarbeiter", "Datum", "Wochentag", "Art", "Einsatz/Aufgabe", "Beginn", "Ende",
+                "Pause (Std.)", "Rüstzeit (Std.)", "Fahrt (Std.)", "vor Ort (Std.)", "Gesamt (Std.)", "Gesamt (h:mm)",
+                "Hinweis"])
+    for g in nach_mitarbeiter(zeilen):
+        for z in g["zeilen"]:
+            d = date.fromisoformat(z["datum"])
+            w.writerow([z["name"], d.strftime("%d.%m.%Y"), WOCHENTAGE[d.weekday()], z["art"], z["wo"],
+                        z.get("beginn") or "", z.get("ende") or "", _dez(z["pause"]), _dez(z["ruest"]),
+                        _dez(z["fahrt"]), _dez(z["ort"]), _dez(z["gesamt"]), hm(z["gesamt"]),
+                        "fehlt: " + ", ".join(z["fehlt"]) if z["fehlt"] else ""])
+    return ("\ufeff" + buf.getvalue()).encode("utf-8")

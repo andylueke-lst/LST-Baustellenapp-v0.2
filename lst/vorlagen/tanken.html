@@ -1,0 +1,57 @@
+{% extends "basis.html" %}
+{% block titel %}Tanken · LST Baustelle{% endblock %}
+{% block pfad %} › Tanken{% endblock %}
+{% block inhalt %}
+<div class="icon">⛽</div>
+<h1>Tanken</h1>
+<p class="muted">Tankvorgänge und Ölkontrollen je Gerät/Fahrzeug von den iPads, dazu Kompressor-Betriebsstunden und Kilometer je Einsatz.</p>
+
+<form method="get" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+  <div class="field"><label for="s-v">Von</label><input class="inp" id="s-v" type="date" name="von" value="{{ von }}"></div>
+  <div class="field"><label for="s-b">Bis</label><input class="inp" id="s-b" type="date" name="bis" value="{{ bis }}"></div>
+  <div class="field"><label for="s-g">Gerät / Fahrzeug</label><select class="inp" id="s-g" name="g"><option value="">alle</option>
+    {% for gid, name in auswahl %}<option value="{{ gid }}"{% if g == gid %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>
+  <button class="btn pri">Anzeigen</button>
+</form>
+<p class="small" style="margin-top:8px">{% for t, a, b in schnell %}<a href="?von={{ a.isoformat() }}&bis={{ b.isoformat() }}{% if g %}&g={{ g|urlencode }}{% endif %}">{{ t }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+
+{% if gruppen %}
+<h2>Übersicht</h2>
+<table class="tab">
+  <tr><th>Gerät / Fahrzeug</th><th>Tankvorgänge</th><th>Diesel</th><th>Betrag</th><th>Öl geprüft</th><th>Öl nachgefüllt</th><th>Letzter Stand</th></tr>
+  {% for x in gruppen %}{% set letzt = x.eintraege|selectattr('stand')|list|last %}<tr>
+    <td><a href="#g-{{ loop.index }}"><b>{{ x.geraet }}</b></a></td><td>{{ x.anzahl }}</td><td>{{ zahl(x.liter) }} l</td><td>{{ zahl(x.betrag, 2) }} €</td>
+    <td>{{ x.oel_kontrollen }}×</td><td>{{ zahl(x.oel_l) }} l</td>
+    <td>{% if letzt %}{{ zahl(letzt.stand) }} {{ 'km' if x.art == 'km' else 'Std.' }} <span class="small muted">({{ datum(letzt.datum) }})</span>{% else %}–{% endif %}</td></tr>{% endfor %}
+</table>
+
+{% for x in gruppen %}
+<h2 id="g-{{ loop.index }}">{{ x.geraet }}{% if not g %} <a class="btn small" style="margin-left:8px" href="?von={{ von }}&bis={{ bis }}&g={{ x.gid|urlencode }}">nur dieses</a>{% endif %}</h2>
+<table class="tab">
+  <tr><th>Datum</th><th>{{ 'Kilometerstand' if x.art == 'km' else 'Betriebsstunden' }}</th><th>Diesel</th><th>Betrag</th><th>Öl</th><th>Wer</th><th>Einsatz</th></tr>
+  {% for t in x.eintraege %}<tr><td>{{ datum(t.datum) }}</td>
+    <td>{{ zahl(t.stand) }}{% if t.stand is not none %} {{ 'km' if t.art == 'km' else 'Std.' }}{% endif %}</td>
+    <td>{{ zahl(t.liter) ~ ' l' if t.liter else '–' }}</td>
+    <td>{{ zahl(t.betrag, 2) ~ ' €' if t.betrag is not none else '–' }}</td>
+    <td>{% if t.oel_l %}<span class="tag yellow">{{ zahl(t.oel_l) }} l nachgefüllt</span>{% elif t.oel_geprueft %}<span class="tag green">geprüft</span>{% else %}–{% endif %}</td>
+    <td>{{ t.wer }}</td><td>{% if t.eid %}<a href="{{ url_for('einsatz_seite', eid=t.eid) }}">{{ t.wo }}</a>{% endif %}</td></tr>{% endfor %}
+</table>
+{% endfor %}
+{% else %}<h2>Tanken und Öl</h2><div class="empty">Keine Einträge in diesem Zeitraum.</div>{% endif %}
+
+<h2>Kompressor und Kilometer je Einsatz</h2>
+{% if geraete %}
+<table class="tab">
+  <tr><th>Einsatz</th><th>Zeitraum</th><th>Kompressor</th><th>Betriebsstd. Start → Ende</th><th>Std.</th><th>Fahrzeug</th><th>km Start → Ende</th><th>km</th></tr>
+  {% for x in geraete %}<tr>
+    <td><a href="{{ url_for('einsatz_seite', eid=x.eid) }}">{{ x.wo }}</a>{% if x.status != 'abgeschlossen' %} <span class="tag blue">läuft</span>{% endif %}</td>
+    <td>{{ zeitraum(x.von, x.bis) }}</td>
+    <td>{{ x.kompressor or '–' }}</td>
+    <td>{% if x.kompressor %}{{ zahl(x.h_start) }} → {{ zahl(x.h_ende) }}{% endif %}</td>
+    <td><b>{{ zahl(x.h) if x.h is not none else '' }}</b></td>
+    <td>{{ x.fahrzeug or '–' }}</td>
+    <td>{{ zahl(x.km_start) }} → {{ zahl(x.km_ende) }}</td>
+    <td><b>{{ zahl(x.km) if x.km is not none else '' }}</b></td></tr>{% endfor %}
+</table>
+{% else %}<div class="empty">Keine Einsätze mit Start- oder Endstand in diesem Zeitraum.</div>{% endif %}
+{% endblock %}

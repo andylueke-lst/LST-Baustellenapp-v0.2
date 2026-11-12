@@ -575,7 +575,7 @@ function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="c
   return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
   <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
   <div class="board">${col('Vorbereitet',es('vorbereitet').map(cardE),'Nichts geplant')}${col('In Arbeit',es('inarbeit').map(cardE),'Kein laufender Einsatz')}${col('Abgeschlossen',es('abgeschlossen').map(cardE),'Noch nichts abgeschlossen')}${col('Intern',intern,'Keine offenen Aufträge')}</div>
-  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}<button class="btn" data-a="importieren">＋ Einsatz einfügen</button><button class="btn" data-a="notizen">📤 Notizen senden${(S.notizen||[]).length?` (${S.notizen.length})`:''}</button></div></div>`}
+  <div class="fab"><button class="btn" data-a="reise">🚐 Reisetag</button><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken / Öl</button>${(isAdmin()||me().rolle==='technik')?`<button class="btn" data-a="maengel">Mängelliste${mOffen?` (${mOffen})`:''}</button>`:''}<button class="btn" data-a="importieren">＋ Einsatz einfügen</button><button class="btn" data-a="notizen">📤 Notizen senden${(S.notizen||[]).length?` (${S.notizen.length})`:''}</button></div></div>`}
 
 /* ---------- Einsatz ---------- */
 function vEinsatz(){const e=E(V.id);if(!e)return vStart();
@@ -767,7 +767,7 @@ function tBericht(e){const tag=selTag(e);if(!tag)return'<div class="empty">Noch 
 
 function tInfo(e){return `<div class="callout"><span>📋</span><div><b>Technische Daten</b><br>${esc(e.technisch||'–')}</div></div><div class="hr"></div>${geraeteForm(e)}
   <div class="hr"></div><div class="props" style="margin:0"><div class="k">Startstand Kompressor</div><div class="num">${e.start?.kompH??'–'} h</div><div class="k">Startstand Kilometer</div><div class="num">${e.start?.km??'–'} km</div><div class="k">Strahlmittel im Fahrzeug</div><div>${(()=>{const f=fz(e.geraete.fahrzeug);return f?.saecke?Object.entries(f.saecke).map(([k,n])=>`<span class="tag">${n} Säcke ${esc(S.strahlmittel[k])}</span>`).join(' '):'–'})()}</div></div>
-  <div class="fab"><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken</button><button class="btn" data-a="beladen">+ Säcke geladen</button></div>`}
+  <div class="fab"><button class="btn" data-a="mangel">⚠️ Mangel melden</button><button class="btn" data-a="tanken">⛽ Tanken / Öl</button><button class="btn" data-a="beladen">+ Säcke geladen</button></div>`}
 
 /* ---------- Abschluss-Assistent ---------- */
 const WSTEPS=['Prüfung','Abbau-Check','Endstände','Kundenansicht','Unterschrift'];
@@ -888,12 +888,14 @@ function mangelSheet(){formSheet('Mangel melden',`${pickField('teil','Baugruppe'
     S.maengel.push({id:uid(),teil,art:d.art,notiz:d.notiz,ts:Date.now(),von:S.user,status:'offen'});save();toast('Mangel gemeldet');render()})}
 function tankSheet(){const e=V.id?E(V.id):null;const all=[...S.fahrzeuge.map(f=>['f:'+f.id,f.kz+' '+f.name]),...S.kompressoren.filter(k=>k.aktiv!==false).map(k=>['k:'+k.id,k.kz+' '+(k.eigen?'Kompressor':'Mietkompressor')])];
   const def=e?'f:'+e.geraete.fahrzeug:all[0][0];
-  formSheet('Tanken',`<div onclick="setTimeout(()=>tkArt(this.closest('form')),0)">${pickField('g','Gerät',all,def)}</div>
-  <div class="times"><div class="field"><label for="tk-l">Liter</label><input class="inp num" id="tk-l" name="l" inputmode="decimal" required></div><div class="field"><label for="tk-b">Betrag €</label><input class="inp num" id="tk-b" name="b" inputmode="decimal"></div></div>
+  formSheet('Tanken / Öl',`<div onclick="setTimeout(()=>tkArt(this.closest('form')),0)">${pickField('g','Gerät',all,def)}</div>
+  <div class="times"><div class="field"><label for="tk-l">Diesel Liter</label><input class="inp num" id="tk-l" name="l" inputmode="decimal"></div><div class="field"><label for="tk-b">Betrag €</label><input class="inp num" id="tk-b" name="b" inputmode="decimal"></div></div>
   <div class="field" id="tk-kmf"${def[0]==='k'?' hidden':''}><label for="tk-km">Kilometerstand (Sprinter)</label><input class="inp num" id="tk-km" name="km" inputmode="numeric" value="${def[0]==='f'?fz(def.slice(2))?.km??'':''}"></div>
   <div class="field" id="tk-hf"${def[0]==='f'?' hidden':''}><label for="tk-h">Betriebsstunden (Kompressor)</label><input class="inp num" id="tk-h" name="h" inputmode="decimal" value="${def[0]==='k'?kp(def.slice(2))?.h??'':''}"></div>
-  <div class="field"><label for="tk-f">Foto vom Beleg</label><input class="inp" id="tk-f" name="beleg" type="file" accept="image/*" capture="environment"></div>`,'Speichern',d=>{if(!num(d.l))return'Bitte Liter eintragen.';
-    const [t,id]=d.g.split(':');S.tanken.push({id:uid(),geraet:d.g,l:num(d.l),b:num(d.b),km:t==='f'?num(d.km):null,h:t==='k'?num(d.h):null,datum:today(),einsatz:e?.id||null,von:S.user});if(t==='f'&&num(d.km))fz(id).km=+d.km;if(t==='k'&&num(d.h))kp(id).h=+d.h;save();toast('Tankvorgang gespeichert')})}
+  <div class="times"><label class="row small" style="gap:8px;align-items:center"><input type="checkbox" name="og" style="width:22px;height:22px"> Öl geprüft</label><div class="field"><label for="tk-ol">Öl nachgefüllt (Liter)</label><input class="inp num" id="tk-ol" name="ol" inputmode="decimal" placeholder="0"></div></div>
+  <div class="small muted">Nur Öl geprüft oder nachgefüllt? Dann Diesel einfach leer lassen.</div>
+  <div class="field"><label for="tk-f">Foto vom Beleg</label><input class="inp" id="tk-f" name="beleg" type="file" accept="image/*" capture="environment"></div>`,'Speichern',d=>{const og=!!d.og,ol=num(d.ol);if(!num(d.l)&&!og&&!ol)return'Bitte Diesel-Liter eintragen oder Öl geprüft/nachgefüllt angeben.';
+    const [t,id]=d.g.split(':');S.tanken.push({id:uid(),geraet:d.g,l:num(d.l),b:num(d.b),km:t==='f'?num(d.km):null,h:t==='k'?num(d.h):null,oel_geprueft:og||!!ol,oel_l:ol,datum:today(),einsatz:e?.id||null,von:S.user});if(t==='f'&&num(d.km))fz(id).km=+d.km;if(t==='k'&&num(d.h))kp(id).h=+d.h;save();toast(num(d.l)?'Tankvorgang gespeichert':'Ölkontrolle gespeichert')})}
 function tkArt(f){if(!f)return;const v=f.elements.g.value||'';const k=v[0]==='k';f.querySelector('#tk-kmf').hidden=k;f.querySelector('#tk-hf').hidden=!k;
   const km=f.querySelector('#tk-km'),h=f.querySelector('#tk-h');if(k){km.value='';h.value=kp(v.slice(2))?.h??''}else{h.value='';km.value=fz(v.slice(2))?.km??''}}
 window.tkArt=tkArt; // für onclick im Tankformular (Skript läuft gekapselt)
