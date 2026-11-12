@@ -542,7 +542,8 @@ function vEinsatz(){const e=E(V.id);if(!e)return vStart();
     <div class="k">Status</div><div>${e.status==='vorbereitet'?'<span class="tag">Vorbereitet</span>':e.status==='inarbeit'?'<span class="tag blue">In Arbeit</span>':'<span class="tag green">Abgeschlossen</span>'}</div>
     <div class="k">Termin</div><div>${e.von===e.bis?fDY(e.von):fDY(e.von)+' – '+fDY(e.bis)}</div>
     <div class="k">Adresse</div><div>${esc(e.adresse)}</div>
-    <div class="k">AP vor Ort</div><div>${esc(e.apOrt.name||'–')}${e.apOrt.tel?` <span class="muted num">${esc(e.apOrt.tel)}</span>`:''}</div>
+    <div class="k">AP vor Ort</div><div>${esc(e.apOrt.name||'–')}${e.apOrt.tel?` <a class="muted num" href="tel:${esc(e.apOrt.tel.replace(/\s/g,''))}">${esc(e.apOrt.tel)}</a>`:''}</div>
+    ${(e.apKunde&&(e.apKunde.name||e.apKunde.tel))?`<div class="k">AP Kunde</div><div>${esc(e.apKunde.name||'–')}${e.apKunde.tel?` <a class="muted num" href="tel:${esc(e.apKunde.tel.replace(/\s/g,''))}">${esc(e.apKunde.tel)}</a>`:''}</div>`:''}
     <div class="k">Lieferschein</div><div>${e.ls?`<span class="tag green">${e.ls}</span>`:'<span class="tag yellow">fehlt noch</span> <span class="small muted">kommt automatisch, sobald im Projekt</span>'}</div>
     <div class="k">Reinigungsart</div><div><span class="tag red">${esc(e.reinigungsart)}</span></div>
   </div>`;

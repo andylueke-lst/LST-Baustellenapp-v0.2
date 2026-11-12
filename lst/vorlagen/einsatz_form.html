@@ -19,6 +19,7 @@
     <div class="field"><label for="ort_mail">E-Mail Einsatzort (für den Lieferschein, optional)</label><input class="inp" id="ort_mail" name="ort_mail" type="email" value="{{ e.apOrt.mail }}"></div>
     <div></div>
     <div class="field"><label for="k_name">AP beim Kunden</label><input class="inp" id="k_name" name="k_name" value="{{ e.apKunde.name }}"></div>
+    <div class="field"><label for="k_tel">Telefon AP beim Kunden (Mobil bevorzugt)</label><input class="inp" id="k_tel" name="k_tel" value="{{ e.apKunde.tel or '' }}" inputmode="tel"></div>
     <div class="field"><label for="k_mail">E-Mail AP beim Kunden (Fotobericht)</label><input class="inp" id="k_mail" name="k_mail" type="email" value="{{ e.apKunde.mail }}"></div>
   </div>
 

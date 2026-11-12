@@ -206,7 +206,7 @@ def mitarbeiter_seite():
 
 def _leerer_einsatz() -> dict:
     return {"id": "", "art": "kunde", "status": "vorbereitet", "einsatzort": "", "kunde": "", "adresse": "",
-            "apOrt": {"name": "", "tel": "", "mail": ""}, "apKunde": {"name": "", "mail": ""}, "von": "", "bis": "",
+            "apOrt": {"name": "", "tel": "", "mail": ""}, "apKunde": {"name": "", "mail": "", "tel": ""}, "von": "", "bis": "",
             "ls": None, "reinigungsart": "Wärmetauscher", "technisch": "", "anlagen": [], "zusatz": [],
             "team": {"vor": None, "fach": None}, "geraete": {"fahrzeug": "f2", "kompressor": "k1", "strahl": ["s1"]},
             "tage": [], "trash": [], "zeitenAufLs": False, "tagesUnterschrift": False}
@@ -242,7 +242,8 @@ def einsatz_neu(eid=None):
         e.update({"einsatzort": f["einsatzort"].strip(), "kunde": f["kunde"].strip(), "adresse": f.get("adresse", "").strip(),
                   "apOrt": {"name": f.get("ort_name", "").strip(), "tel": f.get("ort_tel", "").strip(),
                             "mail": f.get("ort_mail", "").strip()},
-                  "apKunde": {"name": f.get("k_name", "").strip(), "mail": f.get("k_mail", "").strip()},
+                  "apKunde": {"name": f.get("k_name", "").strip(), "mail": f.get("k_mail", "").strip(),
+                              "tel": f.get("k_tel", "").strip()},
                   "von": f["von"], "bis": max(f["von"], f["bis"]), "reinigungsart": f.get("reinigungsart", "").strip(),
                   "ls": f.get("ls", "").strip().upper() or e.get("ls"), "technisch": f.get("technisch", "").strip(),
                   "anlagen": _zeilen(f.get("anlagen"), e.get("anlagen", [])),

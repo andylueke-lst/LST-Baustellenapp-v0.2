@@ -12,7 +12,7 @@
   <div class="k">Fotos</div><div>{{ fotos|length }}</div>
   {% if e.notion %}<div class="k">Notion</div><div><a href="{{ e.notion.url }}" target="_blank" rel="noopener">{{ e.notion.projektname }}</a> <span class="muted small">geholt {{ datum(e.notion.geholt) }}</span></div>{% endif %}
   <div class="k">Anlagen</div><div>{{ e.anlagen|map(attribute='name')|join(', ') }}</div>
-  <div class="k">Auftraggeber</div><div>{{ (e.apKunde or {}).name }} <span class="muted">{{ (e.apKunde or {}).mail }}</span></div>
+  <div class="k">Auftraggeber</div><div>{{ (e.apKunde or {}).name }} <span class="muted">{% if (e.apKunde or {}).tel %}<a href="tel:{{ e.apKunde.tel|replace(' ','') }}">{{ e.apKunde.tel }}</a> {% endif %}{{ (e.apKunde or {}).mail }}</span></div>
 </div>
 
 {% if e.anlagenPruefen and e.status == 'vorbereitet' %}<div class="callout hinweis">Die Anlagen wurden aus den technischen Daten vorgeschlagen. Bitte unter „Bearbeiten“ prüfen und speichern.</div>{% endif %}

@@ -323,7 +323,9 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
         "einsatzort": einsatzort, "kunde": kunde_f.get("name") or einsatzort, "adresse": adresse,
         "apOrt": {"name": ap_ort.get("name", ""), "tel": _erstes(eig(p, "Mobil AP Einsatzort")) or _erstes(eig(p, "Telefon AP Einsatzort")) or ap_ort.get("tel", ""),
                   "mail": _erstes(eig(p, "Email AP Einsatzort")) or ap_ort.get("mail", "")},
-        "apKunde": {"name": ap_kunde.get("name", ""), "mail": _erstes(eig(p, "Email Kunde")) or ap_kunde.get("mail", "")},
+        "apKunde": {"name": ap_kunde.get("name", ""), "mail": _erstes(eig(p, "Email Kunde")) or ap_kunde.get("mail", ""),
+                    # Mobil bevorzugt: Mobil aus dem Projekt, dann Mobil/Durchwahl der Person, dann Firmentelefon
+                    "tel": _erstes(eig(p, "Telefon Mobil Kunde")) or ap_kunde.get("tel", "") or _erstes(eig(p, "Telefon Kunde"))},
         "von": von, "bis": max(von, bis), "reinigungsart": eig(p, "Reinigungsart") or "",
         "bestellnummer": eig(p, "Bestellnummer") or "", "technisch": technik,
     })
