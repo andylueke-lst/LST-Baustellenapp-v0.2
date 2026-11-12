@@ -34,6 +34,7 @@
     <div class="meter" aria-hidden="true"><i id="balken" style="width:0"></i></div>
     <div class="small muted" style="margin-bottom:14px">Grenze für die Mail: {{ ziel_mb }} MB. Die genaue Größe zeigt die Vorschau.</div>
     <div class="field"><label for="an">An (Auftraggeber)</label><input class="inp" id="an" type="email" value="{{ an }}" placeholder="name@firma.de"></div>
+    <div class="field"><label for="weitere">Weitere Empfänger (mit Komma oder Semikolon trennen)</label><input class="inp" id="weitere" placeholder="kollege@firma.de"></div>
     <div class="field"><label for="betreff">Betreff</label><input class="inp" id="betreff" value="{{ betreff }}"></div>
     <div class="field"><label for="text">Mailtext</label><textarea class="inp" id="text">{{ mailtext }}</textarea></div>
     <div id="fehler" class="small" style="color:var(--danger);min-height:20px" role="alert"></div>
@@ -87,12 +88,13 @@
   senden.onclick = async () => {
     const an = document.getElementById('an').value.trim();
     if (!gewaehlt.size) { fehler.textContent = 'Bitte mindestens ein Foto auswählen.'; return; }
-    if (!/^\S+@\S+\.\S+$/.test(an)) { fehler.textContent = 'Bitte eine vollständige E-Mail-Adresse eintragen.'; return; }
-    if (senden.dataset.sicher !== '1') { senden.dataset.sicher = '1'; senden.textContent = 'Wirklich an ' + an + ' senden?'; return; }
+    const weitere = document.getElementById('weitere').value.trim();
+    if (!/^\S+@\S+\.\S+$/.test(an) && !weitere) { fehler.textContent = 'Bitte eine vollständige E-Mail-Adresse eintragen.'; return; }
+    if (senden.dataset.sicher !== '1') { senden.dataset.sicher = '1'; senden.textContent = 'Wirklich an ' + [an, weitere].filter(Boolean).join(', ') + ' senden?'; return; }
     senden.disabled = true; senden.textContent = 'Wird erstellt …';
     try {
       const r = await fetch('{{ url_for("fotobericht_freigeben", eid=e.id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fotos: liste(), an, betreff: document.getElementById('betreff').value, text: document.getElementById('text').value }) });
+        body: JSON.stringify({ fotos: liste(), an, weitere, betreff: document.getElementById('betreff').value, text: document.getElementById('text').value }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.fehler || 'Unbekannter Fehler');
       location.href = '{{ url_for("einsatz_seite", eid=e.id) }}';

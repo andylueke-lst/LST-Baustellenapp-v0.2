@@ -10,7 +10,7 @@
   <div class="k">Zeitraum</div><div>{{ zeitraum(e.von, e.bis) }}</div>
   <div class="k">Lieferschein</div><div>{% if e.ls %}<span class="tag green">{{ e.ls }}</span>{% else %}<span class="tag yellow">fehlt</span>{% endif %}</div>
   <div class="k">Fotos</div><div>{{ fotos|length }}</div>
-  {% if e.notion %}<div class="k">Notion</div><div><a href="{{ e.notion.url }}" target="_blank" rel="noopener">{{ e.notion.projektname }}</a> <span class="muted small">geholt {{ datum(e.notion.geholt) }}</span></div>{% endif %}
+  {% if e.notion %}<div class="k">Notion</div><div><a href="{{ e.notion.url }}" target="_blank" rel="noopener">{{ e.notion.projektname }}</a> {% if e.notion.geholt %}<span class="muted small">geholt {{ datum(e.notion.geholt) }}</span>{% endif %}</div>{% endif %}
   <div class="k">Anlagen</div><div>{{ e.anlagen|map(attribute='name')|join(', ') }}</div>
   <div class="k">Auftraggeber</div><div>{{ (e.apKunde or {}).name }} <span class="muted">{% if (e.apKunde or {}).tel %}<a href="tel:{{ e.apKunde.tel|replace(' ','') }}">{{ e.apKunde.tel }}</a> {% endif %}{{ (e.apKunde or {}).mail }}</span></div>
 </div>
@@ -20,16 +20,20 @@
 <h2>Dokumente</h2>
 <div class="list">
 {% for d in docs %}
-  <div class="item"><div><b>{{ d.datei.split('/')[-1] }}</b>
-    <div class="meta">{{ d.art|capitalize }} · {{ d.status|replace('_',' ') }}{% if d.empfaenger %} · an {{ d.empfaenger }}{% endif %}</div></div>
-    <a class="btn small" href="{{ url_for('dokument', did=d.id) }}" target="_blank" rel="noopener">Öffnen</a></div>
+  <div class="item"{% if d.id not in aktuell %} style="opacity:.6"{% endif %}><div><b>{{ d.datei.split('/')[-1] }}</b>
+    {% if d.id in aktuell %}<span class="tag green">aktuell</span>{% else %}<span class="tag">ältere Fassung</span>{% endif %}
+    <div class="meta">{{ d.art|capitalize }} · erstellt {{ zeitpunkt(d.erstellt) }} · {{ d.status|replace('_',' ') }}{% if d.empfaenger %} · an {{ d.empfaenger }}{% endif %}</div></div>
+    <div class="row"><a class="btn small" href="{{ url_for('dokument', did=d.id) }}" target="_blank" rel="noopener">Öffnen</a>
+    <form method="post" action="{{ url_for('dokument_loeschen', did=d.id) }}" onsubmit="return confirm('Dieses Dokument wirklich löschen?')"><button class="btn small" title="Löschen">🗑</button></form></div></div>
 {% else %}<div class="empty">Noch keine Dokumente. Sie entstehen beim Job-Abschluss auf dem iPad.</div>{% endfor %}
 </div>
 
 <div class="row" style="margin-top:16px">
   {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>
   {% if e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn" title="z. B. nachdem der Lexware-Lieferschein hochgeladen wurde">Lieferschein und Fotodoku neu erzeugen</button></form>{% endif %}
-  {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>{% endif %}
+  <form method="post" action="{{ url_for('einsatz_wieder_oeffnen', eid=e.id) }}" style="display:inline" onsubmit="return confirm('Einsatz wieder öffnen? Die Unterschrift bleibt gespeichert.')"><button class="btn">Wieder öffnen</button></form>
+  {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>
+  {% if e.status == 'inarbeit' and e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn pri">Mit gespeicherter Unterschrift abschließen</button></form>{% endif %}{% endif %}
 </div>
 
 <h2>Lexware-Lieferschein</h2>
@@ -39,17 +43,23 @@
   <button class="btn">Hochladen</button>
 </form>
 
-{% if docs|selectattr('art','equalto','fotodoku')|list %}
-<h2>Fotodoku nachträglich senden</h2>
-<form method="post" action="{{ url_for('fotodoku_senden', eid=e.id) }}">
-  <div class="field"><label for="fd-an">An</label><input class="inp" id="fd-an" name="an" type="email" value="{{ (e.apKunde or {}).mail }}" required></div>
-  <div class="field"><label for="fd-text">Text</label><textarea class="inp" id="fd-text" name="text">Sehr geehrte Damen und Herren,
+{% if docs %}
+<h2 id="senden">Dokumente senden</h2>
+<form method="post" action="{{ url_for('dokumente_senden', eid=e.id) }}" class="stack" style="max-width:720px">
+  <div class="field"><label>Anhänge</label>
+    {% for d in docs if d.id in aktuell %}<label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" name="doc" value="{{ d.id }}"{% if d.art in ('lieferschein','fotodoku') %} checked{% endif %}> {{ d.datei.split('/')[-1] }}</label>{% endfor %}</div>
+  <div class="field"><label>Empfänger</label>
+    {% if (e.apKunde or {}).mail %}<label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" name="an" value="{{ e.apKunde.mail }}" checked> {{ e.apKunde.name or 'Auftraggeber' }} · {{ e.apKunde.mail }}</label>{% endif %}
+    {% if (e.apOrt or {}).mail %}<label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" name="an" value="{{ e.apOrt.mail }}"> {{ e.apOrt.name or 'Einsatzort' }} · {{ e.apOrt.mail }}</label>{% endif %}</div>
+  <div class="field"><label for="weitere">Weitere Empfänger (mehrere mit Komma oder Semikolon trennen)</label><input class="inp" id="weitere" name="weitere" placeholder="name@firma.de; kollege@firma.de"></div>
+  <div class="field"><label for="betreff">Betreff</label><input class="inp" id="betreff" name="betreff" value="Unterlagen {{ e.einsatzort }}{% if e.ls %} – {{ e.ls }}{% endif %}"></div>
+  <div class="field"><label for="text">Text</label><textarea class="inp" id="text" name="text">Sehr geehrte Damen und Herren,
 
-anbei die vollständige Fotodokumentation zum Einsatz {{ e.einsatzort }}.
+anbei die Unterlagen zum Einsatz {{ e.einsatzort }}.
 
 Mit freundlichen Grüßen
 LST Lüke-Strahl-Technik GmbH</textarea></div>
-  <button class="btn">Fotodoku senden</button>
+  <div><button class="btn pri">Senden</button> <span class="small muted">Kopie geht automatisch an dich.</span></div>
 </form>
 {% endif %}
 

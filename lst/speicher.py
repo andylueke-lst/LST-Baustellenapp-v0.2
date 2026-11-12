@@ -215,6 +215,20 @@ def dokumente(einsatz_id: str | None = None, status: str | None = None) -> list[
         return [dict(r) for r in c.execute(sql + " ORDER BY erstellt DESC", args).fetchall()]
 
 
+def dokument_loeschen(did: str) -> dict | None:
+    """Löscht Eintrag und Datei. Gibt den gelöschten Eintrag zurück."""
+    with db() as c:
+        r = c.execute("SELECT * FROM dokumente WHERE id=?", (did,)).fetchone()
+        if not r:
+            return None
+        c.execute("DELETE FROM dokumente WHERE id=?", (did,))
+    d = dict(r)
+    p = DATEN / d["datei"]
+    if p.exists() and not any(x["datei"] == d["datei"] for x in dokumente(d["einsatz_id"])):
+        p.unlink()
+    return d
+
+
 def dokument_status(did: str, status: str, empfaenger: str | None = None):
     with db() as c:
         c.execute("UPDATE dokumente SET status=?, empfaenger=COALESCE(?, empfaenger), gesendet=CASE WHEN ?='versendet' "

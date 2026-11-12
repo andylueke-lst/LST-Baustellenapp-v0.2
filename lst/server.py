@@ -10,6 +10,7 @@ import functools
 import io
 import json
 import os
+import re
 import threading
 import time
 from datetime import date, timedelta
@@ -80,7 +81,23 @@ def anmeldung(admin=False):
 @app.context_processor
 def vorlagen_helfer():
     return {"ich": ich(), "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
-            "mail_eingerichtet": mail.eingerichtet()}
+            "mail_eingerichtet": mail.eingerichtet(),
+            "zeitpunkt": lambda ts: time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ts)) if ts else ""}
+
+
+def empfaenger_liste(*teile: str) -> list[str]:
+    """Adressen aus Feldern wie „a@x.de; b@y.de“ – ohne Doppelte, in Reihenfolge."""
+    aus = []
+    for t in teile:
+        for a in re.split(r"[,;\s]+", t or ""):
+            a = a.strip()
+            if a and a.lower() not in (x.lower() for x in aus):
+                aus.append(a)
+    return aus
+
+
+def adresse_ok(a: str) -> bool:
+    return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", a))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -153,9 +170,14 @@ def _einsatz_oder_404(eid: str) -> dict:
 @anmeldung(admin=True)
 def einsatz_seite(eid):
     e = _einsatz_oder_404(eid)
-    docs = speicher.dokumente(eid)
+    docs = speicher.dokumente(eid)   # neueste zuerst
+    aktuell, gesehen = set(), set()
+    for d in docs:
+        if d["art"] not in gesehen:
+            gesehen.add(d["art"])
+            aktuell.add(d["id"])
     lex = speicher.pfad("dokumente", eid, "lexware.pdf")
-    return render_template("einsatz.html", e=e, docs=docs, fotos=_fotos_von(eid), lexware=lex.exists(),
+    return render_template("einsatz.html", e=e, docs=docs, aktuell=aktuell, fotos=_fotos_von(eid), lexware=lex.exists(),
                            post=[p for p in mail.postausgang() if p["einsatz_id"] == eid])
 
 
@@ -471,11 +493,14 @@ def fotobericht_vorschau(eid):
 def fotobericht_freigeben(eid):
     e = _einsatz_mit_fotos(_einsatz_oder_404(eid))
     d = request.get_json(force=True)
-    auswahl, an = d.get("fotos") or [], (d.get("an") or "").strip()
+    auswahl = d.get("fotos") or []
+    liste = empfaenger_liste(d.get("an"), d.get("weitere"))
     if not auswahl:
         return jsonify(fehler="Bitte mindestens ein Foto auswählen."), 400
-    if "@" not in an or "." not in an.split("@")[-1]:
-        return jsonify(fehler="Die Empfänger-Adresse sieht unvollständig aus."), 400
+    falsch = [a for a in liste if not adresse_ok(a)]
+    if not liste or falsch:
+        return jsonify(fehler="Diese Adresse sieht unvollständig aus: " + (falsch[0] if falsch else "(leer)")), 400
+    an = ", ".join(liste)
     try:
         name, pdf, info = dok_abschluss.fotobericht_aus_auswahl(e, auswahl, _quelle(eid), heute=_doku_datum(e))
     except fotos.ZuGross as ex:
@@ -884,15 +909,80 @@ def dokumente_neu(eid):
     Abschluss hochgeladen wurde. Nutzt die beim Abschluss gespeicherte Unterschrift."""
     e = _einsatz_oder_404(eid)
     u = e.get("unterschrift")
-    if e.get("status") != "abgeschlossen" or not u:
-        flash("Neu erzeugen geht nur bei abgeschlossenen Einsätzen mit gespeicherter Unterschrift.", "fehler")
+    if e.get("status") == "vorbereitet" or not u:
+        flash("Das geht nur bei Einsätzen mit gespeicherter Unterschrift.", "fehler")
         return redirect(url_for("einsatz_seite", eid=eid))
     sig = {**u, "bild": base64.b64decode(u["bild"]) if u.get("bild") else None}
     datum = (e.get("abschluss") or {}).get("datum") or date.today().isoformat()
     _, ls_name, _, _, _, fd_name, lex_pdf = _dokumente_bauen(eid, sig, datum)
-    speicher.protokoll("dokumente_neu", session.get("uid"), eid)
-    flash(f"Neu erzeugt: {ls_name} und {fd_name}." + ("" if lex_pdf else " Hinweis: kein Lexware-Lieferschein hochgeladen."), "ok")
+    e = speicher.einsatz(eid)
+    war_offen = e.get("status") != "abgeschlossen"
+    if war_offen:   # wieder geöffneter Einsatz: mit der gespeicherten Unterschrift abschließen
+        if e.get("tage"):
+            e["tage"][-1]["fertig"] = True
+        e["status"] = "abgeschlossen"
+        e["ergebnis"] = "ausstehend" if u.get("ohne_kunde") else "unterschrieben"
+        e["abschluss"] = {**(e.get("abschluss") or {}), "datum": datum, "name": u.get("name"),
+                          "ohneKunde": bool(u.get("ohne_kunde"))}
+        speicher.einsatz_speichern(e)
+    speicher.protokoll("dokumente_neu", session.get("uid"), eid, abgeschlossen=war_offen)
+    flash(("Abgeschlossen mit der gespeicherten Unterschrift. " if war_offen else "") +
+          f"Neu erzeugt: {ls_name} und {fd_name}." + ("" if lex_pdf else " Hinweis: kein Lexware-Lieferschein hochgeladen."), "ok")
     return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/einsatz/<eid>/wieder-oeffnen", methods=["POST"])
+@anmeldung(admin=True)
+def einsatz_wieder_oeffnen(eid):
+    """Abgeschlossenen Einsatz wieder bearbeitbar machen. Die Unterschrift bleibt gespeichert;
+    danach im Büro „Mit gespeicherter Unterschrift abschließen“."""
+    e = _einsatz_oder_404(eid)
+    if e.get("status") != "abgeschlossen":
+        return redirect(url_for("einsatz_seite", eid=eid))
+    e["status"] = "inarbeit"
+    e.pop("ergebnis", None)
+    if e.get("tage"):
+        e["tage"][-1]["fertig"] = False
+    speicher.einsatz_speichern(e)
+    speicher.protokoll("einsatz_wieder_geoeffnet", session.get("uid"), eid)
+    flash("Wieder geöffnet. Jetzt auf dem iPad (oder hier unter „Bearbeiten“) anpassen, danach "
+          "„Mit gespeicherter Unterschrift abschließen“." if e.get("unterschrift") else
+          "Wieder geöffnet. Es ist keine Unterschrift gespeichert – zum Abschluss auf dem iPad neu unterschreiben lassen.", "ok")
+    return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/einsatz/<eid>/senden", methods=["POST"])
+@anmeldung(admin=True)
+def dokumente_senden(eid):
+    e = _einsatz_oder_404(eid)
+    f = request.form
+    gewaehlt = [d for d in speicher.dokumente(eid) if d["id"] in f.getlist("doc")]
+    liste = empfaenger_liste(*f.getlist("an"), f.get("weitere", ""))
+    falsch = [a for a in liste if not adresse_ok(a)]
+    if not gewaehlt or not liste or falsch:
+        flash("Bitte mindestens ein Dokument und einen Empfänger wählen." if not falsch else
+              f"Diese Adresse sieht unvollständig aus: {falsch[0]}", "fehler")
+        return redirect(url_for("einsatz_seite", eid=eid) + "#senden")
+    anh = [(Path(d["datei"]).name, (speicher.DATEN / d["datei"]).read_bytes()) for d in gewaehlt]
+    erg = mail.senden(", ".join(liste), f.get("betreff") or f"Unterlagen {e['einsatzort']}", f.get("text", ""), anh, eid)
+    for d in gewaehlt:
+        speicher.dokument_status(d["id"], "versendet" if erg["status"] == "versendet" else d["status"], ", ".join(liste))
+    speicher.protokoll("dokumente_gesendet", session.get("uid"), eid, an=liste, docs=[d["id"] for d in gewaehlt],
+                       mail=erg["status"])
+    flash(f"{len(gewaehlt)} Dokument(e) an {', '.join(liste)} versendet." if erg["status"] == "versendet" else
+          f"Nicht versendet, liegt im Postausgang: {erg['fehler']}", "ok" if erg["status"] == "versendet" else "hinweis")
+    return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/dokument/<did>/loeschen", methods=["POST"])
+@anmeldung(admin=True)
+def dokument_loeschen(did):
+    d = speicher.dokument_loeschen(did)
+    if not d:
+        abort(404)
+    speicher.protokoll("dokument_geloescht", session.get("uid"), d["einsatz_id"], datei=d["datei"])
+    flash(f"Gelöscht: {Path(d['datei']).name}", "ok")
+    return redirect(url_for("einsatz_seite", eid=d["einsatz_id"]))
 
 
 def main():
