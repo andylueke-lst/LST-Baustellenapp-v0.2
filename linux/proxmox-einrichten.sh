@@ -18,6 +18,9 @@ SWAP=512          # MB
 PLATTE=100        # GB auf der SSD
 SPEICHER="${LST_SPEICHER:-local-lvm}"
 SICHERUNG="${LST_SICHERUNG:-macmini-backup}"
+# Spracheinstellung des Macs nicht in den Container durchreichen (sonst Locale-Warnungen)
+export LANG=C.UTF-8 LC_ALL=C.UTF-8
+unset LANGUAGE
 
 schritt() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 ok()      { printf '  ✓ %s\n' "$1"; }
@@ -102,5 +105,5 @@ fi
 
 echo
 echo "Fertig. Container „$NAME“ hat die Nummer $ID."
-echo "  Aktualisieren:   pct exec $ID -- baustelle-aktualisieren"
+echo "  Aktualisieren:   pct exec $ID -- bash /opt/lst-baustelle/linux/aktualisieren.sh"
 echo "  Hineinschauen:   pct enter $ID"

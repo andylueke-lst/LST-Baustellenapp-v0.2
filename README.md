@@ -84,7 +84,7 @@ Datenbank-Sicherung, Tailscale mit HTTPS und eine nächtliche Proxmox-Sicherung 
 Containers nach `macmini-backup` ein. Es fragt nur die PINs für Andy und Tina und die
 Tailscale-Anmeldung ab und kann gefahrlos mehrfach laufen.
 
-Aktualisieren vom Proxmox-Rechner aus: `pct exec <Nummer> -- baustelle-aktualisieren`
+Aktualisieren vom Proxmox-Rechner aus: `pct exec <Nummer> -- bash /opt/lst-baustelle/linux/aktualisieren.sh`
 
 ## Server starten
 

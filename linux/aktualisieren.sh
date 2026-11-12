@@ -1,7 +1,7 @@
 #!/bin/bash
 # Holt die neueste Version von GitHub und startet die App neu. Daten bleiben unberührt.
 # Im Container:              baustelle-aktualisieren
-# Vom Proxmox-Rechner aus:   pct exec <Nummer> -- baustelle-aktualisieren
+# Vom Proxmox-Rechner aus:   pct exec <Nummer> -- bash /opt/lst-baustelle/linux/aktualisieren.sh
 set -uo pipefail
 APP=/opt/lst-baustelle
 PORT="${LST_PORT:-8080}"
