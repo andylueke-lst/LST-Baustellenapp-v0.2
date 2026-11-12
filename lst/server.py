@@ -583,8 +583,37 @@ def _docs_fuer_app(eid: str) -> list[dict]:
     for d in speicher.dokumente(eid):   # neueste zuerst
         if d["art"] in APP_DOKUMENTE and d["art"] not in gesehen:
             gesehen.add(d["art"])
-            aus.append({"id": d["id"], "art": d["art"], "name": Path(d["datei"]).name, "status": d["status"]})
+            aus.append({"id": d["id"], "art": d["art"], "name": Path(d["datei"]).name, "status": d["status"],
+                        "seiten": _seitenzahl(speicher.DATEN / d["datei"])})
     return sorted(aus, key=lambda d: APP_DOKUMENTE.index(d["art"]))
+
+
+def _seitenzahl(p: Path) -> int:
+    try:
+        from pypdf import PdfReader
+        return len(PdfReader(str(p)).pages)
+    except Exception:
+        return 0
+
+
+@app.route("/api/dokument/<did>/seite/<int:nr>")
+@anmeldung()
+def api_dokument_seite(did, nr):
+    """Eine Seite als Bild (für die Ansicht auf dem iPad, ohne PDF-Viewer). Wird zwischengespeichert."""
+    d = next((x for x in speicher.dokumente() if x["id"] == did), None)
+    if not d or d["art"] not in APP_DOKUMENTE or not darf_einsatz(speicher.einsatz(d["einsatz_id"]), ich()):
+        abort(404)
+    ziel = speicher.pfad("vorschau", did, f"{nr}.jpg")
+    if not ziel.exists():
+        import shutil
+        import subprocess
+        if not shutil.which("pdftoppm"):
+            return jsonify(fehler="Seitenansicht fehlt auf dem Server (poppler-utils)."), 503
+        r = subprocess.run(["pdftoppm", "-jpeg", "-jpegopt", "quality=82", "-r", "110", "-f", str(nr), "-l", str(nr),
+                            "-singlefile", str(speicher.DATEN / d["datei"]), str(ziel)[:-4]], capture_output=True, timeout=60)
+        if r.returncode or not ziel.exists():
+            abort(404)
+    return send_file(ziel, mimetype="image/jpeg", max_age=3600)
 
 
 @app.route("/api/dokument/<did>")
@@ -963,15 +992,37 @@ def dokumente_senden(eid):
         flash("Bitte mindestens ein Dokument und einen Empfänger wählen." if not falsch else
               f"Diese Adresse sieht unvollständig aus: {falsch[0]}", "fehler")
         return redirect(url_for("einsatz_seite", eid=eid) + "#senden")
-    anh = [(Path(d["datei"]).name, (speicher.DATEN / d["datei"]).read_bytes()) for d in gewaehlt]
-    erg = mail.senden(", ".join(liste), f.get("betreff") or f"Unterlagen {e['einsatzort']}", f.get("text", ""), anh, eid)
-    for d in gewaehlt:
-        speicher.dokument_status(d["id"], "versendet" if erg["status"] == "versendet" else d["status"], ", ".join(liste))
-    speicher.protokoll("dokumente_gesendet", session.get("uid"), eid, an=liste, docs=[d["id"] for d in gewaehlt],
-                       mail=erg["status"])
+    erg = _dokumente_mailen(e, gewaehlt, liste, f.get("betreff"), f.get("text", ""))
     flash(f"{len(gewaehlt)} Dokument(e) an {', '.join(liste)} versendet." if erg["status"] == "versendet" else
           f"Nicht versendet, liegt im Postausgang: {erg['fehler']}", "ok" if erg["status"] == "versendet" else "hinweis")
     return redirect(url_for("einsatz_seite", eid=eid))
+
+
+def _dokumente_mailen(e: dict, gewaehlt: list[dict], liste: list[str], betreff: str | None, text: str) -> dict:
+    anh = [(Path(d["datei"]).name, (speicher.DATEN / d["datei"]).read_bytes()) for d in gewaehlt]
+    erg = mail.senden(", ".join(liste), betreff or f"Unterlagen {e['einsatzort']}", text or "", anh, e["id"])
+    for d in gewaehlt:
+        speicher.dokument_status(d["id"], "versendet" if erg["status"] == "versendet" else d["status"], ", ".join(liste))
+    speicher.protokoll("dokumente_gesendet", session.get("uid"), e["id"], an=liste, docs=[d["id"] for d in gewaehlt],
+                       mail=erg["status"])
+    return erg
+
+
+@app.route("/api/einsatz/<eid>/senden", methods=["POST"])
+@anmeldung()
+def api_dokumente_senden(eid):
+    """Vom iPad: Lieferschein/Fotodoku an ausgewählte Empfänger mailen."""
+    e = _einsatz_fuer_mich(eid)
+    d = request.get_json(force=True)
+    gewaehlt = [x for x in speicher.dokumente(eid) if x["id"] in (d.get("docs") or []) and x["art"] in APP_DOKUMENTE]
+    liste = empfaenger_liste(*(d.get("an") or []), d.get("weitere", ""))
+    falsch = [a for a in liste if not adresse_ok(a)]
+    if not gewaehlt:
+        return jsonify(fehler="Bitte mindestens ein Dokument wählen."), 400
+    if not liste or falsch:
+        return jsonify(fehler=f"Diese Adresse sieht unvollständig aus: {falsch[0]}" if falsch else "Bitte mindestens einen Empfänger wählen."), 400
+    erg = _dokumente_mailen(e, gewaehlt, liste, d.get("betreff"), d.get("text", ""))
+    return jsonify(ok=True, status=erg["status"], fehler=erg.get("fehler"), an=liste)
 
 
 @app.route("/buero/dokument/<did>/loeschen", methods=["POST"])

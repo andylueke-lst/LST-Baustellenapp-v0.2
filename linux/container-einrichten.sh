@@ -24,7 +24,7 @@ cd "$APP" || exit 1   # „python -m lst…“ braucht den Programm-Ordner als A
 
 schritt "a) Pakete"
 apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip fonts-dejavu-core sqlite3 curl git ca-certificates >/dev/null \
+apt-get install -y -qq python3 python3-venv python3-pip fonts-dejavu-core sqlite3 curl git ca-certificates poppler-utils >/dev/null \
   || abbruch "Pakete ließen sich nicht installieren."
 # Verdana wie in den Lexware-Belegen (Microsoft-Schriften aus Debian „contrib“). Ohne: DejaVu Sans.
 if [ ! -f /usr/share/fonts/truetype/msttcorefonts/Verdana.ttf ]; then
