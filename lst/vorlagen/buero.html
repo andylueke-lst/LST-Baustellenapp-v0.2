@@ -3,7 +3,7 @@
 {% block inhalt %}
 <div class="icon">🗂️</div>
 <h1>Büro</h1>
-<p class="muted">Freigaben, Postausgang und Einsätze.</p>
+<p class="muted">Freigaben, Postausgang und Einsätze. · <a href="{{ url_for('altdaten_seite') }}">Aus alter App übernehmen</a></p>
 
 {% if not mail_eingerichtet %}
 <div class="callout hinweis">Der Mailversand ist noch nicht eingerichtet. Mails werden im Postausgang gesammelt und können später gesendet werden.</div>

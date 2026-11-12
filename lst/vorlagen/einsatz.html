@@ -28,6 +28,7 @@
 
 <div class="row" style="margin-top:16px">
   {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>
+  {% if e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn" title="z. B. nachdem der Lexware-Lieferschein hochgeladen wurde">Lieferschein und Fotodoku neu erzeugen</button></form>{% endif %}
   {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>{% endif %}
 </div>
 

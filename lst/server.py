@@ -19,12 +19,12 @@ from flask import (Flask, abort, flash, jsonify, redirect, render_template, requ
                    url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from . import mail, notion, speicher
+from . import altdaten, mail, notion, speicher
 from .dokumente import abschluss as dok_abschluss
 from .dokumente import basis, fotos, lieferschein
 
 app = Flask(__name__, template_folder="vorlagen", static_folder="statisch")
-app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
+app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024   # Übernahme aus der alten App: viele Fotos auf einmal
 app.permanent_session_lifetime = timedelta(days=60)   # iPads bleiben angemeldet
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
@@ -632,6 +632,9 @@ def api_einsatz_speichern():
         e.pop("abschluss", None)
     if alt.get("ls") and not e.get("ls"):
         e["ls"] = alt["ls"]
+    for k in ("unterschrift", "uebernommen_aus_alter_app"):
+        if alt.get(k):
+            e[k] = alt[k]
     speicher.einsatz_speichern(e)
     if liste is not None:
         speicher.fotos_abgleichen(e["id"], liste)
@@ -752,16 +755,24 @@ def _doku_datum(e):
 def api_abschluss(eid):
     """Job abschließen: Dokumente erzeugen, Lieferschein ggf. an den Einsatzort senden,
     Fotobericht in die Freigabe legen, Admins benachrichtigen."""
-    e = _einsatz_mit_fotos(_einsatz_fuer_mich(eid))
+    _einsatz_fuer_mich(eid)
     sig = request.get_json(force=True)
-    if sig.get("bild"):
-        sig["bild"] = base64.b64decode(sig["bild"].split(",")[-1])
+    datum = _abschluss_datum(sig.get("datum"))
+    ls_name, fd_name, versand, lex_pdf = abschluss_ausfuehren(eid, sig, datum, versenden=True)
+    speicher.protokoll("job_abgeschlossen", session.get("uid"), eid, ohne_kunde=bool(sig.get("ohne_kunde")))
+    return jsonify(ok=True, lieferschein=ls_name, fotodoku=fd_name, versand=versand, docs=_docs_fuer_app(eid),
+                   lexware=bool(lex_pdf))
+
+
+def _dokumente_bauen(eid: str, sig: dict, datum: str):
+    """Fotodoku und Lieferschein erzeugen und ablegen. sig["bild"] als Bytes."""
+    e = _einsatz_mit_fotos(speicher.einsatz(eid))
     lex = speicher.pfad("dokumente", eid, "lexware.pdf")
     lex_pdf = lex.read_bytes() if lex.exists() else None
     stamm = {"mitarbeiter": {m["id"]: m for m in speicher.stamm("mitarbeiter", [])},
              "strahlgeraete": {g["id"]: g for g in speicher.stamm("strahlgeraete", [])},
              "typen": speicher.stamm("geraetetypen", {})}
-    datum = _abschluss_datum(sig.get("datum"))
+    e["ls"] = e.get("ls") or (lex_pdf and lieferschein.lexware_nummer(lex_pdf)) or None
     docs = dok_abschluss.einsatz_dokumente(e, stamm, _quelle(eid), lex_pdf, sig, heute=datum)
     fd_name, fd_pdf, fd_info = docs["fotodoku"]
     ls_name, ls_pdf, ls_info = docs["lieferschein"]
@@ -770,13 +781,29 @@ def api_abschluss(eid):
     ls_status = "unterschrift_ausstehend" if sig.get("ohne_kunde") else "unterschrieben"
     did = speicher.dokument_speichern(eid, "lieferschein", e.get("ls") or "", ls_name, ls_pdf, ls_status,
                                       basis.pruefsumme(ls_pdf), info=ls_info)
+    return e, ls_name, ls_pdf, ls_status, did, fd_name, lex_pdf
+
+
+def abschluss_ausfuehren(eid: str, sig: dict, datum: str, versenden: bool = True):
+    """Job abschließen: Unterschrift merken (für spätere Neuerzeugung), Dokumente bauen,
+    Lieferschein ggf. senden, Einsatz auf abgeschlossen setzen, Admins benachrichtigen."""
+    sig = dict(sig)
+    sig["zeit"] = sig.get("zeit") or basis.jetzt_text()
+    bild_b64 = sig["bild"].split(",")[-1] if isinstance(sig.get("bild"), str) else None
+    if bild_b64:
+        sig["bild"] = base64.b64decode(bild_b64)
+    e, ls_name, ls_pdf, ls_status, did, fd_name, lex_pdf = _dokumente_bauen(eid, sig, datum)
     versand = None
-    if sig.get("versand") and sig.get("mail") and not sig.get("spaeter"):
+    if versenden and sig.get("versand") and sig.get("mail") and not sig.get("spaeter"):
         versand = mail.senden(sig["mail"], f"Lieferschein {e.get('ls') or ''} {e['einsatzort']}".strip(),
                               "Guten Tag,\n\nanbei der unterschriebene Lieferschein.\n\nMit freundlichen Grüßen\n"
                               + basis.config()["firma"], [(ls_name, ls_pdf)], eid)
         speicher.dokument_status(did, ls_status, sig["mail"])
     e = speicher.einsatz(eid)
+    if lex_pdf and not e.get("ls"):
+        e["ls"] = lieferschein.lexware_nummer(lex_pdf)
+    e["unterschrift"] = {k: sig.get(k) for k in ("name", "zeit", "eingesehen", "zeiten_auf_ls", "ohne_kunde")}
+    e["unterschrift"]["bild"] = bild_b64
     e["status"] = "abgeschlossen"
     e["ergebnis"] = "ausstehend" if sig.get("ohne_kunde") else "unterschrieben"   # für andere iPads
     e["abschluss"] = {"datum": datum, "name": sig.get("name"), "ohneKunde": bool(sig.get("ohne_kunde"))}
@@ -785,9 +812,87 @@ def api_abschluss(eid):
     for a in admins:
         mail.senden(a["mail"], f"Fotobericht zur Freigabe: {e['einsatzort']}",
                     f"Der Job {e['einsatzort']} ist abgeschlossen. Der Fotobericht wartet auf deine Freigabe.", [], eid)
-    speicher.protokoll("job_abgeschlossen", session.get("uid"), eid, ohne_kunde=bool(sig.get("ohne_kunde")))
-    return jsonify(ok=True, lieferschein=ls_name, fotodoku=fd_name, versand=versand, docs=_docs_fuer_app(eid),
-                   lexware=bool(lex_pdf))
+    return ls_name, fd_name, versand, lex_pdf
+
+
+# ---------------------------------------------------------------- Büro: Übernahme aus der alten App
+@app.route("/buero/altdaten", methods=["GET", "POST"])
+@anmeldung(admin=True)
+def altdaten_seite():
+    if request.method == "GET":
+        return render_template("altdaten.html", schritt=1)
+    datei = request.files.get("datei")
+    fotos = [f for f in request.files.getlist("fotos") if f and f.filename]
+    if not datei or not datei.filename:
+        flash("Bitte die Datei aus „Alles als Datei teilen“ auswählen.", "fehler")
+        return redirect(url_for("altdaten_seite"))
+    try:
+        roh = datei.read()
+        einsaetze = altdaten.einsaetze_aus_datei(roh)
+    except (ValueError, UnicodeDecodeError) as ex:
+        flash(f"Die Datei ließ sich nicht lesen: {ex}", "fehler")
+        return redirect(url_for("altdaten_seite"))
+    token = speicher.neue_id()
+    ordner = speicher.pfad("import", token, "x").parent
+    (ordner / "daten.json").write_bytes(roh)
+    namen = []
+    for f in fotos:
+        name = Path(f.filename).name
+        (ordner / "fotos").mkdir(exist_ok=True)
+        (ordner / "fotos" / name).write_bytes(f.read())
+        namen.append(name)
+    server_es = [e for e in speicher.einsaetze() if e.get("status") != "abgeschlossen"]
+    liste = []
+    for i, e in enumerate(einsaetze):
+        v = altdaten.vorschau(e, namen)
+        v["index"] = i
+        ort = (e.get("einsatzort") or "").lower()
+        v["vorschlag"] = next((x["id"] for x in server_es if ort and (ort in (x.get("einsatzort") or "").lower()
+                                                                       or (x.get("einsatzort") or "").lower() in ort)), "")
+        liste.append(v)
+    return render_template("altdaten.html", schritt=2, token=token, liste=liste, fotos=len(namen),
+                           server_es=server_es)
+
+
+@app.route("/buero/altdaten/<token>/<int:index>", methods=["POST"])
+@anmeldung(admin=True)
+def altdaten_uebernehmen(token, index):
+    ordner = speicher.DATEN / "import" / Path(token).name
+    if not (ordner / "daten.json").exists():
+        abort(404)
+    e = altdaten.einsaetze_aus_datei((ordner / "daten.json").read_bytes())[index]
+    fotos = [(p.name, p.read_bytes()) for p in sorted((ordner / "fotos").glob("*"))] if (ordner / "fotos").exists() else []
+    ziel = request.form.get("ziel") or None
+    eid, sig, n, fehlt = altdaten.uebernehmen(e, fotos, ziel)
+    text = f"{e.get('einsatzort')} übernommen, {n} Fotos zugeordnet."
+    if fehlt:
+        text += f" {len(fehlt)} Dateien passten zu keiner Anlage (z. B. {fehlt[0]})."
+    if sig:
+        datum = _abschluss_datum(sig.get("datum"))
+        ls_name, fd_name, _, lex_pdf = abschluss_ausfuehren(eid, sig, datum, versenden=False)
+        text += f" Erzeugt: {ls_name} und {fd_name}."
+        if not lex_pdf:
+            text += " Ohne Lexware-Lieferschein – nach dem Hochladen „Neu erzeugen“ klicken."
+    flash(text, "ok")
+    return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/einsatz/<eid>/neu-erzeugen", methods=["POST"])
+@anmeldung(admin=True)
+def dokumente_neu(eid):
+    """Lieferschein und Fotodoku neu bauen, z. B. wenn der Lexware-Lieferschein erst nach dem
+    Abschluss hochgeladen wurde. Nutzt die beim Abschluss gespeicherte Unterschrift."""
+    e = _einsatz_oder_404(eid)
+    u = e.get("unterschrift")
+    if e.get("status") != "abgeschlossen" or not u:
+        flash("Neu erzeugen geht nur bei abgeschlossenen Einsätzen mit gespeicherter Unterschrift.", "fehler")
+        return redirect(url_for("einsatz_seite", eid=eid))
+    sig = {**u, "bild": base64.b64decode(u["bild"]) if u.get("bild") else None}
+    datum = (e.get("abschluss") or {}).get("datum") or date.today().isoformat()
+    _, ls_name, _, _, _, fd_name, lex_pdf = _dokumente_bauen(eid, sig, datum)
+    speicher.protokoll("dokumente_neu", session.get("uid"), eid)
+    flash(f"Neu erzeugt: {ls_name} und {fd_name}." + ("" if lex_pdf else " Hinweis: kein Lexware-Lieferschein hochgeladen."), "ok")
+    return redirect(url_for("einsatz_seite", eid=eid))
 
 
 def main():

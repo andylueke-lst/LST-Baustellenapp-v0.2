@@ -1,0 +1,39 @@
+{% extends "basis.html" %}
+{% block titel %}Aus alter App übernehmen · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><span style="padding:6px 4px">Aus alter App übernehmen</span>{% endblock %}
+{% block inhalt %}
+<div class="icon">📥</div>
+<h1>Aus alter App übernehmen</h1>
+{% if schritt == 1 %}
+<p class="muted">Für Einsätze, die noch in der alten iPad-App (ohne Server) erfasst wurden. Auf dem iPad in der alten App:</p>
+<ol class="small">
+  <li>Oben <b>Notiz</b> › <b>Alles als Datei teilen</b> › z. B. per AirDrop an den Mac oder „In Dateien sichern“.</li>
+  <li>Im Einsatz unter <b>Fotos</b> › <b>Fotos teilen</b> › <b>Alle Fotos</b> › ebenso weitergeben. Die Dateinamen nicht ändern – an ihnen erkennt der Server Anlage und Vorher/Nachher.</li>
+</ol>
+<form method="post" enctype="multipart/form-data" class="stack" style="max-width:560px">
+  <div class="field"><label for="datei">Datei aus „Alles als Datei teilen“ (.json)</label><input class="inp" type="file" id="datei" name="datei" accept=".json,application/json" required></div>
+  <div class="field"><label for="fotos">Fotos (alle auf einmal auswählen)</label><input class="inp" type="file" id="fotos" name="fotos" accept="image/*" multiple></div>
+  <div><button class="btn pri">Weiter</button></div>
+</form>
+{% else %}
+<p class="muted">{{ fotos }} Fotos hochgeladen. Welchen Einsatz übernehmen?</p>
+<div class="list">
+{% for v in liste %}
+  <form class="item" method="post" action="{{ url_for('altdaten_uebernehmen', token=token, index=v.index) }}" style="align-items:flex-start">
+    <div><b>{{ v.einsatzort }}</b>
+      <div class="meta">{{ v.kunde }} · {{ zeitraum(v.von, v.bis) if v.von else '' }} · {{ v.status }} · {{ v.tage }} Tage · Fotos: {{ v.fotos_passend }} von {{ v.fotos_alt }} gefunden
+        {% if v.status == 'abgeschlossen' %} · {% if v.unterschrift %}unterschrieben{% else %}ohne Unterschrift{% endif %}{% endif %}</div>
+      {% if v.status == 'abgeschlossen' %}<div class="small muted">Lieferschein und Fotodoku werden gleich erzeugt (ohne Mail an den Kunden).</div>{% endif %}
+      <div class="field" style="margin-top:8px"><label>Ziel</label>
+        <select class="inp" name="ziel">
+          <option value="">als neuer Einsatz anlegen</option>
+          {% for x in server_es %}<option value="{{ x.id }}"{% if x.id == v.vorschlag %} selected{% endif %}>in „{{ x.einsatzort }}“ ({{ zeitraum(x.von, x.bis) }}) übernehmen</option>{% endfor %}
+        </select></div>
+    </div>
+    <button class="btn pri small">Übernehmen</button>
+  </form>
+{% else %}<div class="empty">Keine Einsätze in der Datei.</div>{% endfor %}
+</div>
+<p class="small muted">„In … übernehmen“ nutzt den vorhandenen Einsatz (z. B. aus Notion) mit seinem Lexware-Lieferschein und ersetzt Zeiten, Berichte und Fotos durch die aus der alten App.</p>
+{% endif %}
+{% endblock %}
