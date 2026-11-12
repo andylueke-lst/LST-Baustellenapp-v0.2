@@ -318,7 +318,8 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
     e.update({
         "id": (alt or {}).get("id") or "n" + p["id"].replace("-", "")[:11],
         "notion": {"id": p["id"], "url": p.get("url"), "status": eig(p, "LST Status externe Projekte"),
-                   "geholt": date.today().isoformat(), "projektname": eig(p, "Projektname")},
+                   "geholt": date.today().isoformat(), "projektname": eig(p, "Projektname"),
+                   "firmen": [x for x in (_erstes(eig(p, "Kunde")), _erstes(eig(p, "Einsatz bei"))) if x]},
         "art": "kunde", "status": (alt or {}).get("status", "vorbereitet"),
         "einsatzort": einsatzort, "kunde": kunde_f.get("name") or einsatzort, "adresse": adresse,
         "apOrt": {"name": ap_ort.get("name", ""), "tel": _erstes(eig(p, "Mobil AP Einsatzort")) or _erstes(eig(p, "Telefon AP Einsatzort")) or ap_ort.get("tel", ""),
@@ -490,3 +491,43 @@ def aufgaben_abgleichen() -> dict:
     speicher.stamm_setzen("intern", ergebnis)
     speicher.protokoll("notion_aufgaben", "notion", None, anzahl=len(neu), entfernt=len(weg), unbekannt=uebersprungen)
     return {"anzahl": len(neu), "entfernt": len(weg), "unbekannt": uebersprungen}
+
+
+# ---------------------------------------------------------------- Kontakte (LST Personen) fürs Verschicken
+PERSONEN_QUELLE = "b1589e16-f8e3-4082-b383-842034b82212"
+FIRMEN_QUELLE = "52307a5c-c12d-464b-bafd-158433d18b77"
+
+
+def _alle(ds: str) -> list[dict]:
+    aus, cursor = [], None
+    while True:
+        body = {"page_size": 100}
+        if cursor:
+            body["start_cursor"] = cursor
+        d = _anfrage("POST", f"/data_sources/{ds}/query", body)
+        aus += d.get("results", [])
+        if not d.get("has_more"):
+            return aus
+        cursor = d.get("next_cursor")
+
+
+def kontakte_abgleichen() -> int:
+    """Nur Name, Firma und E-Mail aus LST Personen (keine Geburtstage, keine Telefonnummern)."""
+    firmen = {}
+    for f in _alle(FIRMEN_QUELLE):
+        firmen[f["id"]] = (eig(f, "Suchname") or " ".join(x for x in (eig(f, "Firmenname 1"), eig(f, "Firmenname 2")) if x)
+                           or titel(f) or "").strip()
+    kontakte = []
+    for k in _alle(PERSONEN_QUELLE):
+        pr = k.get("properties") or {}
+        mail = next((wert(v) for n, v in pr.items() if v.get("type") == "email" and "gesch" in n.lower() and wert(v)), "") \
+            or next((wert(v) for v in pr.values() if v.get("type") == "email" and wert(v)), "")
+        if not mail:
+            continue
+        name = " ".join(x for x in (eig(k, "Vorname"), eig(k, "Nachname")) if x).strip() or titel(k)
+        fids = eig(k, "Firmenzugehörigkeit") or []
+        kontakte.append({"id": k["id"], "name": name, "mail": mail.strip(), "firmen": fids,
+                         "firma": ", ".join(firmen.get(i, "") for i in fids if firmen.get(i))})
+    kontakte.sort(key=lambda x: (x["firma"].lower(), x["name"].lower()))
+    speicher.stamm_setzen("kontakte", kontakte)
+    return len(kontakte)

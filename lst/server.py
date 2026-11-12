@@ -347,11 +347,18 @@ def aufgaben_holen():
 
 
 def _aufgaben_takt():
+    runde = 0
     while True:
         try:
             aufgaben_holen()
         except Exception as ex:   # der Takt darf nie stehen bleiben
             AUFGABEN_STAND["fehler"] = f"Unerwarteter Fehler: {ex}"
+        if runde % 12 == 0 and notion.eingerichtet():   # Kontakte stündlich
+            try:
+                notion.kontakte_abgleichen()
+            except Exception:
+                pass
+        runde += 1
         time.sleep(300)
 
 
@@ -420,6 +427,10 @@ def intern_bericht(iid):
 @anmeldung(admin=True)
 def notion_aufgaben():
     aufgaben_holen()
+    try:
+        notion.kontakte_abgleichen()
+    except notion.NotionFehler:
+        pass
     if AUFGABEN_STAND["fehler"]:
         flash(AUFGABEN_STAND["fehler"], "fehler")
     elif AUFGABEN_STAND["ergebnis"]:
@@ -1006,6 +1017,25 @@ def _dokumente_mailen(e: dict, gewaehlt: list[dict], liste: list[str], betreff: 
     speicher.protokoll("dokumente_gesendet", session.get("uid"), e["id"], an=liste, docs=[d["id"] for d in gewaehlt],
                        mail=erg["status"])
     return erg
+
+
+@app.route("/api/kontakte")
+@anmeldung()
+def api_kontakte():
+    """Ohne Suchbegriff: Personen der Firmen des Einsatzes. Mit Suchbegriff: Treffer in Name, Firma, Mail."""
+    alle = speicher.stamm("kontakte", [])
+    q = (request.args.get("q") or "").strip().lower()
+    if q:
+        treffer = [k for k in alle if all(w in f"{k['name']} {k['firma']} {k['mail']}".lower() for w in q.split())]
+    else:
+        e = speicher.einsatz(request.args.get("eid", ""))
+        if not darf_einsatz(e, ich()):
+            return jsonify([])
+        fids = set(((e or {}).get("notion") or {}).get("firmen") or [])
+        namen = {x.lower() for x in ((e or {}).get("kunde"), (e or {}).get("einsatzort")) if x}
+        treffer = [k for k in alle if fids & set(k.get("firmen") or []) or
+                   any(n and (n in k["firma"].lower() or k["firma"].lower() in n) for n in namen if k["firma"])]
+    return jsonify([{"name": k["name"], "mail": k["mail"], "firma": k["firma"]} for k in treffer[:30]])
 
 
 @app.route("/api/einsatz/<eid>/senden", methods=["POST"])

@@ -409,12 +409,20 @@ function verschickenSheet(e,id){const docs=e.docs||[];const ak=e.apKunde||{},ao=
   sheet(`<h2>Verschicken</h2>
   <div class="field"><label>Anhänge</label>${docs.map(d=>`<label class="row" style="gap:8px;margin:4px 0"><input type="checkbox" data-vd="${d.id}"${d.id===id?' checked':''}> ${esc(DOKNAME[d.art]||d.art)}</label>`).join('')}</div>
   <div class="field"><label>An</label>${emp.map(([m,nm,an])=>`<label class="row" style="gap:8px;margin:4px 0"><input type="checkbox" data-ve="${esc(m)}"${an?' checked':''}> ${esc(nm)} · <span class="muted">${esc(m)}</span></label>`).join('')||'<div class="small muted">Keine Adresse hinterlegt – unten eintragen.</div>'}</div>
+  <div class="field"><label for="vs-q">Aus LST Personen</label><div id="vs-k" class="small muted">wird geladen …</div>
+    <input class="inp" id="vs-q" type="search" placeholder="Name, Firma oder Mail suchen" autocapitalize="off" style="margin-top:6px"><div id="vs-r"></div></div>
   <div class="field"><label for="vs-w">Weitere Empfänger <span class="small muted">(mit Komma trennen)</span></label><input class="inp" id="vs-w" type="email" inputmode="email" autocapitalize="off" placeholder="name@firma.de"></div>
   <div class="field"><label for="vs-b">Betreff</label><input class="inp" id="vs-b" value="${esc('Unterlagen '+e.einsatzort+(e.ls?' – '+e.ls:''))}"></div>
   <div class="field"><label for="vs-t">Text</label><textarea class="inp" id="vs-t">${esc('Guten Tag,\n\nanbei die Unterlagen zum Einsatz '+e.einsatzort+'.\n\nMit freundlichen Grüßen\nLST Lüke-Strahl-Technik GmbH')}</textarea></div>
   <div class="small" id="vs-st" role="status" style="min-height:18px"></div>
   <div class="row" style="justify-content:flex-end"><button class="btn" id="vs-x">Abbrechen</button><button class="btn pri" id="vs-ok">Senden</button></div>`,el=>{
     el.querySelector('#vs-x').onclick=closeSheet;const st=el.querySelector('#vs-st');
+    const schon=()=>new Set([...el.querySelectorAll('[data-ve]')].map(x=>x.dataset.ve.toLowerCase()));
+    const zeilen=(l,an)=>l.filter(k=>!schon().has(k.mail.toLowerCase())).map(k=>`<label class="row" style="gap:8px;margin:4px 0"><input type="checkbox" data-ve="${esc(k.mail)}"${an?' checked':''}> ${esc(k.name)} <span class="muted">· ${esc(k.firma||'')} · ${esc(k.mail)}</span></label>`).join('');
+    api('/api/kontakte?eid='+encodeURIComponent(e.id)).then(l=>{const h=zeilen(l,false);el.querySelector('#vs-k').innerHTML=h||'<span class="small muted">Keine weiteren Personen zu diesem Kunden.</span>'}).catch(()=>{el.querySelector('#vs-k').textContent='Personen nur mit Verbindung zum Büro.'});
+    let qt=null;el.querySelector('#vs-q').oninput=ev=>{clearTimeout(qt);const q=ev.target.value.trim();const r=el.querySelector('#vs-r');
+      [...r.querySelectorAll('input:not(:checked)')].forEach(x=>x.closest('label').remove());
+      if(q.length<2)return;qt=setTimeout(()=>api('/api/kontakte?q='+encodeURIComponent(q)).then(l=>{r.insertAdjacentHTML('beforeend',zeilen(l,false)||'')}).catch(()=>{}),250)};
     el.querySelector('#vs-ok').onclick=async ev=>{const b=ev.currentTarget;
       const body={docs:[...el.querySelectorAll('[data-vd]:checked')].map(x=>x.dataset.vd),an:[...el.querySelectorAll('[data-ve]:checked')].map(x=>x.dataset.ve),
         weitere:el.querySelector('#vs-w').value,betreff:el.querySelector('#vs-b').value,text:el.querySelector('#vs-t').value};
