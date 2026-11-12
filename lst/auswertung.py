@@ -265,6 +265,11 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
         stand = t.get("h") if art == "h" else t.get("km")
         if art == "h" and stand is None and t.get("km") is not None:
             stand = t.get("km")  # ältere Einträge: Stand stand im Kilometerfeld
+        try:
+            if stand is not None and float(stand) <= 0:
+                stand = None  # 0 = Zähler defekt/unbekannt, zählt nicht für den Verbrauch
+        except (TypeError, ValueError):
+            stand = None
         alle.append({"datum": t["datum"], "gid": t.get("geraet"), "geraet": name, "art": art, "liter": t.get("l"),
                     "betrag": _betrag(t), "preis": _preis(t), "oel_geprueft": bool(t.get("oel_geprueft") or t.get("oel_l")),
                     "oel_l": t.get("oel_l"), "id": t.get("id"),
