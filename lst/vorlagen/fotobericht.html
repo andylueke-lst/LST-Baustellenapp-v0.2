@@ -4,7 +4,8 @@
 {% block inhalt %}
 <div class="icon">🖼️</div>
 <h1>Fotobericht {{ e.einsatzort }}</h1>
-<p class="muted">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or 'Lieferschein folgt' }}. Antippen wählt ein Foto aus oder ab.</p>
+<p class="muted">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or 'Lieferschein folgt' }}. Antippen wählt ein Foto aus oder ab. <b>Verschieben</b> ändert die Reihenfolge, auch zwischen Vorher und Nachher oder in eine andere Anlage (am iPad: Foto kurz gedrückt halten, dann ziehen).</p>
+{% if umgeordnet %}<form method="post" action="{{ url_for('fotobericht_ordnung_zuruecksetzen', eid=e.id) }}" class="small" style="margin-bottom:8px">Reihenfolge im Büro geändert · <button class="btn small" onclick="return confirm('Reihenfolge und Zuordnung wieder wie vom iPad?')">Zurücksetzen</button></form>{% endif %}
 
 <div class="fb">
   <div>
@@ -18,10 +19,12 @@
         <button class="btn small" type="button" data-keine="{{ g.anlage.id }}">keine</button></div>
       <div class="ph">
         {% for ph, label in [('vorher','Vorher'),('nachher','Nachher')] %}
-        <div><div class="lbl">{{ label }}</div><div class="thumbs">
+        <div><div class="lbl row" style="justify-content:space-between">{{ label }}
+          <label class="btn small" style="cursor:pointer">＋ Fotos<input type="file" accept="image/*" multiple hidden data-upload data-anlage="{{ g.anlage.id }}" data-phase="{{ ph }}"></label></div>
+          <div class="thumbs ziel" data-anlage="{{ g.anlage.id }}" data-phase="{{ ph }}">
           {% for f in g[ph] %}<button type="button" class="th" data-id="{{ f.id }}" data-phase="{{ ph }}" aria-pressed="false" aria-label="{{ g.anlage.name }} {{ label }} auswählen">
             <img loading="lazy" src="{{ url_for('foto', eid=e.id, fid=f.id, v=1) }}" alt=""><span class="haken">✓</span></button>
-          {% else %}<div class="empty">keine</div>{% endfor %}
+          {% endfor %}<div class="leer-hinweis">hierher ziehen</div>
         </div></div>
         {% endfor %}
       </div>
@@ -48,14 +51,23 @@
   </aside>
 </div>
 
+<style>
+.ziel{min-height:96px;border-radius:8px;padding:4px;transition:background .15s}
+.ziel.drueber{background:var(--t-blue)}
+.leer-hinweis{display:none;color:var(--faint);font-size:13px;align-self:center;justify-self:center}
+.ziel:not(:has(.th)) .leer-hinweis{display:block}
+.th.zieht{opacity:.3}
+.geist{position:fixed;z-index:50;pointer-events:none;width:110px;aspect-ratio:4/3;border-radius:6px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.3);transform:translate(-50%,-50%) rotate(-3deg)}
+.geist img{width:100%;height:100%;object-fit:cover}
+</style>
 <script>
 (() => {
   const KB = {{ kb_pro_foto }}, ZIEL = {{ ziel_mb }};
-  const th = [...document.querySelectorAll('.th')];
+  const alleTh = () => [...document.querySelectorAll('.th')];
   const gewaehlt = new Set();
   const fehler = document.getElementById('fehler');
   function zeigen() {
-    th.forEach(b => { const an = gewaehlt.has(b.dataset.id); b.classList.toggle('an', an); b.setAttribute('aria-pressed', an); });
+    alleTh().forEach(b => { const an = gewaehlt.has(b.dataset.id); b.classList.toggle('an', an); b.setAttribute('aria-pressed', an); });
     const n = gewaehlt.size, mb = n ? (n * KB + 120) / 1024 : 0;
     document.getElementById('anzahl').textContent = n;
     document.getElementById('groesse').textContent = 'ca. ' + mb.toFixed(1).replace('.', ',') + ' MB';
@@ -64,23 +76,117 @@
     balken.className = mb > ZIEL ? 'zu' : mb > ZIEL * 0.8 ? 'warn' : '';
     fehler.textContent = '';
   }
-  th.forEach(b => b.addEventListener('click', () => { gewaehlt.has(b.dataset.id) ? gewaehlt.delete(b.dataset.id) : gewaehlt.add(b.dataset.id); zeigen(); }));
-  const inAnlage = id => th.filter(b => b.closest('.anl').dataset.anlage === id);
+  // Antippen = auswählen (nicht direkt nach dem Verschieben)
+  let nachZiehen = false;
+  document.addEventListener('click', ev => {
+    const b = ev.target.closest('.th'); if (!b) return;
+    if (nachZiehen) { nachZiehen = false; return; }
+    gewaehlt.has(b.dataset.id) ? gewaehlt.delete(b.dataset.id) : gewaehlt.add(b.dataset.id); zeigen();
+  });
+  const inAnlage = id => alleTh().filter(b => b.closest('.anl').dataset.anlage === id);
   document.querySelectorAll('[data-alle]').forEach(b => b.onclick = () => { inAnlage(b.dataset.alle).forEach(x => gewaehlt.add(x.dataset.id)); zeigen(); });
   document.querySelectorAll('[data-keine]').forEach(b => b.onclick = () => { inAnlage(b.dataset.keine).forEach(x => gewaehlt.delete(x.dataset.id)); zeigen(); });
   document.getElementById('alle-ab').onclick = () => { gewaehlt.clear(); zeigen(); };
   document.getElementById('vorschlag').onclick = () => {
     gewaehlt.clear();
     document.querySelectorAll('.anl').forEach(s => {
-      const v = [...s.querySelectorAll('.th[data-phase=vorher]')], n = [...s.querySelectorAll('.th[data-phase=nachher]')];
+      const v = [...s.querySelectorAll('.ziel[data-phase=vorher] .th')], n = [...s.querySelectorAll('.ziel[data-phase=nachher] .th')];
       if (v.length) gewaehlt.add(v[0].dataset.id);
       if (n.length) gewaehlt.add(n[n.length - 1].dataset.id);
     });
     zeigen();
   };
-  const liste = () => th.filter(b => gewaehlt.has(b.dataset.id)).map(b => b.dataset.id);
-  document.getElementById('vorschau').onclick = () => {
+
+  // ---- Reihenfolge und Zuordnung speichern
+  const ordnung = () => alleTh().map(b => { const z = b.closest('.ziel'); return { id: b.dataset.id, anlage: z.dataset.anlage, phase: z.dataset.phase }; });
+  async function speichern() {
+    try { await fetch('{{ url_for("fotobericht_ordnung", eid=e.id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fotos: ordnung() }) }); }
+    catch (ex) { fehler.textContent = 'Reihenfolge konnte nicht gespeichert werden (Verbindung?).'; }
+  }
+
+  // ---- Verschieben: Maus sofort, Finger nach kurzem Halten
+  let zieh = null;
+  function start(b, x, y) {
+    const g = document.createElement('div'); g.className = 'geist'; g.innerHTML = b.querySelector('img').outerHTML;
+    document.body.appendChild(g); b.classList.add('zieht'); zieh = { b, g, quelle: b.parentNode, vorher: b.nextSibling }; bewegen(x, y);
+  }
+  function bewegen(x, y) {
+    if (!zieh) return;
+    zieh.g.style.left = x + 'px'; zieh.g.style.top = y + 'px';
+    document.querySelectorAll('.ziel.drueber').forEach(z => z.classList.remove('drueber'));
+    const el = document.elementFromPoint(x, y); if (!el) return;
+    const ziel = el.closest('.ziel'); if (!ziel) return;
+    ziel.classList.add('drueber');
+    const ueber = el.closest('.th');
+    if (ueber && ueber !== zieh.b) {
+      const r = ueber.getBoundingClientRect();
+      ziel.insertBefore(zieh.b, x < r.left + r.width / 2 ? ueber : ueber.nextSibling);
+    } else if (!ueber) {
+      ziel.insertBefore(zieh.b, ziel.querySelector('.leer-hinweis'));
+    }
+    // am Rand automatisch scrollen
+    if (y < 80) scrollBy(0, -12); else if (y > innerHeight - 80) scrollBy(0, 12);
+  }
+  function ende() {
+    if (!zieh) return;
+    const geaendert = zieh.b.parentNode !== zieh.quelle || zieh.b.nextSibling !== zieh.vorher;
+    zieh.b.classList.remove('zieht'); zieh.g.remove();
+    document.querySelectorAll('.ziel.drueber').forEach(z => z.classList.remove('drueber'));
+    zieh.b.dataset.phase = zieh.b.closest('.ziel').dataset.phase;
+    zieh = null; nachZiehen = true; setTimeout(() => { nachZiehen = false; }, 400);
+    if (geaendert) speichern();
+  }
+  // Maus
+  let maus = null;
+  document.addEventListener('mousedown', ev => { const b = ev.target.closest('.th'); if (!b || ev.button) return; ev.preventDefault(); maus = { b, x: ev.clientX, y: ev.clientY }; });
+  document.addEventListener('mousemove', ev => {
+    if (zieh) { bewegen(ev.clientX, ev.clientY); return; }
+    if (maus && Math.hypot(ev.clientX - maus.x, ev.clientY - maus.y) > 6) { start(maus.b, ev.clientX, ev.clientY); maus = null; }
+  });
+  document.addEventListener('mouseup', () => { maus = null; if (zieh) ende(); });
+  // Finger (iPad): 300 ms halten, dann ziehen; vorher bewegen = normal scrollen
+  let tipp = null;
+  document.addEventListener('touchstart', ev => {
+    const b = ev.target.closest('.th'); if (!b || ev.touches.length > 1) return;
+    const t = ev.touches[0];
+    tipp = { b, x: t.clientX, y: t.clientY, timer: setTimeout(() => { if (tipp) { start(tipp.b, tipp.x, tipp.y); if (navigator.vibrate) navigator.vibrate(10); } }, 300) };
+  }, { passive: true });
+  document.addEventListener('touchmove', ev => {
+    const t = ev.touches[0];
+    if (zieh) { ev.preventDefault(); bewegen(t.clientX, t.clientY); return; }
+    if (tipp && Math.hypot(t.clientX - tipp.x, t.clientY - tipp.y) > 10) { clearTimeout(tipp.timer); tipp = null; }
+  }, { passive: false });
+  const tippEnde = () => { if (tipp) { clearTimeout(tipp.timer); tipp = null; } if (zieh) ende(); };
+  document.addEventListener('touchend', tippEnde); document.addEventListener('touchcancel', tippEnde);
+  document.addEventListener('contextmenu', ev => { if (ev.target.closest('.th')) ev.preventDefault(); });
+
+  // ---- Weitere Fotos hochladen (Mediathek, Mac, aus Notion gespeichert)
+  document.querySelectorAll('[data-upload]').forEach(inp => inp.onchange = async () => {
+    const dateien = [...inp.files]; if (!dateien.length) return;
+    const ziel = document.querySelector(`.ziel[data-anlage="${inp.dataset.anlage}"][data-phase="${inp.dataset.phase}"]`);
+    const knopf = inp.parentNode, alt = knopf.firstChild.textContent;
+    knopf.firstChild.textContent = 'lädt …';
+    for (const [n, d] of dateien.entries()) {
+      knopf.firstChild.textContent = `${n + 1}/${dateien.length} …`;
+      const fd = new FormData(); fd.append('fotos', d, d.name); fd.append('anlage', inp.dataset.anlage); fd.append('phase', inp.dataset.phase);
+      try {
+        const r = await fetch('{{ url_for("fotos_hochladen", eid=e.id) }}', { method: 'POST', body: fd });
+        const j = await r.json(); if (!r.ok) throw new Error(j.fehler || 'Fehler');
+        if (j.fehler) fehler.textContent = j.fehler;
+        j.neu.forEach(f => {
+          const b = document.createElement('button'); b.type = 'button'; b.className = 'th'; b.dataset.id = f.id; b.dataset.phase = inp.dataset.phase;
+          b.setAttribute('aria-pressed', 'false'); b.innerHTML = `<img src="${f.url}" alt=""><span class="haken">✓</span>`;
+          ziel.insertBefore(b, ziel.querySelector('.leer-hinweis')); gewaehlt.add(f.id);
+        });
+      } catch (ex) { fehler.textContent = 'Hochladen ging nicht: ' + ex.message; }
+    }
+    knopf.firstChild.textContent = alt; inp.value = ''; zeigen(); speichern();
+  });
+
+  const liste = () => alleTh().filter(b => gewaehlt.has(b.dataset.id)).map(b => b.dataset.id);
+  document.getElementById('vorschau').onclick = async () => {
     if (!gewaehlt.size) { fehler.textContent = 'Bitte mindestens ein Foto auswählen.'; return; }
+    await speichern();
     document.getElementById('vorschau-fotos').value = JSON.stringify(liste());
     document.getElementById('vorschau-form').submit();
   };
@@ -93,6 +199,7 @@
     if (senden.dataset.sicher !== '1') { senden.dataset.sicher = '1'; senden.textContent = 'Wirklich an ' + [an, weitere].filter(Boolean).join(', ') + ' senden?'; return; }
     senden.disabled = true; senden.textContent = 'Wird erstellt …';
     try {
+      await speichern();
       const r = await fetch('{{ url_for("fotobericht_freigeben", eid=e.id) }}', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fotos: liste(), an, weitere, betreff: document.getElementById('betreff').value, text: document.getElementById('text').value }) });
       const d = await r.json();

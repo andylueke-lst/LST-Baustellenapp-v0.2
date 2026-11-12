@@ -175,9 +175,12 @@ def fotos_abgleichen(einsatz_id: str, liste: list[dict]):
     umgehängte Fotos bekommen Anlage und Phase vom iPad. Noch nicht hochgeladene Fotos
     in der Liste werden übergangen, sie kommen mit eigener Anfrage."""
     neu = {f["id"]: f for f in liste if f.get("id")}
+    buero = set(stamm(f"buerofotos_{einsatz_id}", []))   # im Büro hochgeladen: nicht vom iPad löschen lassen
     with db() as c:
         for r in c.execute("SELECT id, anlage_id, phase, geloescht FROM fotos WHERE einsatz_id=?", (einsatz_id,)).fetchall():
             f = neu.get(r["id"])
+            if not f and r["id"] in buero:
+                continue
             if not f:
                 if not r["geloescht"]:
                     c.execute("UPDATE fotos SET geloescht=1 WHERE id=?", (r["id"],))

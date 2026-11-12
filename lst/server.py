@@ -561,17 +561,71 @@ def notion_uebernehmen(pid):
     return redirect(url_for("einsatz_seite", eid=e["id"]))
 
 
+def _fotos_geordnet(eid: str) -> list[dict]:
+    """Fotos des Einsatzes mit der im Büro per Verschieben festgelegten Reihenfolge und Zuordnung
+    (Anlage, vorher/nachher). Gilt nur für den Fotobericht; die Fotos auf dem iPad bleiben unverändert."""
+    fs = _fotos_von(eid)
+    ordnung = speicher.stamm(f"fotoordnung_{eid}", [])
+    pos = {o["id"]: (n, o) for n, o in enumerate(ordnung) if isinstance(o, dict) and o.get("id")}
+    for f in fs:
+        if f["id"] in pos:
+            o = pos[f["id"]][1]
+            f["anlage_id"] = o.get("anlage") or f["anlage_id"]
+            f["phase"] = o.get("phase") if o.get("phase") in ("vorher", "nachher") else f["phase"]
+    return sorted(fs, key=lambda f: (pos[f["id"]][0] if f["id"] in pos else len(pos), f["erstellt"]))
+
+
+@app.route("/api/einsatz/<eid>/fotobericht/ordnung", methods=["POST"])
+@anmeldung(admin=True)
+def fotobericht_ordnung(eid):
+    _einsatz_oder_404(eid)
+    liste = [{"id": str(o["id"]), "anlage": str(o.get("anlage") or ""), "phase": o.get("phase")}
+             for o in (request.get_json(force=True) or {}).get("fotos", []) if isinstance(o, dict) and o.get("id")]
+    speicher.stamm_setzen(f"fotoordnung_{eid}", liste)
+    return jsonify(ok=True)
+
+
+@app.route("/buero/einsatz/<eid>/fotos/hochladen", methods=["POST"])
+@anmeldung(admin=True)
+def fotos_hochladen(eid):
+    """Weitere Fotos im Büro hinzufügen (Mediathek, Mac, aus Notion heruntergeladen)."""
+    e = _einsatz_oder_404(eid)
+    anlage = request.form.get("anlage") or ""
+    phase = request.form.get("phase") if request.form.get("phase") in ("vorher", "nachher") else "nachher"
+    if not any(a["id"] == anlage for a in e.get("anlagen", [])):
+        return jsonify(fehler="Unbekannte Anlage."), 400
+    neu, fehler = [], []
+    for f in request.files.getlist("fotos"):
+        try:
+            neu.append(speicher.foto_speichern(eid, f.read(), anlage, phase))
+        except Exception:
+            fehler.append(f.filename or "Datei")
+    if neu:
+        ids = speicher.stamm(f"buerofotos_{eid}", [])
+        speicher.stamm_setzen(f"buerofotos_{eid}", ids + neu)
+        speicher.protokoll("fotos_im_buero", session.get("uid"), eid, anzahl=len(neu))
+    return jsonify(ok=True, neu=[{"id": i, "url": url_for("foto", eid=eid, fid=i, v=1)} for i in neu],
+                   fehler=("Nicht lesbar: " + ", ".join(fehler) + " (bitte als JPEG oder PNG)") if fehler else "")
+
+
+@app.route("/buero/einsatz/<eid>/fotobericht/ordnung-zuruecksetzen", methods=["POST"])
+@anmeldung(admin=True)
+def fotobericht_ordnung_zuruecksetzen(eid):
+    speicher.stamm_setzen(f"fotoordnung_{eid}", [])
+    flash("Reihenfolge und Zuordnung wie vom iPad.", "ok")
+    return redirect(url_for("fotobericht_seite", eid=eid))
+
+
 @app.route("/buero/einsatz/<eid>/fotobericht")
 @anmeldung(admin=True)
 def fotobericht_seite(eid):
     e = _einsatz_oder_404(eid)
-    fs = _fotos_von(eid)
+    fs = _fotos_geordnet(eid)
     gruppen = []
     for a in e.get("anlagen", []):
         g = {"anlage": a, "vorher": [f for f in fs if f["anlage_id"] == a["id"] and f["phase"] == "vorher"],
              "nachher": [f for f in fs if f["anlage_id"] == a["id"] and f["phase"] == "nachher"]}
-        if g["vorher"] or g["nachher"]:
-            gruppen.append(g)
+        gruppen.append(g)   # auch Anlagen ohne Fotos: dorthin kann man ziehen oder hochladen
     tage = e.get("tage") or []
     zr = basis.zeitraum(tage[0]["datum"], tage[-1]["datum"]) if tage else basis.zeitraum(e["von"], e["bis"])
     text = (f"Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie den Fotobericht zu unserer Reinigung "
@@ -580,25 +634,28 @@ def fotobericht_seite(eid):
     return render_template("fotobericht.html", e=e, gruppen=gruppen, mailtext=text,
                            an=(e.get("apKunde") or {}).get("mail", ""),
                            betreff=f"Fotobericht {e['einsatzort']} {zr}",
-                           kb_pro_foto=260, ziel_mb=basis.config()["fotos"]["bericht_ziel_mb"])
+                           kb_pro_foto=260, ziel_mb=basis.config()["fotos"]["bericht_ziel_mb"],
+                           umgeordnet=bool(speicher.stamm(f"fotoordnung_{eid}", [])))
 
 
 def _quelle(eid):
     return lambda fid: speicher.foto_datei(eid, fid)
 
 
-def _einsatz_mit_fotos(e: dict) -> dict:
-    """Ergänzt den Einsatz um die Fotos aus der Datenbank (Form wie im Prototyp)."""
+def _einsatz_mit_fotos(e: dict, buero_ordnung: bool = False) -> dict:
+    """Ergänzt den Einsatz um die Fotos aus der Datenbank (Form wie im Prototyp).
+    buero_ordnung: Reihenfolge/Zuordnung aus dem Fotobericht-Editor anwenden."""
     e = dict(e)
     e["fotos"] = [{"id": f["id"], "anlage": f["anlage_id"], "phase": f["phase"], "tag": f["tag"] or 0,
-                   "ts": int(f["erstellt"] * 1000), "up": 1} for f in _fotos_von(e["id"])]
+                   "ts": int(f["erstellt"] * 1000), "up": 1}
+                  for f in (_fotos_geordnet(e["id"]) if buero_ordnung else _fotos_von(e["id"]))]
     return e
 
 
 @app.route("/api/einsatz/<eid>/fotobericht/vorschau", methods=["POST"])
 @anmeldung(admin=True)
 def fotobericht_vorschau(eid):
-    e = _einsatz_mit_fotos(_einsatz_oder_404(eid))
+    e = _einsatz_mit_fotos(_einsatz_oder_404(eid), buero_ordnung=True)
     auswahl = json.loads(request.form.get("fotos") or "[]")
     if not auswahl:
         return "Bitte mindestens ein Foto auswählen.", 400
@@ -612,7 +669,7 @@ def fotobericht_vorschau(eid):
 @app.route("/api/einsatz/<eid>/fotobericht/freigeben", methods=["POST"])
 @anmeldung(admin=True)
 def fotobericht_freigeben(eid):
-    e = _einsatz_mit_fotos(_einsatz_oder_404(eid))
+    e = _einsatz_mit_fotos(_einsatz_oder_404(eid), buero_ordnung=True)
     d = request.get_json(force=True)
     auswahl = d.get("fotos") or []
     liste = empfaenger_liste(d.get("an"), d.get("weitere"))
