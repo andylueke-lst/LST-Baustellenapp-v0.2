@@ -17,6 +17,20 @@
 
 {% if e.anlagenPruefen and e.status == 'vorbereitet' %}<div class="callout hinweis">Die Anlagen wurden aus den technischen Daten vorgeschlagen. Bitte unter „Bearbeiten“ prüfen und speichern.</div>{% endif %}
 {% if e.technisch %}<h2>Technische Daten</h2><div class="small" style="white-space:pre-line">{{ e.technisch }}</div>{% endif %}
+{% if e.unterschrift %}
+<h2>Unterschrift</h2>
+<div class="row" style="flex-wrap:wrap;gap:12px;align-items:center">
+  {% if e.unterschrift.bild %}<img src="data:image/png;base64,{{ e.unterschrift.bild }}" alt="Unterschrift" style="height:48px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:2px">{% endif %}
+  <span>{{ e.unterschrift.name or '–' }} · {{ e.unterschrift.zeit or '–' }}</span>
+</div>
+<details style="margin-top:8px"><summary class="small">Name, Datum oder Uhrzeit ändern</summary>
+<form method="post" action="{{ url_for('unterschrift_aendern', eid=e.id) }}" class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:8px">
+  <div class="field"><label for="u-n">Name</label><input class="inp" id="u-n" name="name" value="{{ e.unterschrift.name or '' }}"></div>
+  <div class="field"><label for="u-d">Datum</label><input class="inp" id="u-d" name="datum" type="date" value="{{ uf.datum }}" required></div>
+  <div class="field"><label for="u-z">Uhrzeit</label><input class="inp" id="u-z" name="uhrzeit" type="time" value="{{ uf.uhrzeit }}" required></div>
+  <button class="btn">Speichern{% if e.status == 'abgeschlossen' %} und Dokumente neu erzeugen{% endif %}</button>
+</form></details>
+{% endif %}
 <h2>Dokumente</h2>
 <div class="list">
 {% for d in docs %}

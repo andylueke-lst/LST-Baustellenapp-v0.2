@@ -178,6 +178,7 @@ def einsatz_seite(eid):
             aktuell.add(d["id"])
     lex = speicher.pfad("dokumente", eid, "lexware.pdf")
     return render_template("einsatz.html", e=e, docs=docs, aktuell=aktuell, fotos=_fotos_von(eid), lexware=lex.exists(),
+                           uf=_unterschrift_felder(e.get("unterschrift")),
                            post=[p for p in mail.postausgang() if p["einsatz_id"] == eid])
 
 
@@ -968,6 +969,40 @@ def dokumente_neu(eid):
     speicher.protokoll("dokumente_neu", session.get("uid"), eid, abgeschlossen=war_offen)
     flash(("Abgeschlossen mit der gespeicherten Unterschrift. " if war_offen else "") +
           f"Neu erzeugt: {ls_name} und {fd_name}." + ("" if lex_pdf else " Hinweis: kein Lexware-Lieferschein hochgeladen."), "ok")
+    return redirect(url_for("einsatz_seite", eid=eid))
+
+
+def _unterschrift_felder(u: dict) -> dict:
+    """„12.11.2026, 13:03 Uhr“ → {datum: 2026-11-12, uhrzeit: 13:03} fürs Formular."""
+    m = re.match(r"(\d\d)\.(\d\d)\.(\d{4}), (\d\d:\d\d)", (u or {}).get("zeit") or "")
+    return {"datum": f"{m.group(3)}-{m.group(2)}-{m.group(1)}", "uhrzeit": m.group(4)} if m else {"datum": "", "uhrzeit": ""}
+
+
+@app.route("/buero/einsatz/<eid>/unterschrift", methods=["POST"])
+@anmeldung(admin=True)
+def unterschrift_aendern(eid):
+    """Name, Datum und Uhrzeit der gespeicherten Unterschrift korrigieren (z. B. nach Übernahme aus der
+    alten App, die die Uhrzeit nicht kannte). Abgeschlossene Einsätze bekommen gleich neue Dokumente."""
+    e = _einsatz_oder_404(eid)
+    if not e.get("unterschrift"):
+        abort(404)
+    f = request.form
+    try:
+        tag = date.fromisoformat(f.get("datum", ""))
+        h, mi = (int(x) for x in f.get("uhrzeit", "").split(":")[:2])
+        assert 0 <= h < 24 and 0 <= mi < 60
+    except (ValueError, AssertionError):
+        flash("Bitte Datum und Uhrzeit vollständig eintragen.", "fehler")
+        return redirect(url_for("einsatz_seite", eid=eid))
+    e["unterschrift"]["zeit"] = f"{tag:%d.%m.%Y}, {h:02d}:{mi:02d} Uhr"
+    if f.get("name", "").strip():
+        e["unterschrift"]["name"] = f["name"].strip()
+    e["abschluss"] = {**(e.get("abschluss") or {}), "datum": tag.isoformat(), "name": e["unterschrift"]["name"]}
+    speicher.einsatz_speichern(e)
+    speicher.protokoll("unterschrift_geaendert", session.get("uid"), eid, zeit=e["unterschrift"]["zeit"])
+    if e.get("status") == "abgeschlossen":
+        return dokumente_neu(eid)
+    flash(f"Unterschrift geändert: {e['unterschrift']['name']}, {e['unterschrift']['zeit']}.", "ok")
     return redirect(url_for("einsatz_seite", eid=eid))
 
 
