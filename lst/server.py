@@ -10,6 +10,8 @@ import functools
 import io
 import json
 import os
+import threading
+import time
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -292,8 +294,49 @@ def notion_seite():
                 liste.append(k)
         except notion.NotionFehler as ex:
             fehler = str(ex)
+    intern = [i for i in speicher.stamm("intern", []) if str(i.get("id", "")).startswith("n-")]
+    leute = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
     return render_template("notion.html", liste=liste, fehler=fehler, eingerichtet=notion.eingerichtet(),
-                           schreiben=bool(notion.einstellungen().get("schreiben")))
+                           schreiben=bool(notion.einstellungen().get("schreiben")),
+                           aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
+                           aufgaben_erledigt=[i for i in intern if i.get("status") == "erledigt"],
+                           aufgaben_stand=AUFGABEN_STAND, leute=leute)
+
+
+AUFGABEN_STAND = {"zeit": None, "ergebnis": None, "fehler": ""}
+
+
+def aufgaben_holen():
+    """Interne Aufgaben aus Notion holen (alle 5 Minuten im Hintergrund und per Knopf im Büro)."""
+    if not notion.eingerichtet():
+        return
+    try:
+        AUFGABEN_STAND["ergebnis"] = notion.aufgaben_abgleichen()
+        AUFGABEN_STAND["fehler"] = ""
+    except notion.NotionFehler as ex:
+        AUFGABEN_STAND["fehler"] = str(ex)
+    AUFGABEN_STAND["zeit"] = time.strftime("%H:%M")
+
+
+def _aufgaben_takt():
+    while True:
+        try:
+            aufgaben_holen()
+        except Exception as ex:   # der Takt darf nie stehen bleiben
+            AUFGABEN_STAND["fehler"] = f"Unerwarteter Fehler: {ex}"
+        time.sleep(300)
+
+
+@app.route("/buero/notion/aufgaben", methods=["POST"])
+@anmeldung(admin=True)
+def notion_aufgaben():
+    aufgaben_holen()
+    if AUFGABEN_STAND["fehler"]:
+        flash(AUFGABEN_STAND["fehler"], "fehler")
+    elif AUFGABEN_STAND["ergebnis"]:
+        r = AUFGABEN_STAND["ergebnis"]
+        flash(f"{r['anzahl']} Aufgaben für die iPads geholt." + (f" {r['unbekannt']} mit unbekanntem Namen bei „iPad für“ übersprungen." if r["unbekannt"] else ""), "ok")
+    return redirect(url_for("notion_seite"))
 
 
 @app.route("/buero/notion/<pid>/uebernehmen", methods=["POST"])
@@ -587,6 +630,8 @@ def api_stand():
            "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}
     for k in LISTEN:
         aus[k] = speicher.stamm(k, [])
+    if (m or {}).get("rolle") != "admin":   # interne Aufträge: eigene und „offen für alle“
+        aus["intern"] = [i for i in aus["intern"] if i.get("zust") in (None, m["id"])]
     return jsonify(aus)
 
 
@@ -681,6 +726,7 @@ def api_abschluss(eid):
 def main():
     speicher.einrichten()
     app.secret_key = speicher.geheim()["sitzung"]
+    threading.Thread(target=_aufgaben_takt, name="notion-aufgaben", daemon=True).start()
     port = int(os.environ.get("LST_PORT", 8080))
     host = os.environ.get("LST_HOST", "127.0.0.1")
     if os.environ.get("LST_DEBUG"):

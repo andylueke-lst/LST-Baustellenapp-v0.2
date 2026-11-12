@@ -363,3 +363,105 @@ def uebernehmen(pid: str) -> tuple[dict, str]:
     speicher.einsatz_speichern(e)
     speicher.protokoll("notion_uebernommen", "notion", e["id"], notion=p["id"])
     return e, hinweis
+
+
+# ---------------------------------------------------------------- Interne Aufgaben (LST Aufgaben) → iPad
+# Eine Aufgabe kommt aufs iPad, wenn „iPad für“ gesetzt ist, „Erledigt“ nicht angehakt ist und der
+# Status einer dieser ist. Die Zahl ist der Rang für die Reihenfolge auf dem iPad (kleiner = weiter oben).
+AUFGABEN_STATUS = {"Zu tun": 1, "Läuft": 1, "Wartet": 2, "Geplant": 2, "Wenn Zeit dann tun": 3, "Wenn Zeit": 3}
+IPAD_FELD = "iPad für"
+AUFGABEN_QUELLE = "930c0024-ee04-4560-bf79-a47f02f2e709"   # LST Aufgaben
+
+
+def aufgaben_abfragen() -> list[dict]:
+    ds = einstellungen().get("aufgaben") or AUFGABEN_QUELLE
+    filt = {"and": [{"property": IPAD_FELD, "select": {"is_not_empty": True}},
+                    {"property": "Erledigt", "checkbox": {"equals": False}}]}
+    aus, cursor = [], None
+    while True:
+        body = {"filter": filt, "page_size": 100}
+        if cursor:
+            body["start_cursor"] = cursor
+        try:
+            d = _anfrage("POST", f"/data_sources/{ds}/query", body)
+        except NotionFehler as e:
+            if "iPad" in str(e) or "property" in str(e).lower():
+                raise NotionFehler(f"In LST Aufgaben fehlt das Feld „{IPAD_FELD}“ (Auswahl: Matthias, Faro, Arthur, Alle).") from None
+            raise
+        aus += d.get("results", [])
+        if not d.get("has_more"):
+            return aus
+        cursor = d.get("next_cursor")
+
+
+def _aufgabe_text(pid: str) -> str:
+    """Text der Aufgabenseite (oberste Ebene, ohne synchronisierte Blöcke und Unterseiten), gekürzt."""
+    zeilen = []
+    for b in kinder(pid):
+        if b.get("type") in ("paragraph", "bulleted_list_item", "numbered_list_item", "to_do", "quote", "callout",
+                             "heading_1", "heading_2", "heading_3"):
+            t = _block_text(b).strip()
+            if t:
+                zeilen.append(("☐ " if b["type"] == "to_do" else "• " if "list" in b["type"] else "") + t)
+    text = "\n".join(zeilen)
+    return text[:1500] + (" …" if len(text) > 1500 else "")
+
+
+def aufgaben_abgleichen() -> dict:
+    """Holt die Aufgaben fürs iPad und führt sie mit den internen Aufträgen der App zusammen.
+    Auf dem iPad Erledigtes, Notizen und „Mache ich“ bleiben erhalten. Aufgaben, die in Notion
+    erledigt sind oder kein „iPad für“ mehr haben, verschwinden vom iPad."""
+    leute = speicher.stamm("mitarbeiter", [])
+    liste = speicher.stamm("intern", [])
+    alt = {x.get("id"): x for x in liste if isinstance(x, dict)}
+    projektnamen: dict[str, str] = {}
+    neu, uebersprungen = {}, 0
+    for p in aufgaben_abfragen():
+        status = eig(p, "LST Status intern")
+        fuer = (eig(p, IPAD_FELD) or "").strip()
+        if status not in AUFGABEN_STATUS:
+            continue
+        if fuer.lower() == "alle":
+            zust = None
+        else:
+            zust = _person_id(fuer)
+            if not zust:
+                uebersprungen += 1
+                continue
+        aid = "n-" + p["id"].replace("-", "")
+        vorher = alt.get(aid) or {}
+        geaendert = p.get("last_edited_time")
+        if (vorher.get("notion") or {}).get("geaendert") == geaendert:
+            text, projekt = vorher.get("beschreibung", ""), vorher.get("projekt", "")
+        else:
+            try:
+                text = _aufgabe_text(p["id"])
+            except NotionFehler:
+                text = ""
+            projekt = ""
+            for rid in eig(p, "LST Projekte") or []:
+                if rid not in projektnamen:
+                    try:
+                        sp = seite(rid)
+                        projektnamen[rid] = eig(sp, "Projektname") or titel(sp)
+                    except NotionFehler:
+                        projektnamen[rid] = ""
+                projekt = projekt or projektnamen[rid]
+        a = {"id": aid, "titel": eig(p, "Aufgabe") or titel(p) or "Aufgabe", "beschreibung": text,
+             "datum": ((eig(p, "Wann tun") or {}).get("start") or "")[:10], "zust": zust,
+             "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS[status],
+             "prio": eig(p, "Priorität") or "", "projekt": projekt,
+             "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert}}
+        if vorher.get("status") == "erledigt":
+            a["status"] = "erledigt"
+            a["erledigt_am"] = vorher.get("erledigt_am")
+        if vorher.get("notiz"):
+            a["notiz"] = vorher["notiz"]
+        if zust is None and vorher.get("zust"):      # bei „Alle“: wer „Mache ich“ getippt hat, bleibt zuständig
+            a["zust"] = vorher["zust"]
+        neu[aid] = a
+    weg = [k for k in alt if str(k).startswith("n-") and k not in neu]
+    ergebnis = [x for x in liste if not str(x.get("id", "")).startswith("n-")] + list(neu.values())
+    speicher.stamm_setzen("intern", ergebnis)
+    speicher.protokoll("notion_aufgaben", "notion", None, anzahl=len(neu), entfernt=len(weg), unbekannt=uebersprungen)
+    return {"anzahl": len(neu), "entfernt": len(weg), "unbekannt": uebersprungen}

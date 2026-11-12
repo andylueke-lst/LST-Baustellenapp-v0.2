@@ -25,4 +25,20 @@
   </div>
 {% else %}{% if eingerichtet and not fehler %}<div class="empty">Keine bestätigten Projekte im Zeitraum.</div>{% endif %}{% endfor %}
 </div>
+
+<h2>Interne Aufgaben für die iPads</h2>
+<p class="muted small">Aus LST Aufgaben, wenn „iPad für“ gesetzt ist und der Status Zu tun, Läuft, Wartet oder Wenn Zeit dann tun ist. Wird alle 5 Minuten geholt{% if aufgaben_stand.zeit %}, zuletzt um {{ aufgaben_stand.zeit }} Uhr{% endif %}.</p>
+{% if aufgaben_stand.fehler %}<div class="callout fehler" role="alert">{{ aufgaben_stand.fehler }}</div>{% endif %}
+{% if eingerichtet %}<form method="post" action="{{ url_for('notion_aufgaben') }}" style="margin-bottom:12px"><button class="btn small">Jetzt holen</button></form>{% endif %}
+{% if aufgaben_erledigt %}
+<div class="callout hinweis">Auf dem iPad erledigt – bitte in Notion abhaken, dann verschwinden sie hier:</div>
+<div class="list">{% for i in aufgaben_erledigt %}
+  <div class="item"><div><b>{{ i.titel }}</b><div class="meta">{{ leute.get(i.zust, 'alle') if i.zust else 'alle' }}{% if i.notiz %} · {{ i.notiz }}{% endif %}</div></div>
+  {% if i.notion and i.notion.url %}<a class="btn small" href="{{ i.notion.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}</div>
+{% endfor %}</div>
+{% endif %}
+<div class="list">{% for i in aufgaben_offen %}
+  <div class="item"><div><b>{{ i.titel }}</b><div class="meta">{{ leute.get(i.zust, '') if i.zust else 'alle' }} · {{ i.nstatus }}{% if i.datum %} · {{ datum(i.datum) }}{% endif %}{% if i.projekt %} · {{ i.projekt }}{% endif %}</div></div>
+  {% if i.notion and i.notion.url %}<a class="btn small" href="{{ i.notion.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}</div>
+{% else %}<div class="empty">Keine Aufgaben für die iPads.</div>{% endfor %}</div>
 {% endblock %}

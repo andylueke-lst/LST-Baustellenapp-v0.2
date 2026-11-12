@@ -93,6 +93,12 @@ async function leuteLaden(){try{const l=await api('/api/leute');S.leute=l;save0(
 async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
 /* ---------- Lieferschein und Fotodoku vom Server laden und teilen ----------
    Erst laden, dann teilen: Safari erlaubt das Teilen nur direkt nach einem Fingertipp. */
+/* Interne Aufgaben: überfällig/heute zuerst, dann mit Termin, dann ohne Termin nach Status-Rang
+   (Zu tun/Läuft, Wartet, Wenn Zeit dann tun) */
+function internKey(i){const d=i.datum||'';if(d&&d<=today())return [0,d];if(d)return [1,d];return [1+(i.rang||1),i.titel||'']}
+function internSort(a,b){const x=internKey(a),y=internKey(b);return x[0]-y[0]||String(x[1]).localeCompare(String(y[1]))}
+function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · überfällig':d===today()?' · heute':''):'ohne Termin');
+  if(i.nstatus)t.push(i.nstatus);if(i.prio)t.push('Priorität '+i.prio);if(i.projekt)t.push(i.projekt);return t.join(' · ')}
 const DOKNAME={lieferschein:'Lieferschein',fotodoku:'Fotodoku'};
 function dokLeiste(e){const docs=e.docs||[];
   if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier laden.</div></div>`;
@@ -127,6 +133,15 @@ ERSETZUNGEN = [
      "maengel:[],tanken:[],reisetage:[],sync:{},weg:{},pins:{}}}\n"
      "let S=load()||leer();['reisetage','maengel','tanken','intern','einsaetze','fahrzeuge','kompressoren'].forEach(k=>{S[k]=S[k]||[]});S.pins=S.pins||{};S.weg=S.weg||{};"
      + SYNC),
+    # Interne Aufgaben (auch aus Notion): Reihenfolge, Termin optional, Status/Priorität/Projekt
+    ("sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class=\"card\" data-a=\"intern\"",
+     "sort(internSort).map(i=>`<button class=\"card\" data-a=\"intern\""),
+    ("<div class=\"meta\">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div>",
+     "<div class=\"meta\"${i.datum&&i.datum<today()?' style=\"color:var(--danger)\"':''}>${esc(internMeta(i))}</div>"),
+    ("<div class=\"k\">Erledigen am</div><div>${fDY(i.datum)}</div>",
+     "<div class=\"k\">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>"
+     "${i.nstatus?`<div class=\"k\">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}"
+     "${i.projekt?`<div class=\"k\">Projekt</div><div>${esc(i.projekt)}</div>`:''}"),
     # Abgeschlossener Einsatz: Lieferschein und Fotodoku zum Teilen
     ("${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}",
      "${dokLeiste(e)}${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}"),

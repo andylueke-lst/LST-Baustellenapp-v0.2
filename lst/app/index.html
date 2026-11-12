@@ -338,6 +338,12 @@ async function leuteLaden(){try{const l=await api('/api/leute');S.leute=l;save0(
 async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
 /* ---------- Lieferschein und Fotodoku vom Server laden und teilen ----------
    Erst laden, dann teilen: Safari erlaubt das Teilen nur direkt nach einem Fingertipp. */
+/* Interne Aufgaben: überfällig/heute zuerst, dann mit Termin, dann ohne Termin nach Status-Rang
+   (Zu tun/Läuft, Wartet, Wenn Zeit dann tun) */
+function internKey(i){const d=i.datum||'';if(d&&d<=today())return [0,d];if(d)return [1,d];return [1+(i.rang||1),i.titel||'']}
+function internSort(a,b){const x=internKey(a),y=internKey(b);return x[0]-y[0]||String(x[1]).localeCompare(String(y[1]))}
+function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · überfällig':d===today()?' · heute':''):'ohne Termin');
+  if(i.nstatus)t.push(i.nstatus);if(i.prio)t.push('Priorität '+i.prio);if(i.projekt)t.push(i.projekt);return t.join(' · ')}
 const DOKNAME={lieferschein:'Lieferschein',fotodoku:'Fotodoku'};
 function dokLeiste(e){const docs=e.docs||[];
   if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier laden.</div></div>`;
@@ -481,7 +487,7 @@ function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).l
   return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(e.einsatzort)}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
 function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="col"><h3>${t} <span class="tag">${list.length}</span></h3>${list.join('')||`<div class="empty">${empty}</div>`}</section>`;
   const es=st=>S.einsaetze.filter(e=>e.status===st).sort((a,b)=>st==='abgeschlossen'?b.von.localeCompare(a.von):a.von.localeCompare(b.von));
-  const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div><div class="tags">${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div></button>`);
+  const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort(internSort).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta"${i.datum&&i.datum<today()?' style="color:var(--danger)"':''}>${esc(internMeta(i))}</div><div class="tags">${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div></button>`);
   const mOffen=S.maengel.filter(m=>m.status==='offen').length;
   return `<div class="page"><div class="icon">🧰</div><h1>Einsätze</h1>
   <p class="muted" style="margin-top:6px">Hallo ${esc(me().name)}. ${fDY(today())}</p>
@@ -755,7 +761,7 @@ function page3(e,sig){const tl=e.tage;const sum={};let smArt=new Set();let grund
 /* ---------- Interne Aufträge, Mängel ---------- */
 function vIntern(){const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
   return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
-  <div class="props"><div class="k">Erledigen am</div><div>${fDY(i.datum)}</div><div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div><div class="k">Status</div><div>${i.status==='erledigt'?'<span class="tag green">Erledigt</span>':'<span class="tag yellow">Offen</span>'}</div></div>
+  <div class="props"><div class="k">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}<div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div><div class="k">Status</div><div>${i.status==='erledigt'?'<span class="tag green">Erledigt</span>':'<span class="tag yellow">Offen</span>'}</div></div>
   <div class="hr"></div><p>${esc(i.beschreibung)}</p>
   <div class="field" style="margin-top:16px"><label for="in-n">Notiz</label><textarea class="inp" id="in-n" data-in="notiz" placeholder="Kupplung getauscht, neue bestellt">${esc(i.notiz||'')}</textarea></div>
   <div class="fab">${!i.zust&&i.status==='offen'?'<button class="btn" data-a="mache">Mache ich</button>':''}${i.status==='offen'?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
