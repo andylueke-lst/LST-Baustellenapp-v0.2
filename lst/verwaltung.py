@@ -101,10 +101,14 @@ def mail_eintragen():
     speicher.einrichten()
     host = input("SMTP-Server (z. B. smtp.udmedia.de): ").strip()
     port = int(input("Port [587]: ").strip() or 587)
-    benutzer = input("Benutzer / Adresse (z. B. lieferschein@lueke-strahlt.de): ").strip()
+    benutzer = input("Benutzername für die Anmeldung (Kontoname oder Adresse): ").strip()
     passwort = getpass.getpass("Passwort: ")
+    vorschlag = benutzer if "@" in benutzer else "post@lueke-strahlt.de"
+    adresse = input(f"Absender-Adresse, die der Empfänger sieht [{vorschlag}]: ").strip() or vorschlag
+    if "@" not in adresse:
+        raise SystemExit("Die Absender-Adresse muss eine Mailadresse sein. Nichts gespeichert.")
     _geheim_setzen("mail", {"host": host, "port": port, "benutzer": benutzer, "passwort": passwort,
-                            "absender": f"LST Lüke-Strahl-Technik <{benutzer}>", "antwort_an": "post@lueke-strahlt.de",
+                            "absender": f"LST Lüke-Strahl-Technik <{adresse}>", "antwort_an": "post@lueke-strahlt.de",
                             "bcc": "post@lueke-strahlt.de", "verbindung": "ssl" if port == 465 else "starttls"})
     print("Gespeichert. Gilt sofort – im Büro im Postausgang „Jetzt senden“ probieren.")
 
