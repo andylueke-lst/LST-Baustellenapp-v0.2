@@ -6,6 +6,8 @@
   python3 -m lst.verwaltung notion          Notion-Schlüssel eintragen (verdeckte Eingabe)
   python3 -m lst.verwaltung mail            Zugang zum Postfach eintragen (verdeckte Eingabe)
   python3 -m lst.verwaltung testmail <an>   Testmail schicken, um den Mailversand zu prüfen
+  python3 -m lst.verwaltung kopie <an>      Kopie aller Mails an diese Adresse (ohne Passwort neu einzugeben)
+  python3 -m lst.verwaltung antwort <an>    Antworten der Empfänger gehen an diese Adresse
 """
 from __future__ import annotations
 
@@ -109,8 +111,18 @@ def mail_eintragen():
         raise SystemExit("Die Absender-Adresse muss eine Mailadresse sein. Nichts gespeichert.")
     _geheim_setzen("mail", {"host": host, "port": port, "benutzer": benutzer, "passwort": passwort,
                             "absender": f"LST Lüke-Strahl-Technik <{adresse}>", "antwort_an": "post@lueke-strahlt.de",
-                            "bcc": "post@lueke-strahlt.de", "verbindung": "ssl" if port == 465 else "starttls"})
+                            "bcc": input("Kopie aller Mails an [a.lueke@lueke-strahlt.de]: ").strip() or "a.lueke@lueke-strahlt.de", "verbindung": "ssl" if port == 465 else "starttls"})
     print("Gespeichert. Gilt sofort – im Büro im Postausgang „Jetzt senden“ probieren.")
+
+
+def mail_setzen(feld: str, adresse: str):
+    speicher.einrichten()
+    if "@" not in adresse:
+        raise SystemExit("Das ist keine Mailadresse. Nichts geändert.")
+    if not (speicher.geheim().get("mail") or {}).get("host"):
+        raise SystemExit("Mailversand ist noch nicht eingerichtet (erst: verwaltung mail).")
+    _geheim_setzen("mail", {feld: adresse})
+    print(("Kopie aller Mails geht jetzt an " if feld == "bcc" else "Antworten gehen jetzt an ") + adresse)
 
 
 def testmail(an: str):
@@ -137,6 +149,10 @@ if __name__ == "__main__":
         notion_eintragen()
     elif befehl == "mail":
         mail_eintragen()
+    elif befehl == "kopie" and len(sys.argv) > 2:
+        mail_setzen("bcc", sys.argv[2])
+    elif befehl == "antwort" and len(sys.argv) > 2:
+        mail_setzen("antwort_an", sys.argv[2])
     elif befehl == "testmail" and len(sys.argv) > 2:
         testmail(sys.argv[2])
     else:
