@@ -348,13 +348,14 @@ function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · über
    Pflicht zum Abhaken ist nur „Was wurde gemacht?“. Zeit, Material und Fotos sind freiwillig.
    Fotos gehen direkt zum Büro (brauchen also Verbindung). */
 function dauerText(z){if(!z||!z.von||!z.bis)return '–';const m0=(+z.bis.slice(0,2)*60+ +z.bis.slice(3,5))-(+z.von.slice(0,2)*60+ +z.von.slice(3,5));const m=m0<0?m0+1440:m0;return `${Math.floor(m/60)}:${pad(m%60)} h`}
-function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const offen=i.status==='offen';const z=i.zeit||{};const ro=offen?'':' disabled';
+function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const offen=i.status==='offen';const gem=!!i.gemeinsam;const z=gem?((i.zeiten||{})[S.user]||{}):(i.zeit||{});const ro=offen?'':' disabled';
+  const andere=gem?Object.entries(i.zeiten||{}).filter(([m])=>m!==S.user):[];
   const fotos=ph=>(i.fotos||[]).filter(f=>f.phase===ph).map(f=>`<img src="/intern-foto/${encodeURIComponent(i.id)}/${encodeURIComponent(f.id)}?v=1" alt="Foto ${ph}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px">`).join('');
   return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
   <div class="props"><div class="k">Erledigen am</div><div>${i.datum?fDY(i.datum):'ohne Termin'}</div>
   ${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}
   ${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}
-  <div class="k">Zuständig</div><div>${i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">offen für alle</span>'}</div>
+  <div class="k">Zuständig</div><div>${gem?`${(i.fuer||[]).map(m=>`<span class="tag purple">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="tag blue">gemeinsam</span>`:i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:(i.fuer||[]).length?`${i.fuer.map(m=>`<span class="tag">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="small muted">einer übernimmt</span>`:'<span class="tag">offen für alle</span>'}</div>
   <div class="k">Status</div><div>${offen?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
   ${i.beschreibung?`<div class="hr"></div><p style="white-space:pre-line">${esc(i.beschreibung)}</p>`:''}
   <div class="hr"></div><h2>Arbeitsbericht</h2>
@@ -363,18 +364,19 @@ function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
     <div class="field"><label for="ib-d">Datum</label><input class="inp" type="date" id="ib-d" data-ib="z.datum" value="${z.datum||today()}"${ro}></div>
     <div class="field"><label for="ib-v">von</label><input class="inp" type="time" id="ib-v" data-ib="z.von" value="${z.von||''}"${ro}></div>
     <div class="field"><label for="ib-b">bis</label><input class="inp" type="time" id="ib-b" data-ib="z.bis" value="${z.bis||''}"${ro}></div>
-    <div class="field"><label>Dauer</label><div id="ib-dauer" style="padding:10px 2px">${dauerText(z)}</div></div></div>
+    <div class="field"><label>Dauer${gem?' (meine Zeit)':''}</label><div id="ib-dauer" style="padding:10px 2px">${dauerText(z)}</div></div></div>
+  ${andere.length?`<div class="small muted" style="margin-top:6px">${andere.map(([m,t])=>`${esc(ma(m)?.name||m)}: ${t.von||'?'}–${t.bis||'?'} (${dauerText(t)})`).join(' · ')}</div>`:''}
   <div class="field"><label for="ib-m">Material <span class="small muted">(freiwillig)</span></label><textarea class="inp" id="ib-m" data-ib="material" style="min-height:60px" placeholder="z. B. 2 m Druckluftschlauch, 1 Kupplung"${ro}>${esc(i.material||'')}</textarea></div>
   <div class="field"><label>Fotos <span class="small muted">(freiwillig)</span></label>
   ${['vorher','nachher'].map(ph=>`<div class="small muted" style="margin:6px 0">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${fotos(ph)}${offen?`<label class="btn small" style="cursor:pointer;justify-content:center">📷 Foto<input type="file" accept="image/*" multiple hidden data-ifoto="${ph}"></label>`:''}</div>`).join('')}
   <div class="small muted" id="ib-st" role="status" style="min-height:18px"></div></div>
-  <div class="fab">${!i.zust&&offen?'<button class="btn" data-a="mache">Mache ich</button>':''}${offen?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
+  <div class="fab">${!i.zust&&!gem&&offen?'<button class="btn" data-a="mache">Mache ich</button>':''}${offen?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
 function internErledigt(){const i=S.intern.find(x=>x.id===V.id);if(!i)return;
   if(!(i.notiz||'').trim()){toast('Bitte kurz eintragen, was gemacht wurde.');const t=document.getElementById('ib-t');if(t)t.focus();return}
-  i.status='erledigt';i.erledigt_am=today();i.erledigt_von=S.user;i.zeit=i.zeit||{datum:today()};if(!i.zust)i.zust=S.user;
+  i.status='erledigt';i.erledigt_am=today();i.erledigt_von=S.user;if(i.gemeinsam){i.zeiten=i.zeiten||{};i.zeiten[S.user]=i.zeiten[S.user]||{datum:today()}}else{i.zeit=i.zeit||{datum:today()};if(!i.zust)i.zust=S.user}
   save();V={name:'start'};render();toast('Auftrag erledigt')}
 function internFeld(ev){const t=ev.target;if(!t||!t.dataset||!t.dataset.ib)return;const i=S.intern.find(x=>x.id===V.id);if(!i||i.status!=='offen')return;const k=t.dataset.ib;
-  if(k.startsWith('z.')){i.zeit=i.zeit||{datum:today()};i.zeit[k.slice(2)]=t.value;const d=document.getElementById('ib-dauer');if(d)d.textContent=dauerText(i.zeit)}else i[k]=t.value;save()}
+  if(k.startsWith('z.')){let zz;if(i.gemeinsam){i.zeiten=i.zeiten||{};zz=i.zeiten[S.user]=i.zeiten[S.user]||{datum:today()}}else zz=i.zeit=i.zeit||{datum:today()};zz[k.slice(2)]=t.value;const d=document.getElementById('ib-dauer');if(d)d.textContent=dauerText(zz)}else i[k]=t.value;save()}
 document.addEventListener('input',internFeld);document.addEventListener('change',internFeld);
 document.addEventListener('change',async ev=>{const t=ev.target;if(!t||!t.dataset||!t.dataset.ifoto)return;const i=S.intern.find(x=>x.id===V.id);if(!i)return;
   const st=document.getElementById('ib-st');const files=[...t.files];const ph=t.dataset.ifoto;t.value='';

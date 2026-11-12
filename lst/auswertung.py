@@ -171,16 +171,19 @@ def arbeitszeiten(von: str, bis: str, wer: str | list[str] | None = None) -> lis
                        "ende": h.get("bis"), "ruest": 0, "fahrt": 0, "ort": c, "pause": h.get("pause") or 0,
                        "gesamt": c, "fehlt": [], "offen": False})
     for i in speicher.stamm("intern", []):
-        z = (i or {}).get("zeit") or {}
-        mid = i.get("erledigt_von") or i.get("zust")
-        if not z.get("von") or not _im_zeitraum(z.get("datum"), von, bis) or (wer and mid not in wer):
+        if not isinstance(i, dict):
             continue
-        a, b = _min(z.get("von")), _min(z.get("bis"))
-        dauer = (b - a) % 1440 if a is not None and b is not None else None
-        zeilen.append({"datum": z["datum"], "mid": mid, "name": namen.get(mid, mid or "?"), "art": "Intern",
-                       "wo": i.get("titel", ""), "eid": None, "beginn": z.get("von"), "ende": z.get("bis"),
-                       "ruest": 0, "fahrt": 0, "ort": dauer, "pause": 0, "gesamt": dauer,
-                       "fehlt": [] if dauer is not None else ["Ende"], "offen": dauer is None})
+        eintraege = list((i.get("zeiten") or {}).items()) or [(i.get("erledigt_von") or i.get("zust"), i.get("zeit") or {})]
+        for mid, z in eintraege:
+            z = z or {}
+            if not z.get("von") or not _im_zeitraum(z.get("datum"), von, bis) or (wer and mid not in wer):
+                continue
+            a, b = _min(z.get("von")), _min(z.get("bis"))
+            dauer = (b - a) % 1440 if a is not None and b is not None else None
+            zeilen.append({"datum": z["datum"], "mid": mid, "name": namen.get(mid, mid or "?"), "art": "Intern",
+                           "wo": i.get("titel", ""), "eid": None, "beginn": z.get("von"), "ende": z.get("bis"),
+                           "ruest": 0, "fahrt": 0, "ort": dauer, "pause": 0, "gesamt": dauer,
+                           "fehlt": [] if dauer is not None else ["Ende"], "offen": dauer is None})
     zeilen.sort(key=lambda x: (x["datum"], x["name"], x.get("beginn") or ""))
     return zeilen
 

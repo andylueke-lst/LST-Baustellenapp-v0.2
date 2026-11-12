@@ -455,6 +455,8 @@ def aufgaben_abgleichen() -> dict:
         if status not in AUFGABEN_STATUS:
             continue
         fuer_ids = []
+        gemeinsam = any(n.lower() == "gemeinsam" for n in namen)
+        namen = [n for n in namen if n.lower() != "gemeinsam"]
         if any(n.lower() == "alle" for n in namen):
             zust = None
         else:
@@ -463,7 +465,9 @@ def aufgaben_abgleichen() -> dict:
                 uebersprungen += 1
                 continue
             # eine Person: ihr zugeordnet; mehrere: für diese Personen offen, wer „Mache ich“ tippt, übernimmt
-            zust = fuer_ids[0] if len(fuer_ids) == 1 else None
+            zust = fuer_ids[0] if len(fuer_ids) == 1 and not gemeinsam else None
+        if gemeinsam and not fuer_ids:      # „Alle“ + „Gemeinsam“
+            fuer_ids = [m["id"] for m in leute if m.get("aktiv", True) and m.get("ipad", True)]
         aid = "n-" + p["id"].replace("-", "")
         vorher = alt.get(aid) or {}
         geaendert = p.get("last_edited_time")
@@ -486,14 +490,15 @@ def aufgaben_abgleichen() -> dict:
         a = {"id": aid, "titel": eig(p, "Aufgabe") or titel(p) or "Aufgabe", "beschreibung": text,
              "datum": ((eig(p, "Wann tun") or {}).get("start") or "")[:10], "zust": zust,
              "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS[status],
-             "prio": eig(p, "Priorität") or "", "projekt": projekt, "fuer": fuer_ids if len(fuer_ids) > 1 else [],
+             "prio": eig(p, "Priorität") or "", "projekt": projekt, "fuer": fuer_ids if (len(fuer_ids) > 1 or gemeinsam) else [],
+             "gemeinsam": gemeinsam,
              "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert}}
         if vorher.get("status") == "erledigt":
             a["status"] = "erledigt"
-        for k in ("notiz", "zeit", "material", "fotos", "erledigt_am", "erledigt_von"):   # Arbeitsbericht vom iPad
+        for k in ("notiz", "zeit", "zeiten", "material", "fotos", "erledigt_am", "erledigt_von"):   # Arbeitsbericht vom iPad
             if vorher.get(k):
                 a[k] = vorher[k]
-        if zust is None and vorher.get("zust"):      # bei „Alle“: wer „Mache ich“ getippt hat, bleibt zuständig
+        if zust is None and vorher.get("zust") and not gemeinsam:      # bei „Alle“: wer „Mache ich“ getippt hat, bleibt zuständig
             a["zust"] = vorher["zust"]
         neu[aid] = a
     weg = [k for k in alt if str(k).startswith("n-") and k not in neu]

@@ -28,9 +28,16 @@ def arbeitsbericht(daten: dict) -> bytes:
     s.feld("Aufgabe", daten["titel"])
     if daten.get("projekt"):
         s.feld("Projekt", daten["projekt"])
-    s.feld("Erledigt von", daten.get("name") or "–")
-    s.feld("Datum", basis.datum(daten["datum"]) if daten.get("datum") else "–")
-    if daten.get("von") or daten.get("bis"):
+    if daten.get("zeiten"):     # gemeinsame Aufgabe: eine Zeile je Person
+        s.feld("Erledigt von", ", ".join(z["name"] for z in daten["zeiten"]))
+        for z in daten["zeiten"]:
+            dauer = dauer_text(z.get("von"), z.get("bis"))
+            s.feld(z["name"], (basis.datum(z["datum"]) + ", " if z.get("datum") else "")
+                   + f"{z.get('von') or '?'}–{z.get('bis') or '?'} Uhr" + (f" ({dauer})" if dauer else ""))
+    else:
+        s.feld("Erledigt von", daten.get("name") or "–")
+        s.feld("Datum", basis.datum(daten["datum"]) if daten.get("datum") else "–")
+    if not daten.get("zeiten") and (daten.get("von") or daten.get("bis")):
         dauer = dauer_text(daten.get("von"), daten.get("bis"))
         s.feld("Zeit", f"{daten.get('von') or '?'}–{daten.get('bis') or '?'} Uhr" + (f" ({dauer})" if dauer else ""))
     s.abstand(10)

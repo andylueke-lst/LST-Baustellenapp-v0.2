@@ -429,7 +429,10 @@ def intern_bericht(iid):
     pdf = dok_intern.arbeitsbericht({"titel": i.get("titel", ""), "projekt": i.get("projekt", ""),
                                      "beschreibung": i.get("beschreibung", ""), "name": voller_name(wer),
                                      "datum": datum, "von": z.get("von"), "bis": z.get("bis"),
-                                     "text": i.get("notiz", ""), "material": i.get("material", ""), "fotos": fotos})
+                                     "text": i.get("notiz", ""), "material": i.get("material", ""), "fotos": fotos,
+                                     "zeiten": [{"name": voller_name(next((m for m in speicher.stamm("mitarbeiter", [])
+                                                                          if m["id"] == mid), None)) or mid, **(zz or {})}
+                                                for mid, zz in (i.get("zeiten") or {}).items()]})
     name = basis.dateiname(datum, "LST", "intern", "Arbeitsbericht", i.get("titel", "")[:40])
     return send_file(io.BytesIO(pdf), mimetype="application/pdf", download_name=name)
 
@@ -808,7 +811,12 @@ def api_listen():
                 if isinstance(x.get("saecke"), dict):
                     a_["saecke"] = x["saecke"]
                 continue
-            alt[x["id"]] = {**alt.get(x["id"], {}), **x}
+            vorher = alt.get(x["id"], {})
+            neu = {**vorher, **x}
+            if k == "intern" and (isinstance(vorher.get("zeiten"), dict) or isinstance(x.get("zeiten"), dict)):
+                # gemeinsame Aufgabe: jedes iPad bringt seine eigene Zeit mit, die der anderen bleiben
+                neu["zeiten"] = {**(vorher.get("zeiten") or {}), **(x.get("zeiten") or {})}
+            alt[x["id"]] = neu
         for wid in (d.get("geloescht") or {}).get(k, []):
             alt.pop(wid, None)
         speicher.stamm_setzen(k, list(alt.values()))
