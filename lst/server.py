@@ -249,7 +249,8 @@ def einsatz_neu(eid=None):
                   "zusatz": _zeilen(f.get("zusatz"), e.get("zusatz", [])),
                   "team": {"vor": f.get("vor") or None, "fach": f.get("fach") or None},
                   "zeitenAufLs": bool(f.get("zeitenAufLs")), "tagesUnterschrift": bool(f.get("tagesUnterschrift"))})
-        e["geraete"] = {**e.get("geraete", {}), "fahrzeug": f.get("fahrzeug"), "kompressor": f.get("kompressor")}
+        e["geraete"] = {**e.get("geraete", {}), "fahrzeug": f.get("fahrzeug"), "kompressor": f.get("kompressor") or None,
+                       "strahl": f.getlist("strahl")[:2]}
         e.pop("anlagenPruefen", None)
         if not e["anlagen"]:
             flash("Bitte mindestens eine Anlage eintragen.", "fehler")
@@ -264,7 +265,8 @@ def einsatz_neu(eid=None):
 def _auswahl():
     return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)],
             "fahrzeuge": speicher.stamm("fahrzeuge", []),
-            "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)]}
+            "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
+            "strahlgeraete": speicher.stamm("strahlgeraete", [])}
 
 
 @app.route("/buero/einsatz/<eid>/loeschen", methods=["POST"])
