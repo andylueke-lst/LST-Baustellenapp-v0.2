@@ -47,8 +47,8 @@
 
 
 {% macro einsatz_kachel(k, live=false) %}{% set e = k.e %}
-<a class="kachel{% if live %} live{% endif %}{% if k.ohne_unterschrift %} warn{% endif %}" href="{{ url_for('einsatz_seite', eid=e.id) }}">
-  <div class="t">{{ jobname(e) }}</div>
+<div class="kachel klick{% if live %} live{% endif %}{% if k.ohne_unterschrift %} warn{% endif %}">
+  <div class="t"><a class="ganz" href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ jobname(e) }}</a></div>
   <div class="s">{{ e.kunde }}{% if e.name and e.einsatzort %} · {{ e.einsatzort }}{% endif %}</div>
   <div class="s">{{ zeitraum(e.von, e.bis) }}{% if e.ls and e.status == 'abgeschlossen' %} · {{ e.ls }}{% endif %}</div>
   {% for j in k.jetzt %}<div class="jetzt">{{ j }}</div>{% endfor %}
@@ -60,8 +60,9 @@
     {% if e.status == 'inarbeit' %}<span class="tag blue">Tag {{ k.tage }}</span>{% endif %}
     {% if e.tour %}<span class="tag blue">🔗 Tour {{ e.tour.nr }}/{{ e.tour.anzahl }}</span>{% endif %}
     {% if e.ipad_aus %}<span class="tag yellow">nicht auf iPads</span>{% endif %}
+    {% if e.notion and e.notion.id %}<a class="tag notionlink" href="{{ e.notion.url or ('https://www.notion.so/' ~ e.notion.id|replace('-', '')) }}" target="_blank" rel="noopener" title="Projekt in Notion öffnen">↗ Notion</a>{% endif %}
     {% if e.status == 'abgeschlossen' and e.notion and e.notion.status %}<span class="tag{% if e.notion.status.startswith('16') %} purple{% endif %}" title="Status in Notion">{{ e.notion.status }}</span>{% endif %}
-  </div></a>
+  </div></div>
 {% endmacro %}
 
 <section class="bereich"><h2>In Arbeit {% if laufend %}<span class="tag green">{{ laufend|length }}</span>{% endif %}</h2>

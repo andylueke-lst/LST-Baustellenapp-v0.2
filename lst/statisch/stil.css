@@ -95,7 +95,7 @@ table.tab select.inp{min-width:140px}
 .kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
 .kachel{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--bg);
   text-decoration:none;color:inherit;min-height:120px;position:relative}
-a.kachel:hover{background:var(--hover);border-color:rgba(55,53,47,.25)}
+a.kachel:hover,.kachel.klick:hover{background:var(--hover);border-color:rgba(55,53,47,.25)}
 .kachel .t{font-weight:600;font-size:16px;line-height:1.3}
 .kachel .s{font-size:13px;color:var(--muted)}
 .kachel .unten{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -109,3 +109,11 @@ a.kachel:hover{background:var(--hover);border-color:rgba(55,53,47,.25)}
 .projekte .item{grid-template-columns:minmax(260px,1fr) minmax(0,max-content)}
 .projekte .item>.row{justify-content:flex-end}
 @media (max-width:900px){.projekte .item{grid-template-columns:1fr}.projekte .item>.row{justify-content:flex-start}}
+
+/* Kachel mit mehreren Links: der Titel-Link deckt die ganze Kachel ab, weitere Links liegen darüber */
+.kachel.klick{position:relative}
+.kachel.klick a.ganz{color:inherit;text-decoration:none}
+.kachel.klick a.ganz::after{content:"";position:absolute;inset:0;border-radius:10px}
+.kachel.klick a.ganz:focus-visible::after{outline:2px solid var(--blue,#2383e2);outline-offset:2px}
+.kachel.klick .notionlink{position:relative;z-index:1;text-decoration:none;color:inherit;background:var(--hover)}
+.kachel.klick .notionlink:hover{text-decoration:underline}
