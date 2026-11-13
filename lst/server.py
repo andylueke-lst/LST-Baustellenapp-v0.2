@@ -395,7 +395,7 @@ def einsatz_neu(eid=None):
 
 
 def _auswahl():
-    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)],
+    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)],
             "fahrzeuge": [f for f in speicher.stamm("fahrzeuge", []) if f.get("aktiv", True)],
             "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
             "strahlgeraete": [g for g in speicher.stamm("strahlgeraete", []) if g.get("aktiv", True)]}
@@ -1197,7 +1197,8 @@ def api_stand():
         e = _einsatz_mit_fotos(e)
         e["docs"] = _docs_fuer_app(e["id"])
         es.append(e)
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
+    # alle aktiven: auch wer kein eigenes iPad-Login hat, kann im Team sein (z. B. Faro am iPad von Matthias)
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
     aus = {"ich": _fuer_app(ich()), "mitarbeiter": [_fuer_app(m) for m in leute], "einsaetze": es,
            "strahlgeraete": speicher.stamm("strahlgeraete", []), "typen": speicher.stamm("geraetetypen", {}),
            "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}

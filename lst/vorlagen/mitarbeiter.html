@@ -9,7 +9,7 @@
 <form method="post">
 <div style="overflow-x:auto">
 <table class="tab">
-  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>iPad</th><th>Minijob</th><th>Aktiv</th></tr></thead>
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Minijob</th><th>Aktiv</th></tr></thead>
   <tbody>
   {% for m in leute %}
   <tr>
@@ -41,7 +41,7 @@
   </tbody>
 </table>
 </div>
-<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. Ohne Haken bei „iPad“ erscheint jemand nicht auf den iPads (z. B. Minijobber); seine Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle Aktiven nehmen, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
 <button class="btn pri">Speichern</button>
 </form>
 {% endblock %}
