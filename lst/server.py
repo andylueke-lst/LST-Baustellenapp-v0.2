@@ -141,7 +141,7 @@ def jobname(e: dict | None) -> str:
 @app.context_processor
 def vorlagen_helfer():
     return {"ich": ich(), "jobname": jobname, "darf": darf, "BEREICHE": BEREICHE, "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
-            "mail_eingerichtet": mail.eingerichtet(),
+            "mail_eingerichtet": mail.eingerichtet(), "NOTION_AUFGABEN": notion.AUFGABEN_SEITE,
             "zeitpunkt": lambda ts: time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ts)) if ts else ""}
 
 

@@ -450,6 +450,7 @@ def lieferschein_abgleichen(e: dict, blocks: list[dict]) -> str:
 AUFGABEN_STATUS = {"Zu tun": 1, "Läuft": 1, "Wartet": 2, "Geplant": 2, "Wenn Zeit dann tun": 3, "Wenn Zeit": 3}
 IPAD_FELD = "iPad für"
 AUFGABEN_QUELLE = "930c0024-ee04-4560-bf79-a47f02f2e709"   # LST Aufgaben
+AUFGABEN_SEITE = "https://www.notion.so/7485e34e897d455bb96646e618772a88"   # Datenbank LST Aufgaben (zum Anlegen)
 
 
 def aufgaben_abfragen() -> list[dict]:

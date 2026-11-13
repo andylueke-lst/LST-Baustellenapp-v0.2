@@ -5,7 +5,8 @@
 <div class="kopfzeile">
   <div><h1>Interne Aufgaben</h1>
   <p class="muted" style="margin:0">Aus LST Aufgaben (Notion, „iPad für“ gesetzt) und auf den iPads angelegte.{% if stand.zeit %} Zuletzt geholt um {{ stand.zeit }} Uhr.{% endif %}</p></div>
-  {% if eingerichtet %}<form method="post" action="{{ url_for('notion_aufgaben') }}"><button class="btn small">Jetzt aus Notion holen</button></form>{% endif %}
+  {% if eingerichtet %}<div class="row" style="gap:8px">{% if darf('notion') %}<a class="btn small" href="{{ NOTION_AUFGABEN }}" target="_blank" rel="noopener" title="Öffnet LST Aufgaben in Notion. Dort „Neu“, Aufgabe eintragen und „iPad für“ setzen.">＋ Neue Aufgabe in Notion ↗</a>
+  <form method="post" action="{{ url_for('notion_aufgaben') }}"><button class="btn small" title="Neue und geänderte Aufgaben sofort holen statt in bis zu 5 Minuten">🔄 Aufgaben holen</button></form>{% endif %}</div>{% endif %}
 </div>
 {% if stand.fehler %}<div class="callout fehler" role="alert">{{ stand.fehler }}</div>{% endif %}
 

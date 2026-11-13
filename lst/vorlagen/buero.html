@@ -75,7 +75,9 @@
   <a class="kachel neu" href="{{ url_for('notion_seite') }}">Aus Notion übernehmen</a></div></section>
 
 <section class="bereich"><h2>Interne Aufgaben {% if aufgaben_offen %}<span class="tag">{{ aufgaben_offen }} offen</span>{% endif %}
-  <a class="btn small" href="{{ url_for('aufgaben_seite') }}" style="margin-left:auto">Alle Aufgaben</a></h2>
+  <span class="row" style="margin-left:auto;gap:8px;flex-wrap:wrap">{% if darf('notion') %}<a class="btn small" href="{{ NOTION_AUFGABEN }}" target="_blank" rel="noopener" title="Öffnet LST Aufgaben in Notion. Dort „Neu“, Aufgabe eintragen und „iPad für“ setzen.">＋ Neue Aufgabe in Notion ↗</a>
+  <form method="post" action="{{ url_for('notion_aufgaben') }}"><button class="btn small" title="Neue und geänderte Aufgaben sofort holen statt in bis zu 5 Minuten">🔄 Aufgaben holen</button></form>{% endif %}
+  <a class="btn small" href="{{ url_for('aufgaben_seite') }}">Alle Aufgaben</a></span></h2>
 {% if aufgaben %}<div class="kacheln">{% for a in aufgaben %}
   <a class="kachel{% if a.ueberfaellig %} rot{% endif %}" href="{{ url_for('aufgaben_seite') }}#a-{{ a.id }}">
     <div class="t">{{ a.titel }}</div>
