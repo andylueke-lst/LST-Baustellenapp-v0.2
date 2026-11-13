@@ -9,7 +9,7 @@
 <form method="post">
 <div style="overflow-x:auto">
 <table class="tab">
-  <thead><tr><th>Vorname</th><th>Nachname</th><th>Funktion</th><th>Rechte in der App</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Funktion</th><th>Grundrolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
   <tbody>
   {% for m in leute %}
   <tr>
@@ -45,7 +45,17 @@
   </tbody>
 </table>
 </div>
-<p class="small muted">Funktion: frei wählbar (Geschäftsführer, Vertrieb, Administration …), ändert keine Rechte. Rechte in der App: Admin sieht alles im Büro und alle Jobs, Technik zusätzlich die Mängelliste, Mitarbeiter nur die eigenen Jobs. PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<p class="small muted">Funktion: frei wählbar (Geschäftsführer, Vertrieb, Administration …), ändert keine Rechte. Grundrolle: Admin sieht alles (Büro komplett, alle Jobs), Technik die eigenen Jobs und die Mängelliste, Mitarbeiter die eigenen Jobs. Einzelne Büro-Bereiche ohne Admin vergibst du unten. PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<h2>Anmeldung im Büro und Rechte</h2>
+<p class="small muted">Wer sich im Browser (Büro) anmelden darf und welche Bereiche er dort sieht. <b>Admin</b> hat immer alles. Ohne Büro-Bereich landet man nach der Anmeldung in der iPad-Ansicht mit den eigenen Jobs.</p>
+<div style="overflow-x:auto"><table class="tab">
+  <thead><tr><th>Name</th><th>Anmeldung im Büro</th>{% for b, l in BEREICHE %}<th style="font-size:12px">{{ l }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for m in leute %}{% set adm = m.rolle == 'admin' %}<tr{% if m.aktiv == false %} style="opacity:.55"{% endif %}>
+    <td><b>{{ m.vorname }}</b>{% if adm %} <span class="tag purple">Admin</span>{% endif %}</td>
+    <td><input type="checkbox" name="buero_{{ m.id }}"{% if adm or m.buero %} checked{% endif %}{% if adm %} disabled{% endif %} aria-label="Anmeldung im Büro" style="width:22px;height:22px"></td>
+    {% for b, l in BEREICHE %}<td><input type="checkbox" name="recht_{{ m.id }}_{{ b }}"{% if adm or b in (m.rechte or []) %} checked{% endif %}{% if adm %} disabled{% endif %} aria-label="{{ l }}" style="width:22px;height:22px"></td>{% endfor %}
+  </tr>{% endfor %}</tbody></table></div>
+
 <datalist id="funktionen">{% for f in ['Geschäftsführer','Vertrieb','Administration','Technik','Vorarbeiter','Facharbeiter','Aushilfe'] %}<option value="{{ f }}">{% endfor %}</datalist>
 <button class="btn pri">Speichern</button>
 </form>

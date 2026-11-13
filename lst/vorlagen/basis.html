@@ -9,15 +9,15 @@
 <body>
 {% if ich %}
 <div class="top">
-  <nav aria-label="Pfad"><a href="{{ url_for('buero') }}">🏠 Büro</a>{% block pfad %}{% endblock %}</nav>
-  {% if ich.rolle == 'admin' %}<nav class="menue" aria-label="Bereiche">
-    <a href="{{ url_for('einsatz_neu') }}">＋ Einsatz</a>
-    <a href="{{ url_for('notion_seite') }}">Notion</a>
-    <a href="{{ url_for('aufgaben_seite') }}">Aufgaben</a>
-    <a href="{{ url_for('stunden_seite') }}">Stunden</a>
-    <a href="{{ url_for('tanken_seite') }}">Tanken</a>
-    <a href="{{ url_for('geraete_seite') }}">Fahrzeuge &amp; Geräte</a>
-    <a href="{{ url_for('mitarbeiter_seite') }}">Mitarbeiter</a>
+  <nav aria-label="Pfad"><a href="{{ url_for('buero') if darf('einsaetze') else url_for('start') }}">🏠 Büro</a>{% block pfad %}{% endblock %}</nav>
+  {% if ich and (darf('einsaetze') or darf('notion') or darf('aufgaben') or darf('stunden') or darf('tanken') or darf('geraete') or darf('mitarbeiter')) %}<nav class="menue" aria-label="Bereiche">
+    {% if darf('einsaetze') %}<a href="{{ url_for('einsatz_neu') }}">＋ Einsatz</a>{% endif %}
+    {% if darf('notion') %}<a href="{{ url_for('notion_seite') }}">Notion</a>{% endif %}
+    {% if darf('aufgaben') %}<a href="{{ url_for('aufgaben_seite') }}">Aufgaben</a>{% endif %}
+    {% if darf('stunden') %}<a href="{{ url_for('stunden_seite') }}">Stunden</a>{% endif %}
+    {% if darf('tanken') %}<a href="{{ url_for('tanken_seite') }}">Tanken</a>{% endif %}
+    {% if darf('geraete') %}<a href="{{ url_for('geraete_seite') }}">Fahrzeuge &amp; Geräte</a>{% endif %}
+    {% if darf('mitarbeiter') %}<a href="{{ url_for('mitarbeiter_seite') }}">Mitarbeiter</a>{% endif %}
     <a href="/app/">iPad-Ansicht</a></nav>{% endif %}
   <span class="small muted">{{ ich.vorname }}</span>
   <a class="btn small" href="{{ url_for('logout') }}">Abmelden</a>

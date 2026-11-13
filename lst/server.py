@@ -62,7 +62,51 @@ def _einsatz_fuer_mich(eid: str) -> dict:
     return e
 
 
+# Bereiche des Büros, die einzeln freigegeben werden können (Admins haben alle)
+BEREICHE = [("einsaetze", "Einsätze & Dokumente"), ("notion", "Notion"), ("aufgaben", "Aufgaben"),
+            ("stunden", "Stunden"), ("tanken", "Tanken"), ("geraete", "Fahrzeuge & Geräte"),
+            ("mitarbeiter", "Mitarbeiter & Rechte"), ("loeschen", "Dokumente löschen")]
+_BEREICH_PFAD = [("/buero/stunden", "stunden"), ("/buero/tanken", "tanken"), ("/buero/geraete", "geraete"),
+                 ("/buero/mitarbeiter", "mitarbeiter"), ("/buero/notion", "notion"), ("/buero/aufgaben", "aufgaben"),
+                 ("/buero/intern", "aufgaben"), ("/buero/postausgang", "einsaetze")]
+
+
+def rechte(m: dict | None) -> set:
+    if not m:
+        return set()
+    if m.get("rolle") == "admin":
+        return {b for b, _ in BEREICHE}
+    return set(m.get("rechte") or [])
+
+
+def darf(bereich: str, m: dict | None = None) -> bool:
+    return bereich in rechte(m if m is not None else ich())
+
+
+def buero_start(m: dict | None) -> str:
+    """Erste Büro-Seite, die jemand sehen darf; sonst die iPad-Ansicht."""
+    r = rechte(m)
+    if "einsaetze" in r:
+        return url_for("buero")
+    ziele = {"aufgaben": "aufgaben_seite", "stunden": "stunden_seite", "tanken": "tanken_seite",
+             "geraete": "geraete_seite", "notion": "notion_seite", "mitarbeiter": "mitarbeiter_seite"}
+    for b, _ in BEREICHE:
+        if b in r and b in ziele:
+            return url_for(ziele[b])
+    return "/app"
+
+
+def _bereich_fuer(pfad: str, endpunkt: str | None) -> str:
+    if endpunkt == "dokument_loeschen":
+        return "loeschen"
+    for vorn, b in _BEREICH_PFAD:
+        if pfad.startswith(vorn):
+            return b
+    return "einsaetze"
+
+
 def anmeldung(admin=False):
+    """admin=True: Büro-Seite; erlaubt, wenn der Bereich der Seite für die Person freigegeben ist."""
     def deko(f):
         @functools.wraps(f)
         def innen(*a, **k):
@@ -71,7 +115,9 @@ def anmeldung(admin=False):
                 if request.path.startswith("/api/"):
                     return jsonify(fehler="Bitte anmelden."), 401
                 return redirect(url_for("login", weiter=request.path))
-            if admin and m.get("rolle") != "admin":
+            if admin and not darf(_bereich_fuer(request.path, request.endpoint), m):
+                if request.method == "GET" and not request.path.startswith("/api/") and request.path in ("/buero", "/buero/"):
+                    return redirect(buero_start(m))
                 abort(403)
             return f(*a, **k)
         return innen
@@ -86,7 +132,7 @@ def jobname(e: dict | None) -> str:
 
 @app.context_processor
 def vorlagen_helfer():
-    return {"ich": ich(), "jobname": jobname, "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
+    return {"ich": ich(), "jobname": jobname, "darf": darf, "BEREICHE": BEREICHE, "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
             "mail_eingerichtet": mail.eingerichtet(),
             "zeitpunkt": lambda ts: time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ts)) if ts else ""}
 
@@ -110,7 +156,7 @@ def adresse_ok(a: str) -> bool:
 def login():
     # Büro/Browser: alle Aktiven mit PIN (der Haken „Anmeldung am iPad“ gilt nur für die iPad-App)
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)
-             and (m.get("pin_hash") or m.get("rolle") == "admin")]
+             and (m.get("rolle") == "admin" or m.get("buero"))]
     fehler = ""
     if request.method == "POST":
         m = next((x for x in leute if x["id"] == request.form.get("wer")), None)
@@ -121,7 +167,7 @@ def login():
             session.permanent = True
             session["uid"] = m["id"]
             speicher.protokoll("anmeldung", m["id"])
-            ziel = request.args.get("weiter") or (url_for("buero") if m.get("rolle") == "admin" else "/app")
+            ziel = request.args.get("weiter") or buero_start(m)
             return redirect(ziel if ziel.startswith("/") else "/")
         else:
             fehler = "Name oder PIN stimmt nicht."
@@ -138,7 +184,7 @@ def logout():
 @app.route("/")
 def start():
     m = ich()
-    return redirect(url_for("buero") if m and m.get("rolle") == "admin" else "/app")
+    return redirect(buero_start(m) if m else "/app")
 
 
 def _fotos_von(eid: str) -> list[dict]:
@@ -307,6 +353,8 @@ def mitarbeiter_seite():
             m["minijob"] = bool(f.get(f"minijob_{i}"))
             m["baustelle"] = bool(f.get(f"baustelle_{i}"))
             m["funktion"] = (f.get(f"funktion_{i}") or "").strip()
+            m["buero"] = bool(f.get(f"buero_{i}"))
+            m["rechte"] = [b for b, _ in BEREICHE if f.get(f"recht_{i}_{b}")]
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -323,12 +371,12 @@ def mitarbeiter_seite():
                    "rolle": f.get("rolle_neu", "mitarbeiter"), "team": f.get("team_neu", "Facharbeiter"),
                    "mail": f.get("mail_neu", "").strip(), "aktiv": True, "ipad": bool(f.get("ipad_neu")),
                    "minijob": bool(f.get("minijob_neu")), "baustelle": bool(f.get("baustelle_neu")),
-                   "funktion": (f.get("funktion_neu") or "").strip()}
+                   "funktion": (f.get("funktion_neu") or "").strip(), "buero": bool(f.get("buero_neu")), "rechte": []}
             pin = f.get("pin_neu", "").strip()
             if pin.isdigit() and 4 <= len(pin) <= 6:
                 neu["pin_hash"] = generate_password_hash(pin)
             leute.append(neu)
-        if not any(m.get("rolle") == "admin" and m.get("aktiv") and m.get("ipad", True) and m.get("pin_hash") for m in leute):
+        if not any(m.get("rolle") == "admin" and m.get("aktiv") and m.get("pin_hash") for m in leute):
             flash("Mindestens ein aktiver Admin mit PIN muss bleiben. Nichts gespeichert.", "fehler")
             return redirect(url_for("mitarbeiter_seite"))
         speicher.stamm_setzen("mitarbeiter", leute)

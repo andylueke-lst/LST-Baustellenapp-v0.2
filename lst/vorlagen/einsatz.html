@@ -38,7 +38,7 @@
     {% if d.id in aktuell %}<span class="tag green">aktuell</span>{% else %}<span class="tag">ältere Fassung</span>{% endif %}
     <div class="meta">{{ d.art|capitalize }} · erstellt {{ zeitpunkt(d.erstellt) }} · {{ d.status|replace('_',' ') }}{% if d.empfaenger %} · an {{ d.empfaenger }}{% endif %}</div></div>
     <div class="row"><a class="btn small" href="{{ url_for('dokument', did=d.id) }}" target="_blank" rel="noopener">Öffnen</a>
-    <form method="post" action="{{ url_for('dokument_loeschen', did=d.id) }}" onsubmit="return confirm('Dieses Dokument wirklich löschen?')"><button class="btn small" title="Löschen">🗑</button></form></div></div>
+    {% if darf('loeschen') %}<form method="post" action="{{ url_for('dokument_loeschen', did=d.id) }}" onsubmit="return confirm('Dieses Dokument wirklich löschen?')"><button class="btn small" title="Löschen">🗑</button></form>{% endif %}</div></div>
 {% else %}<div class="empty">Noch keine Dokumente. Sie entstehen beim Job-Abschluss auf dem iPad.</div>{% endfor %}
 </div>
 
