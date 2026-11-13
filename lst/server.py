@@ -942,6 +942,49 @@ def notion_ausblenden(pid):
     return redirect(url_for("notion_seite"))
 
 
+@app.route("/buero/notion/abgleichen", methods=["POST"])
+@anmeldung(admin=True)
+def notion_abgleichen():
+    """Alle vorbereiteten Einsätze aus Notion auf den neuesten Stand bringen (Termin, Adresse,
+    Ansprechpartner, Lexware-Lieferschein, Material, Reisetage) und die Aufgaben für die iPads holen.
+    Laufende und abgeschlossene Einsätze bleiben unverändert."""
+    felder = ("name", "von", "bis", "ls", "kunde", "einsatzort", "adresse", "apOrt", "apKunde",
+              "reinigungsart", "bestellnummer", "zusatz", "team")
+    geaendert, neue_ls, fehler, aktualisiert = [], [], [], []
+    for alt in speicher.einsaetze("vorbereitet"):
+        pid = (alt.get("notion") or {}).get("id")
+        if not pid:
+            continue
+        try:
+            e, _ = notion.uebernehmen(pid)
+        except notion.NotionFehler as ex:
+            fehler.append(f"{jobname(alt)}: {ex}")
+            continue
+        aktualisiert.append(e)
+        if e.get("ls") and not alt.get("ls"):
+            neue_ls.append(f"{jobname(e)} ({e['ls']})")
+        elif any(e.get(k) != alt.get(k) for k in felder):
+            geaendert.append(jobname(e))
+    n_rt = _reisetage_zu(aktualisiert) if aktualisiert else 0
+    aufgaben_holen()
+    teile = [f"{len(aktualisiert)} Einsätze mit Notion abgeglichen."]
+    if neue_ls:
+        teile.append("Neuer Lieferschein: " + ", ".join(neue_ls) + ".")
+    if geaendert:
+        teile.append("Geändert: " + ", ".join(geaendert) + ".")
+    if not neue_ls and not geaendert:
+        teile.append("Keine Änderungen.")
+    if n_rt:
+        teile.append(f"{n_rt} Reisetag(e) dazu.")
+    flash(" ".join(teile), "ok")
+    if fehler:
+        flash("Nicht abgeglichen: " + "; ".join(fehler), "fehler")
+    if AUFGABEN_STAND.get("fehler"):
+        flash("Aufgaben: " + AUFGABEN_STAND["fehler"], "fehler")
+    speicher.protokoll("notion_abgleich", session.get("uid"), None, anzahl=len(aktualisiert))
+    return redirect(request.referrer or url_for("buero"))
+
+
 @app.route("/buero/notion/<pid>/uebernehmen", methods=["POST"])
 @anmeldung(admin=True)
 def notion_uebernehmen(pid):

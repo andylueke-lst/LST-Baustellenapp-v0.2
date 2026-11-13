@@ -8,6 +8,8 @@
 <div class="kopfzeile">
   <div><h1>Büro</h1><p class="muted" style="margin:0">{{ datum(heute) }}</p></div>
   <div class="row"><a class="btn pri small" href="{{ url_for('einsatz_neu') }}">＋ Neuer Einsatz</a>
+    {% if darf('notion') %}<form method="post" action="{{ url_for('notion_abgleichen') }}" onsubmit="const b=this.querySelector('button');b.disabled=true;b.textContent='⏳ Notion wird abgeglichen …'">
+      <button class="btn small" title="Alle vorbereiteten Einsätze und die Aufgaben mit Notion abgleichen">🔄 Notion aktualisieren</button></form>{% endif %}
     <a class="btn small" href="{{ url_for('altdaten_seite') }}">Aus alter App übernehmen</a></div>
 </div>
 
