@@ -1300,6 +1300,8 @@ def api_stand():
             continue
         e = _einsatz_mit_fotos(e)
         e["docs"] = _docs_fuer_app(e["id"])
+        if e.get("status") == "abgeschlossen":
+            e["versand"] = {k: v for k, v in versandstatus(e).items() if k != "fertig"}
         es.append(e)
     # alle aktiven: auch wer kein eigenes iPad-Login hat, kann im Team sein (z. B. Faro am iPad von Matthias)
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("baustelle", True)]

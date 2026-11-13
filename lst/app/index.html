@@ -390,7 +390,12 @@ function dokLeiste(e){const docs=e.docs||[];
   if(e.sync_abschluss)return `<div class="callout small" style="margin-bottom:16px"><span>⏳</span><div>Lieferschein und Fotodoku entstehen im Büro, sobald alles übertragen ist. Danach kannst du sie hier ansehen und verschicken.</div></div>`;
   if(!docs.length)return `<div class="row" style="margin-bottom:16px"><span class="small muted">Noch keine Dokumente vom Büro geladen.</span><button class="btn small" data-a="sync">Neu laden</button></div>`;
   return `<div class="stack" style="margin-bottom:16px"><div class="row" style="flex-wrap:wrap">${docs.map(d=>`<button class="btn" data-a="dokzeigen" data-id="${d.id}">${d.art==='lieferschein'?'📄':'🖼️'} ${DOKNAME[d.art]||d.art} ansehen</button>`).join('')}</div>
+  ${versandZeile(e)}
   <div class="small muted">${e.ohneLexware&&!e.ls?'Hinweis: Beim Abschluss lag kein Lexware-Lieferschein im Büro vor, der Lieferschein enthält nur die Seite Arbeitsnachweis.':'Ansehen, dann verschicken oder teilen.'}</div></div>`}
+/* Versandstatus vom Büro: gezählt wird jeder Versand über die App (Büro oder iPad) */
+function versandZeile(e){const v=e.versand;if(!v)return'';const zt=t=>{if(!t)return'';const d=new Date(t*1000);return ` ${pad(d.getDate())}.${pad(d.getMonth()+1)}. ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+  const st=x=>!x?'':x.stand==='versendet'?`<b style="color:var(--ok)">✓ versendet${zt(x.wann)}</b>`:x.stand==='bestaetigt'?'<b style="color:var(--ok)">✓ bestätigt</b>':x.stand==='nicht_noetig'?'<span class="muted">nicht nötig</span>':x.stand==='wartet'?'<span style="color:var(--warn)">⏳ Postausgang</span>':x.stand==='erstellt'?'<span class="muted">noch nicht verschickt</span>':'<span class="muted">offen</span>';
+  return `<div class="small" style="display:flex;flex-wrap:wrap;gap:4px 14px">${[['lieferschein','Lieferschein'],['fotodoku','Fotodoku'],['fotobericht','Fotobericht']].map(([k,n])=>`<span title="${esc((v[k]||{}).an||'')}">${n}: ${st(v[k])}</span>`).join('')}</div>`}
 /* Dokument ansehen: Seiten als Bilder vom Server, mit Zurück, Verschicken und Teilen */
 function dokAnsicht(e,id){const d=(e.docs||[]).find(x=>x.id===id);if(!d)return;const n=d.seiten||1;
   const o=document.createElement('div');o.id='dokansicht';
