@@ -386,3 +386,42 @@ def csv_tanken(gruppen: list[dict]) -> bytes:
                         k(t.get("seit"), 1), k(t.get("verbrauch"), 2), "l/100 km" if km else "l/h",
                         "ja" if t["oel_geprueft"] else "", k(t["oel_l"]), t["wer"], t["wo"]])
     return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+
+def letzte_staende() -> dict:
+    """Höchster bekannter Kilometer- bzw. Betriebsstundenstand je Gerät, mit Datum und Herkunft.
+    Quellen: Tankvorgänge/Ölkontrollen, Start- und Endstände der Einsätze, gespeicherter Stand."""
+    aus = {}
+    def merken(gid, stand, datum, quelle):
+        try:
+            stand = float(stand)
+        except (TypeError, ValueError):
+            return
+        if stand <= 0:
+            return
+        alt = aus.get(gid)
+        if not alt or stand > alt["stand"] or (stand == alt["stand"] and (datum or "") > (alt["datum"] or "")):
+            aus[gid] = {"stand": stand, "datum": datum, "quelle": quelle}
+    for t in speicher.stamm("tanken", []):
+        if not isinstance(t, dict):
+            continue
+        g = t.get("geraet") or ""
+        merken(g, t.get("km") if g.startswith("f:") else (t.get("h") if t.get("h") is not None else t.get("km")),
+               t.get("datum"), "Ölkontrolle" if not t.get("l") else "Tanken")
+    for e in speicher.einsaetze():
+        g = e.get("geraete") or {}
+        tage = [t.get("datum") for t in e.get("tage") or [] if t.get("datum")]
+        anfang = min(tage) if tage else e.get("von")
+        ende = (e.get("abschluss") or {}).get("datum") or (max(tage) if tage else e.get("bis"))
+        name = e.get("name") or e.get("einsatzort") or ""
+        if g.get("fahrzeug"):
+            merken("f:" + g["fahrzeug"], (e.get("start") or {}).get("km"), anfang, f"Start {name}")
+            merken("f:" + g["fahrzeug"], (e.get("ende") or {}).get("km"), ende, f"Ende {name}")
+        if g.get("kompressor"):
+            merken("k:" + g["kompressor"], (e.get("start") or {}).get("kompH"), anfang, f"Start {name}")
+            merken("k:" + g["kompressor"], (e.get("ende") or {}).get("kompH"), ende, f"Ende {name}")
+    for f in speicher.stamm("fahrzeuge", []):
+        merken("f:" + f["id"], f.get("km"), None, "zuletzt bekannt")
+    for k in speicher.stamm("kompressoren", []):
+        merken("k:" + k["id"], k.get("h"), None, "zuletzt bekannt")
+    return aus

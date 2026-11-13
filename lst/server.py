@@ -1716,11 +1716,19 @@ def geraete_seite():
                 x["aktiv"] = bool(f.get(f"{i}_aktiv"))
                 if (f.get(f"{i}_{stand}") or "").strip():
                     x[stand] = zahl(f.get(f"{i}_{stand}"))
+                x["anfang"] = zahl(f.get(f"{i}_anfang"))
+                try:
+                    x["anfang_datum"] = date.fromisoformat(f.get(f"{i}_anfang_datum") or "").isoformat()
+                except ValueError:
+                    x["anfang_datum"] = None
+                if x["anfang"] is not None and (x.get(stand) is None or x["anfang"] > float(x.get(stand) or 0)):
+                    x[stand] = x["anfang"]
             if (f.get(f"{b}_neu_kz") or "").strip():
                 neu = {"id": neue_id(liste, b), "kz": f[f"{b}_neu_kz"].strip().upper(),
                        "name": (f.get(f"{b}_neu_name") or "").strip() or ("Fahrzeug" if b == "f" else "Kompressor"),
                        stand: zahl(f.get(f"{b}_neu_{stand}")), "eigen": f.get(f"{b}_neu_eigen") == "eigen",
-                       "vermieter": (f.get(f"{b}_neu_vermieter") or "").strip(), "aktiv": True}
+                       "vermieter": (f.get(f"{b}_neu_vermieter") or "").strip(), "aktiv": True,
+                       "anfang": zahl(f.get(f"{b}_neu_{stand}")), "anfang_datum": date.today().isoformat()}
                 if b == "f":
                     neu["saecke"] = {}
                 liste.append(neu)
@@ -1739,7 +1747,8 @@ def geraete_seite():
         flash("Gespeichert. Die iPads übernehmen die Änderungen beim nächsten Abgleich.", "ok")
         return redirect(url_for("geraete_seite"))
     from .auswertung import zahl as zahl_text
-    return render_template("geraete.html", fz=fz, kp=kp, sg=sg, typen=typen, zahl=zahl_text)
+    from .auswertung import letzte_staende
+    return render_template("geraete.html", fz=fz, kp=kp, sg=sg, typen=typen, zahl=zahl_text, letzt=letzte_staende())
 
 
 @app.route("/buero/tanken")
