@@ -15,7 +15,8 @@
   <div class="item">
     <div><b>{{ p.name }}</b>
       {% if p.einsatz %}<span class="tag {{ 'green' if p.einsatz.status == 'vorbereitet' else 'blue' }}">{{ 'übernommen' if p.einsatz.status == 'vorbereitet' else ('läuft' if p.einsatz.status == 'inarbeit' else 'abgeschlossen') }}</span>{% endif %}
-      <div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}{% if p.reinigungsart %} · {{ p.reinigungsart }}{% endif %}</div></div>
+      <div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}{% if p.reinigungsart %} · {{ p.reinigungsart }}{% endif %}</div>
+      {% if p.partner %}<div class="meta">🔗 verknüpft mit {{ p.partner|join(', ') }}</div>{% endif %}</div>
     <div class="row">
       {% if p.url %}<a class="btn small" href="{{ p.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}
       {% if p.kandidaten %}
@@ -25,6 +26,10 @@
       {% elif not p.einsatz or p.einsatz.status == 'vorbereitet' %}
       <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small {{ '' if p.einsatz else 'pri' }}">{{ 'Aktualisieren' if p.einsatz else 'Übernehmen' }}</button></form>
       {% else %}<a class="btn small" href="{{ url_for('einsatz_seite', eid=p.einsatz.id) }}">Öffnen</a>{% endif %}
+      {% if not p.einsatz and zuordenbar %}<details><summary class="btn small">Zuordnen …</summary>
+        <form method="post" action="{{ url_for('notion_verknuepfen', pid=p.id) }}" class="row" style="margin-top:6px">
+          <select class="inp" name="eid" style="min-width:220px" aria-label="Vorhandener Einsatz">{% for e in zuordenbar %}<option value="{{ e.id }}">{{ jobname(e) }} ({{ zeitraum(e.von, e.bis) }})</option>{% endfor %}</select>
+          <button class="btn small">Zuordnen</button></form></details>{% endif %}
       {% if not p.einsatz %}<form method="post" action="{{ url_for('notion_ausblenden', pid=p.id) }}"><button class="btn small" title="Hier nicht mehr anzeigen (z. B. schon in der alten App erledigt)">Ausblenden</button></form>{% endif %}
     </div>
   </div>

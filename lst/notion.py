@@ -163,7 +163,8 @@ def kurzinfo(p: dict) -> dict:
     um = eig(p, "Umsetzung") or {}
     return {"id": p["id"], "name": eig(p, "Projektname") or titel(p), "von": (um.get("start") or "")[:10],
             "bis": (um.get("end") or um.get("start") or "")[:10], "status": eig(p, "LST Status externe Projekte"),
-            "reinigungsart": eig(p, "Reinigungsart"), "url": p.get("url")}
+            "reinigungsart": eig(p, "Reinigungsart"), "url": p.get("url"),
+            "verknuepft": [x.replace("-", "") for x in (eig(p, "Projektverknüpfung") or [])]}
 
 
 def _firma(pid: str | None) -> dict:

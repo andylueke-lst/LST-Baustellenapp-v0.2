@@ -425,22 +425,36 @@ def notion_seite():
                     if nid:
                         vorhanden[nid] = e
             weg = set(speicher.stamm("notion_ausgeblendet", []))
+            vorhanden = {str(k).replace("-", ""): v for k, v in vorhanden.items()}
+            alle_k = []
             for p in notion.projekte_abfragen():
                 k = notion.kurzinfo(p)
-                k["einsatz"] = vorhanden.get(p["id"])
-                if k["einsatz"] and not k["einsatz"].get("name") and (k["einsatz"].get("notion") or {}).get("id") == p["id"]:
+                k["einsatz"] = vorhanden.get(p["id"].replace("-", ""))
+                if k["einsatz"] and not k["einsatz"].get("name") and \
+                        str((k["einsatz"].get("notion") or {}).get("id", "")).replace("-", "") == p["id"].replace("-", ""):
                     k["einsatz"]["name"] = k["name"]           # ältere Einsätze: Projektname als Jobname
                     speicher.einsatz_speichern(k["einsatz"])
+                alle_k.append(k)
+            # Zusammengehörige Projekte: Notion-Feld „Projektverknüpfung“ (in beide Richtungen)
+            namen = {k["id"].replace("-", ""): k["name"] for k in alle_k}
+            for k in alle_k:
+                kid = k["id"].replace("-", "")
+                partner = set(k["verknuepft"]) | {x["id"].replace("-", "") for x in alle_k if kid in x["verknuepft"]}
+                k["partner"] = [namen.get(x) or (jobname(vorhanden[x]) if x in vorhanden else "weiteres Projekt") for x in partner]
                 if not k["einsatz"]:
-                    k["kandidaten"] = _passende_einsaetze(k, alle_e)
-                (ausgeblendet if p["id"] in weg else liste).append(k)
+                    k["kandidaten"] = list({id(e): e for e in (vorhanden.get(x) for x in partner) if e}.values())
+                (ausgeblendet if p_ausgeblendet(k, weg) else liste).append(k)
         except notion.NotionFehler as ex:
             fehler = str(ex)
     alle = speicher.stamm("intern", [])
     intern = [i for i in alle if str(i.get("id", "")).startswith("n-")]
     grenze = (date.today() - timedelta(days=14)).isoformat()
     leute = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
+    grenze_z = (date.today() - timedelta(days=60)).isoformat()
+    zuordenbar = sorted((e for e in speicher.einsaetze() if (e.get("bis") or e.get("von") or "") >= grenze_z),
+                        key=lambda e: e.get("von") or "", reverse=True)
     return render_template("notion.html", liste=liste, ausgeblendet=ausgeblendet, fehler=fehler, eingerichtet=notion.eingerichtet(),
+                           zuordenbar=zuordenbar,
                            schreiben=bool(notion.einstellungen().get("schreiben")),
                            aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
                            aufgaben_erledigt=[i for i in alle if i.get("status") == "erledigt" and (
@@ -566,27 +580,8 @@ def notion_aufgaben():
     return redirect(request.referrer or url_for("notion_seite"))
 
 
-def _passende_einsaetze(k: dict, alle: list[dict]) -> list[dict]:
-    """Vorhandene Einsätze, die zu einem Notion-Projekt gehören könnten: Zeitraum überschneidet sich
-    (±3 Tage) und ein markantes Wort aus dem Projektnamen steckt im Einsatzort/Kunden."""
-    def woerter(t):
-        return {w for w in re.findall(r"[a-zäöüß0-9]{4,}", (t or "").lower()) if not w.isdigit()}
-    pw = woerter(k.get("name"))
-    try:
-        von = date.fromisoformat(k["von"]) - timedelta(days=3)
-        bis = date.fromisoformat(k["bis"] or k["von"]) + timedelta(days=3)
-    except (KeyError, ValueError):
-        return []
-    aus = []
-    for e in alle:
-        try:
-            ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
-        except ValueError:
-            continue
-        gemeinsam = pw & woerter(f"{e.get('name', '')} {e.get('einsatzort', '')} {e.get('kunde', '')}")
-        if ev <= bis and eb >= von and gemeinsam:
-            aus.append(e)
-    return aus
+def p_ausgeblendet(k: dict, weg: set) -> bool:
+    return k["id"] in weg
 
 
 @app.route("/buero/notion/<pid>/verknuepfen", methods=["POST"])
