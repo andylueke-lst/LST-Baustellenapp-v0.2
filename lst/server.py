@@ -108,7 +108,9 @@ def adresse_ok(a: str) -> bool:
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
+    # Büro/Browser: alle Aktiven mit PIN (der Haken „Anmeldung am iPad“ gilt nur für die iPad-App)
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)
+             and (m.get("pin_hash") or m.get("rolle") == "admin")]
     fehler = ""
     if request.method == "POST":
         m = next((x for x in leute if x["id"] == request.form.get("wer")), None)
