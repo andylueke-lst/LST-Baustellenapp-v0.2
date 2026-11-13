@@ -137,13 +137,13 @@ def titel(seite_json: dict) -> str:
 
 
 # ---------------------------------------------------------------- Projekte lesen
-def projekte_abfragen(tage_zurueck: int = 7, tage_voraus: int = 60) -> list[dict]:
-    """Bestätigte Projekte im Zeitfenster, früheste zuerst."""
+def projekte_abfragen(tage_zurueck: int = 7, tage_voraus: int = 60, status: tuple = None) -> list[dict]:
+    """Bestätigte Projekte (oder die mit den angegebenen Status) im Zeitfenster, früheste zuerst."""
     ds = einstellungen()["projekte"]
     von = (date.today() - timedelta(days=tage_zurueck)).isoformat()
     bis = (date.today() + timedelta(days=tage_voraus)).isoformat()
     filt = {"and": [
-        {"or": [{"property": "LST Status externe Projekte", "status": {"equals": s}} for s in STATUS_UEBERNEHMEN]},
+        {"or": [{"property": "LST Status externe Projekte", "status": {"equals": s}} for s in (status or STATUS_UEBERNEHMEN)]},
         {"property": "Umsetzung", "date": {"on_or_after": von}},
         {"property": "Umsetzung", "date": {"on_or_before": bis}}]}
     aus, cursor = [], None
@@ -164,7 +164,17 @@ def kurzinfo(p: dict) -> dict:
     return {"id": p["id"], "name": eig(p, "Projektname") or titel(p), "von": (um.get("start") or "")[:10],
             "bis": (um.get("end") or um.get("start") or "")[:10], "status": eig(p, "LST Status externe Projekte"),
             "reinigungsart": eig(p, "Reinigungsart"), "url": p.get("url"),
-            "verknuepft": [x.replace("-", "") for x in (eig(p, "Projektverknüpfung") or [])]}
+            "verknuepft": [x.replace("-", "") for x in (eig(p, "Projektverknüpfung") or [])],
+            "zweiter": [n for n in (eig(p, "2. Mann") or []) if n] if isinstance(eig(p, "2. Mann"), list) else
+                       ([eig(p, "2. Mann")] if eig(p, "2. Mann") else [])}
+
+
+STATUS_REISETAG = ("20 Reisetag",)
+
+
+def reisetage_abfragen() -> list[dict]:
+    """Reisetage aus LST Projekte (Status „20 Reisetag“) der letzten 7 und nächsten 60 Tage."""
+    return [kurzinfo(p) for p in projekte_abfragen(status=STATUS_REISETAG)]
 
 
 def _firma(pid: str | None) -> dict:

@@ -418,7 +418,7 @@ def einsatz_loeschen(eid):
 @app.route("/buero/notion")
 @anmeldung(admin=True)
 def notion_seite():
-    liste, ausgeblendet, fehler = [], [], ""
+    liste, ausgeblendet, fehler, reisen = [], [], "", []
     if notion.eingerichtet():
         try:
             alle_e = speicher.einsaetze()
@@ -452,6 +452,7 @@ def notion_seite():
                                        if _ueberschneidet(k, e)]
                 (ausgeblendet if p_ausgeblendet(k, weg) else liste).append(k)
             liste = _gruppieren(liste)
+            reisen = _reisetage_uebersicht(alle_e, vorhanden, alle_k)
         except notion.NotionFehler as ex:
             fehler = str(ex)
     alle = speicher.stamm("intern", [])
@@ -462,7 +463,7 @@ def notion_seite():
     zuordenbar = sorted((e for e in speicher.einsaetze() if (e.get("bis") or e.get("von") or "") >= grenze_z),
                         key=lambda e: e.get("von") or "", reverse=True)
     return render_template("notion.html", liste=liste, ausgeblendet=ausgeblendet, fehler=fehler, eingerichtet=notion.eingerichtet(),
-                           zuordenbar=zuordenbar, tour_leute=_auswahl()["leute"], fahrzeuge=_auswahl()["fahrzeuge"],
+                           zuordenbar=zuordenbar, reisen=reisen, tour_leute=_auswahl()["leute"], fahrzeuge=_auswahl()["fahrzeuge"],
                            kompressoren=_auswahl()["kompressoren"],
                            schreiben=bool(notion.einstellungen().get("schreiben")),
                            aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
@@ -589,6 +590,34 @@ def notion_aufgaben():
     return redirect(request.referrer or url_for("notion_seite"))
 
 
+def _reisetage_uebersicht(alle_e: list[dict], vorhanden: dict, projekte: list[dict]) -> list[dict]:
+    """Reisetage aus Notion mit Ziel-Einsatz: über „Projektverknüpfung“ (sicher) oder als Vorschlag
+    der Einsatz, der am Tag danach beginnt bzw. am Tag davor endet."""
+    da = {r.get("notion_id", "").replace("-", ""): r for r in speicher.stamm("reisetage", []) if r.get("notion_id")}
+    proj_ids = {k["id"].replace("-", ""): k for k in projekte}
+    aus = []
+    for rt in notion.reisetage_abfragen():
+        rid = rt["id"].replace("-", "")
+        partner = set(rt["verknuepft"]) | {k["id"].replace("-", "") for k in projekte if rid in k.get("verknuepft", [])}
+        ziel = next((vorhanden[x] for x in partner if x in vorhanden), None)
+        wartet = None if ziel else next((proj_ids[x]["name"] for x in partner if x in proj_ids), None)
+        vorschlag = None
+        if not ziel and not partner:
+            try:
+                d = date.fromisoformat(rt["von"])
+                for e in sorted(alle_e, key=lambda e: e.get("von") or ""):
+                    ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
+                    if timedelta(days=0) < ev - d <= timedelta(days=2) or timedelta(days=0) < d - eb <= timedelta(days=2):
+                        vorschlag = e
+                        break
+            except ValueError:
+                pass
+        r = da.get(rid)
+        aus.append({**rt, "ziel": ziel, "wartet": wartet, "vorschlag": vorschlag, "angelegt": r,
+                    "einsatz_von_angelegt": next((e for e in alle_e if r and e["id"] == r.get("einsatz")), None)})
+    return aus
+
+
 def _ueberschneidet(k: dict, e: dict) -> bool:
     try:
         kv, kb = date.fromisoformat(k["von"]), date.fromisoformat(k["bis"] or k["von"])
@@ -629,6 +658,65 @@ def p_ausgeblendet(k: dict, weg: set) -> bool:
     return k["id"] in weg
 
 
+def _reisetag_art(datum: str, e: dict) -> str:
+    if datum < (e.get("von") or datum):
+        return "anreise"
+    if datum > (e.get("bis") or e.get("von") or datum):
+        return "abreise"
+    return "wechsel"
+
+
+def _reisetag_anlegen(rt: dict, e: dict) -> dict:
+    """Geplanten Reisetag aus Notion an einen Einsatz hängen (Zeiten trägt das iPad nach)."""
+    liste = speicher.stamm("reisetage", [])
+    rid = "nr-" + rt["id"].replace("-", "")[:16]
+    if rid in set(speicher.stamm("geloescht_im_buero", {}).get("reisetage", [])):
+        weg = speicher.stamm("geloescht_im_buero", {})
+        weg["reisetage"] = [x for x in weg.get("reisetage", []) if x != rid]
+        speicher.stamm_setzen("geloescht_im_buero", weg)
+    team = e.get("team") or {}
+    ma = [x for x in [team.get("vor")] + [notion._person_id(n) for n in rt.get("zweiter") or []] if x]
+    if len(ma) < 2 and team.get("fach") and team["fach"] not in ma:
+        ma.append(team["fach"])
+    alt = next((r for r in liste if r.get("id") == rid), None)
+    r = {**(alt or {}), "id": rid, "einsatz": e["id"], "art": _reisetag_art(rt["von"], e), "datum": rt["von"],
+         "ma": (alt or {}).get("ma") or list(dict.fromkeys(ma)), "ab": (alt or {}).get("ab"), "an": (alt or {}).get("an"),
+         "notiz": (alt or {}).get("notiz") or rt["name"], "geplant": True, "notion_id": rt["id"]}
+    liste = [x for x in liste if x.get("id") != rid] + [r]
+    speicher.stamm_setzen("reisetage", liste)
+    return r
+
+
+def _reisetage_zu(einsaetze: list[dict]):
+    """Nach dem Übernehmen: in Notion verknüpfte Reisetage gleich mit anlegen."""
+    try:
+        rts = notion.reisetage_abfragen()
+    except notion.NotionFehler:
+        return 0
+    n = 0
+    for e in einsaetze:
+        nids = {str(x).replace("-", "") for x in [(e.get("notion") or {}).get("id")] + list(e.get("notion_weitere") or []) if x}
+        for rt in rts:
+            if set(rt["verknuepft"]) & nids or any(nid in rt["verknuepft"] for nid in nids):
+                _reisetag_anlegen(rt, e)
+                n += 1
+    return n
+
+
+@app.route("/buero/notion/reisetag/<pid>", methods=["POST"])
+@anmeldung(admin=True)
+def notion_reisetag(pid):
+    e = _einsatz_oder_404(request.form.get("eid", ""))
+    rt = next((r for r in notion.reisetage_abfragen() if r["id"] == pid), None)
+    if not rt:
+        flash("Reisetag nicht gefunden.", "fehler")
+        return redirect(url_for("notion_seite"))
+    r = _reisetag_anlegen(rt, e)
+    arten = {"anreise": "Anreise", "abreise": "Abreise", "wechsel": "Reise zwischen Jobs"}
+    flash(f"{arten[r['art']]} am {basis.datum(r['datum'])} an „{jobname(e)}“ gehängt. Die Zeiten trägt das iPad ein.", "ok")
+    return redirect(url_for("notion_seite"))
+
+
 @app.route("/buero/notion/tour", methods=["POST"])
 @anmeldung(admin=True)
 def notion_tour():
@@ -667,8 +755,9 @@ def notion_tour():
                 g["kompressor"] = None if f["kompressor"] == "-" else f["kompressor"]
             e["geraete"] = g
         speicher.einsatz_speichern(e)
-    speicher.protokoll("notion_tour", session.get("uid"), None, stationen=len(angelegt))
-    flash(f"Tour mit {len(angelegt)} Stationen übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
+    n_rt = _reisetage_zu(angelegt)
+    speicher.protokoll("notion_tour", session.get("uid"), None, stationen=len(angelegt), reisetage=n_rt)
+    flash(f"Tour mit {len(angelegt)} Stationen" + (f" und {n_rt} Reisetag(en)" if n_rt else "") + " übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
           + (" Fehler: " + "; ".join(fehler) if fehler else ""), "fehler" if fehler else "ok")
     return redirect(url_for("notion_seite"))
 
@@ -708,7 +797,8 @@ def notion_uebernehmen(pid):
     except notion.NotionFehler as ex:
         flash(str(ex), "fehler")
         return redirect(url_for("notion_seite"))
-    flash(f"{jobname(e)} übernommen. {hinweis} Bitte Anlagen prüfen.", "ok")
+    n_rt = _reisetage_zu([e])
+    flash(f"{jobname(e)} übernommen. {hinweis}" + (f" {n_rt} Reisetag(e) aus Notion dazu." if n_rt else "") + " Bitte Anlagen prüfen.", "ok")
     return redirect(url_for("einsatz_seite", eid=e["id"]))
 
 

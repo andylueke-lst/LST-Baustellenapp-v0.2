@@ -60,6 +60,29 @@
 {% endif %}
 {% else %}{% if eingerichtet and not fehler %}<div class="empty">Keine bestätigten Projekte im Zeitraum.</div>{% endif %}{% endfor %}
 </div>
+{% if reisen %}
+<h2>Reisetage aus Notion</h2>
+<p class="muted small">Projekte mit Status „20 Reisetag“. Sicher zugeordnet wird über „Projektverknüpfung“ zum Job (bei Touren zur ersten Station). Ohne Verknüpfung schlägt die App den Job vor, der direkt danach beginnt oder davor endet. Die Zeiten tragen die Jungs auf dem iPad ein.</p>
+<div class="list projekte">{% for r in reisen %}
+  <div class="item"><div><b>🚐 {{ r.name }}</b>
+    {% if r.angelegt %}<span class="tag green">übernommen</span>{% endif %}
+    <div class="meta">{{ datum(r.von) }}{% if r.zweiter %} · 2. Mann {{ r.zweiter|join(', ') }}{% endif %}</div>
+    {% if r.angelegt and r.einsatz_von_angelegt %}<div class="meta">an {{ jobname(r.einsatz_von_angelegt) }}{% if not r.angelegt.ab %} · Zeiten fehlen noch{% else %} · {{ r.angelegt.ab }}–{{ r.angelegt.an }} Uhr{% endif %}</div>
+    {% elif r.wartet %}<div class="meta">🔗 verknüpft mit {{ r.wartet }} – kommt mit, sobald der Job übernommen ist</div>{% endif %}</div>
+  <div class="row">
+    {% if r.url %}<a class="btn small" href="{{ r.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}
+    {% if r.ziel and not r.angelegt %}
+      <form method="post" action="{{ url_for('notion_reisetag', pid=r.id) }}"><input type="hidden" name="eid" value="{{ r.ziel.id }}"><button class="btn small pri">An „{{ jobname(r.ziel) }}“ hängen</button></form>
+    {% elif r.vorschlag and not r.angelegt %}
+      <form method="post" action="{{ url_for('notion_reisetag', pid=r.id) }}"><input type="hidden" name="eid" value="{{ r.vorschlag.id }}"><button class="btn small pri" title="Vorschlag nach Datum – in Notion verknüpfen ist sicherer">{{ 'Anreise' if r.von < r.vorschlag.von else 'Abreise' }} zu „{{ jobname(r.vorschlag) }}“?</button></form>
+    {% endif %}
+    {% if zuordenbar and not r.wartet %}<details><summary class="btn small">{{ 'Anderem Job …' if r.angelegt else 'Zuordnen …' }}</summary>
+      <form method="post" action="{{ url_for('notion_reisetag', pid=r.id) }}" class="row" style="margin-top:6px">
+        <select class="inp" name="eid" style="min-width:220px" aria-label="Job">{% for e in zuordenbar %}<option value="{{ e.id }}">{{ jobname(e) }} ({{ zeitraum(e.von, e.bis) }})</option>{% endfor %}</select>
+        <button class="btn small">Zuordnen</button></form></details>{% endif %}
+  </div></div>
+{% endfor %}</div>
+{% endif %}
 {% if ausgeblendet %}<details style="margin-top:10px"><summary class="small muted">{{ ausgeblendet|length }} ausgeblendet</summary>
 <div class="list">{% for p in ausgeblendet %}<div class="item"><div><b>{{ p.name }}</b><div class="meta">{{ zeitraum(p.von, p.bis) }} · {{ p.status }}</div></div>
   <form method="post" action="{{ url_for('notion_ausblenden', pid=p.id) }}"><input type="hidden" name="zeigen" value="1"><button class="btn small">Wieder zeigen</button></form></div>{% endfor %}</div></details>{% endif %}
