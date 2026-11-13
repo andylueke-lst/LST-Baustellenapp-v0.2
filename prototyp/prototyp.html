@@ -700,7 +700,9 @@ function mangelSheet(){formSheet('Mangel melden',`${pickField('teil','Baugruppe'
   <div class="field"><label for="mg-n">Notiz</label><input class="inp" id="mg-n" name="notiz" placeholder="tropft am Anschluss"></div>`,'Melden',d=>{const teil=(d.teil2||'').trim()||d.teil;if(!teil)return'Bitte Baugruppe wählen oder Teil benennen.';
     S.maengel.push({id:uid(),teil,art:d.art,notiz:d.notiz,ts:Date.now(),von:S.user,status:'offen'});save();toast('Mangel gemeldet');render()})}
 function tankSheet(){const e=V.id?E(V.id):null;const all=[...S.fahrzeuge.filter(f=>f.aktiv!==false).map(f=>['f:'+f.id,f.kz+' '+f.name]),...S.kompressoren.filter(k=>k.aktiv!==false).map(k=>['k:'+k.id,k.kz+' '+(k.eigen?'Kompressor':'Mietkompressor')])];
-  const def=e?'f:'+e.geraete.fahrzeug:all[0][0];
+  // Vorauswahl: Fahrzeug des Jobs, sonst „Fährt meist“ der Person, sonst das zuletzt von ihr betankte Gerät
+  const letzt=[...S.tanken].reverse().find(t=>t.von===S.user&&all.some(x=>x[0]===t.geraet));const meins=me()&&me().fahrzeug&&all.some(x=>x[0]==='f:'+me().fahrzeug)?'f:'+me().fahrzeug:null;
+  const def=e&&e.geraete.fahrzeug?'f:'+e.geraete.fahrzeug:(meins||(letzt&&letzt.geraet)||all[0][0]);
   formSheet('Tanken / Öl',`<div onclick="setTimeout(()=>tkArt(this.closest('form')),0)">${pickField('g','Gerät',all,def)}</div>
   <div class="times" style="grid-template-columns:repeat(3,minmax(0,1fr))"><div class="field"><label for="tk-l">Diesel Liter</label><input class="inp num" id="tk-l" name="l" inputmode="decimal" oninput="dreiFelder(this)"></div><div class="field"><label for="tk-b">Betrag €</label><input class="inp num" id="tk-b" name="b" inputmode="decimal" oninput="dreiFelder(this)"></div><div class="field"><label for="tk-p">€/Liter</label><input class="inp num" id="tk-p" name="p" inputmode="decimal" oninput="dreiFelder(this)"></div></div>
   <div class="small muted">Zwei der drei Felder eintragen, das dritte rechnet sich.</div>

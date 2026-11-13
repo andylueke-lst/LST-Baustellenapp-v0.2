@@ -361,6 +361,7 @@ def mitarbeiter_seite():
             m["minijob"] = bool(f.get(f"minijob_{i}"))
             m["baustelle"] = bool(f.get(f"baustelle_{i}"))
             m["funktion"] = (f.get(f"funktion_{i}") or "").strip()
+            m["fahrzeug"] = f.get(f"fahrzeug_{i}") or None
             m["buero"] = bool(f.get(f"buero_{i}"))
             m["rechte"] = [b for b, _ in BEREICHE if f.get(f"recht_{i}_{b}")]
             m["stunden_von"] = [x for x in f.getlist(f"stunden_von_{i}") if x]
@@ -392,7 +393,8 @@ def mitarbeiter_seite():
         flash("Gespeichert." + (f" PIN nicht geändert bei {', '.join(fehler)}: bitte 4 bis 6 Ziffern." if fehler else ""),
               "hinweis" if fehler else "ok")
         return redirect(url_for("mitarbeiter_seite"))
-    return render_template("mitarbeiter.html", leute=leute)
+    return render_template("mitarbeiter.html", leute=leute,
+                           fahrzeuge=[x for x in speicher.stamm("fahrzeuge", []) if x.get("aktiv", True)])
 
 
 def _leerer_einsatz() -> dict:
@@ -1215,7 +1217,7 @@ def api_einsatz_speichern():
 
 # ---------------------------------------------------------------- iPad: Anmeldung und Gesamtstand
 def _fuer_app(m: dict) -> dict:
-    return {"id": m["id"], "name": m.get("vorname", ""), "nachname": m.get("nachname", ""),
+    return {"id": m["id"], "name": m.get("vorname", ""), "nachname": m.get("nachname", ""), "fahrzeug": m.get("fahrzeug") or None,
             "rolle": m.get("rolle", "mitarbeiter"),
             "team": m.get("team") or ("Vorarbeiter" if m.get("rolle") == "technik" else "Facharbeiter")}
 

@@ -9,7 +9,7 @@
 <form method="post">
 <div style="overflow-x:auto">
 <table class="tab">
-  <thead><tr><th>Vorname</th><th>Nachname</th><th>Funktion</th><th>Grundrolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Funktion</th><th>Grundrolle</th><th>Im Team meist</th><th>Fährt meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
   <tbody>
   {% for m in leute %}
   <tr>
@@ -20,6 +20,8 @@
       {% for r, l in [('admin','Admin'),('technik','Technik'),('mitarbeiter','Mitarbeiter')] %}<option value="{{ r }}"{% if m.rolle == r %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></td>
     <td><select class="inp" name="team_{{ m.id }}" aria-label="Im Team meist">
       {% for t in ['Vorarbeiter','Facharbeiter'] %}<option{% if (m.team or 'Facharbeiter') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
+    <td><select class="inp" name="fahrzeug_{{ m.id }}" aria-label="Fährt meist" style="min-width:150px"><option value="">–</option>
+      {% for x in fahrzeuge %}<option value="{{ x.id }}"{% if m.fahrzeug == x.id %} selected{% endif %}>{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></td>
     <td><input class="inp" type="email" name="mail_{{ m.id }}" value="{{ m.mail or '' }}" aria-label="E-Mail"></td>
     <td><input class="inp" name="pin_{{ m.id }}" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off"
         placeholder="{{ 'vergeben' if m.pin_hash else 'fehlt' }}" aria-label="Neue PIN"></td>
@@ -35,6 +37,7 @@
     <td><input class="inp" name="funktion_neu" list="funktionen" placeholder="Funktion" aria-label="Funktion" style="min-width:150px"></td>
     <td><select class="inp" name="rolle_neu" aria-label="Rechte in der App"><option value="mitarbeiter">Mitarbeiter</option><option value="technik">Technik</option><option value="admin">Admin</option></select></td>
     <td><select class="inp" name="team_neu" aria-label="Im Team meist"><option>Facharbeiter</option><option>Vorarbeiter</option></select></td>
+    <td></td>
     <td><input class="inp" type="email" name="mail_neu" aria-label="E-Mail"></td>
     <td><input class="inp" name="pin_neu" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="PIN" aria-label="PIN"></td>
     <td><input type="checkbox" name="ipad_neu" checked aria-label="Nutzt die iPad-App" style="width:22px;height:22px"></td>
@@ -45,7 +48,7 @@
   </tbody>
 </table>
 </div>
-<p class="small muted">Funktion: frei wählbar (Geschäftsführer, Vertrieb, Administration …), ändert keine Rechte. Grundrolle: Admin sieht alles (Büro komplett, alle Jobs), Technik die eigenen Jobs und die Mängelliste, Mitarbeiter die eigenen Jobs. Einzelne Büro-Bereiche ohne Admin vergibst du unten. PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<p class="small muted">„Fährt meist“: dieses Fahrzeug ist auf dem iPad beim Tanken vorausgewählt (außer im Job, dort das Fahrzeug des Jobs). Funktion: frei wählbar (Geschäftsführer, Vertrieb, Administration …), ändert keine Rechte. Grundrolle: Admin sieht alles (Büro komplett, alle Jobs), Technik die eigenen Jobs und die Mängelliste, Mitarbeiter die eigenen Jobs. Einzelne Büro-Bereiche ohne Admin vergibst du unten. PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
 <h2>Anmeldung im Büro und Rechte</h2>
 <p class="small muted">Wer sich im Browser (Büro) anmelden darf und welche Bereiche er dort sieht. <b>Admin</b> hat immer alles. Ohne Büro-Bereich landet man nach der Anmeldung in der iPad-Ansicht mit den eigenen Jobs. „Stunden von“ legt fest, wessen Stunden jemand mit dem Bereich Stunden sieht und eintragen darf.</p>
 <div style="overflow-x:auto"><table class="tab">
