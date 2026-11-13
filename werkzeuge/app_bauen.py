@@ -149,7 +149,14 @@ function dokLeiste(e){const docs=e.docs||[];
 /* Versandstatus im grünen Abschluss-Kasten: eine Zeile je Dokument */
 function versandText(e){const v=e.versand;if(!v)return'';const zt=t=>{if(!t)return'';const d=new Date(t*1000);return ` am ${pad(d.getDate())}.${pad(d.getMonth()+1)}. um ${pad(d.getHours())}:${pad(d.getMinutes())}`};
   const st=x=>!x?'–':x.stand==='versendet'?`<b>✓ versendet${zt(x.wann)}</b>${x.an?` an ${esc(x.an)}`:''}`:x.stand==='bestaetigt'?'<b>✓ verschickt (im Büro bestätigt)</b>':x.stand==='nicht_noetig'?'nicht nötig (Kunde braucht keinen)':x.stand==='wartet'?'<b>⏳ wartet im Postausgang</b>':x.stand==='erstellt'?'<b>noch nicht verschickt</b>':'<b>offen</b>';
-  return `<div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:2px 12px">${[['lieferschein','Lieferschein'],['fotodoku','Fotodoku'],['fotobericht','Fotobericht']].map(([k,n])=>`<span>${n}</span><span>${st(v[k])}</span>`).join('')}</div>`}
+  const kn=(k,x)=>!x||['versendet','bestaetigt','wartet'].includes(x.stand)?'':x.stand==='nicht_noetig'?`<button class="btn small" data-a="versandst" data-art="${k}" data-st="offen">Doch nötig</button>`:`<button class="btn small" data-a="versandst" data-art="${k}" data-st="nicht_noetig">Kunde braucht keinen</button>`;
+  return `<div style="margin-top:8px;display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center">${[['lieferschein','Lieferschein'],['fotodoku','Fotodoku'],['fotobericht','Fotobericht']].map(([k,n])=>`<span>${n}</span><span>${st(v[k])}</span><span>${kn(k,v[k])}</span>`).join('')}</div>`}
+/* „Kunde braucht keinen“ am iPad: geht direkt ans Büro */
+async function versandSetzen(e,b){const art=b.dataset.art,st=b.dataset.st;b.disabled=true;
+  try{const r=await api(`/api/einsatz/${encodeURIComponent(e.id)}/versand`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({art,status:st})});
+    e.versand=r.versand;save();render()}
+  catch(err){b.disabled=false;toast(err.netz?'Das geht nur mit Verbindung zum Büro. Bitte später noch einmal.':err.message)}}
+window.versandSetzen=versandSetzen;
 /* Versandstatus vom Büro: gezählt wird jeder Versand über die App (Büro oder iPad) */
 function versandZeile(e){const v=e.versand;if(!v)return'';const zt=t=>{if(!t)return'';const d=new Date(t*1000);return ` ${pad(d.getDate())}.${pad(d.getMonth()+1)}. ${pad(d.getHours())}:${pad(d.getMinutes())}`};
   const st=x=>!x?'':x.stand==='versendet'?`<b style="color:var(--ok)">✓ versendet${zt(x.wann)}</b>`:x.stand==='bestaetigt'?'<b style="color:var(--ok)">✓ bestätigt</b>':x.stand==='nicht_noetig'?'<span class="muted">nicht nötig</span>':x.stand==='wartet'?'<span style="color:var(--warn)">⏳ Postausgang</span>':x.stand==='erstellt'?'<span class="muted">noch nicht verschickt</span>':'<span class="muted">offen</span>';
@@ -240,7 +247,7 @@ ERSETZUNGEN = [
     # Abgeschlossener Einsatz: Lieferschein und Fotodoku zum Teilen
     ("${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}",
      "${dokLeiste(e)}${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}"),
-    ("case 'fteilen':teilenSheet(e);break;", "case 'fteilen':teilenSheet(e);break;\n  case 'dok':dokTeilen(b,e);break;\n  case 'dokzeigen':dokAnsicht(e,b.dataset.id);break;"),
+    ("case 'fteilen':teilenSheet(e);break;", "case 'fteilen':teilenSheet(e);break;\n  case 'dok':dokTeilen(b,e);break;\n  case 'dokzeigen':dokAnsicht(e,b.dataset.id);break;\n  case 'versandst':versandSetzen(e,b);break;"),
     ("const me=()=>S.mitarbeiter.find(m=>m.id===S.user);",
      "const me=()=>S.mitarbeiter.find(m=>m.id===S.user)||S.ich||{id:S.user,name:'',rolle:'mitarbeiter'};"),
     ("hydrateImages();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();", "hydrateImages();chip();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();"),

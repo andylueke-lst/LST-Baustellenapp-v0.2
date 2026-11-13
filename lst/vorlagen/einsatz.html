@@ -37,11 +37,11 @@
   {% for art, name in DOK_NAMEN.items() %}{% set x = versand[art] %}<tr><td><b>{{ name }}</b></td>
     <td>{% if x.stand == 'versendet' %}<span class="tag green">versendet</span>{% elif x.stand == 'bestaetigt' %}<span class="tag green">von Hand bestätigt</span>{% elif x.stand == 'nicht_noetig' %}<span class="tag">Kunde braucht keinen</span>{% elif x.stand == 'wartet' %}<span class="tag yellow">im Postausgang</span>{% elif x.stand == 'erstellt' %}<span class="tag">erstellt, nicht verschickt</span>{% else %}<span class="tag">noch nicht erstellt</span>{% endif %}</td>
     <td class="small muted">{% if x.wann %}{{ zeitpunkt(x.wann) }}{% endif %}{% if x.an and x.stand == 'versendet' %} · an {{ x.an }}{% endif %}</td>
-    <td>{% if art == 'fotobericht' %}<div class="row">
-      {% if x.stand not in ('versendet', 'bestaetigt') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="bestaetigt"><button class="btn small">Schon verschickt</button></form>{% endif %}
-      {% if x.stand not in ('versendet', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="nicht_noetig"><button class="btn small">Kunde braucht keinen</button></form>{% endif %}
-      {% if x.stand in ('bestaetigt', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="offen"><button class="btn small">Wieder offen</button></form>{% endif %}
-    </div>{% endif %}</td></tr>{% endfor %}
+    <td><div class="row">
+      {% if x.stand not in ('versendet', 'bestaetigt') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="bestaetigt"><input type="hidden" name="art" value="{{ art }}"><button class="btn small">Schon verschickt</button></form>{% endif %}
+      {% if x.stand not in ('versendet', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="nicht_noetig"><input type="hidden" name="art" value="{{ art }}"><button class="btn small">Kunde braucht keinen</button></form>{% endif %}
+      {% if x.stand in ('bestaetigt', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="offen"><input type="hidden" name="art" value="{{ art }}"><button class="btn small">Wieder offen</button></form>{% endif %}
+    </div></td></tr>{% endfor %}
 </table>
 <p class="small muted">Gezählt wird jeder Versand über die App, egal ob vom Büro oder vom iPad. Was außerhalb verschickt wurde (eigene Mail, Teilen am iPad), hier mit „Schon verschickt“ bestätigen.</p>
 {% endif %}

@@ -219,14 +219,42 @@ def versandstatus(e: dict) -> dict:
             aus[art] = {"stand": "wartet" if ds[-1]["status"] == "wartet" else "erstellt", "wann": ds[-1].get("erstellt"), "an": ""}
         else:
             aus[art] = {"stand": "fehlt", "wann": None, "an": ""}
-    fs = e.get("fotobericht_status") or ("nicht_noetig" if e.get("fotobericht_erledigt") else None)
-    if fs == "bestaetigt" and aus["fotobericht"]["stand"] != "versendet":
-        aus["fotobericht"] = {"stand": "bestaetigt", "wann": e.get("fotobericht_bestaetigt_am"), "an": "von Hand bestätigt"}
-    elif fs == "nicht_noetig":
-        aus["fotobericht"] = {"stand": "nicht_noetig", "wann": None, "an": "Kunde braucht keinen"}
+    for art in DOK_NAMEN:
+        h = _versand_hand(e, art)
+        if not h:
+            continue
+        if h["stand"] == "bestaetigt" and aus[art]["stand"] != "versendet":
+            aus[art] = {"stand": "bestaetigt", "wann": h.get("am"), "an": "von Hand bestätigt"}
+        elif h["stand"] == "nicht_noetig":
+            aus[art] = {"stand": "nicht_noetig", "wann": h.get("am"), "an": "Kunde braucht keinen"}
     aus["fertig"] = (aus["fotobericht"]["stand"] in ("versendet", "wartet", "bestaetigt", "nicht_noetig")
-                     or aus["fotodoku"]["stand"] == "versendet")
+                     or aus["fotodoku"]["stand"] in ("versendet", "bestaetigt"))
     return aus
+
+
+def _versand_hand(e: dict, art: str) -> dict | None:
+    """Von Hand gesetzter Versandstand (Büro oder iPad): bestaetigt oder nicht_noetig."""
+    h = (e.get("versand_status") or {}).get(art)
+    if h:
+        return h
+    if art == "fotobericht":          # ältere Einsätze
+        fs = e.get("fotobericht_status") or ("nicht_noetig" if e.get("fotobericht_erledigt") else None)
+        if fs:
+            return {"stand": fs, "am": e.get("fotobericht_bestaetigt_am"), "von": e.get("fotobericht_bestaetigt_von")}
+    return None
+
+
+def versand_setzen(e: dict, art: str, st: str, uid) -> None:
+    """Versandstand von Hand setzen: bestaetigt, nicht_noetig oder offen (zurücknehmen)."""
+    vs = dict(e.get("versand_status") or {})
+    if art == "fotobericht":
+        for k in ("fotobericht_erledigt", "fotobericht_status", "fotobericht_bestaetigt_am", "fotobericht_bestaetigt_von"):
+            e.pop(k, None)
+    if st in ("bestaetigt", "nicht_noetig"):
+        vs[art] = {"stand": st, "am": time.time(), "von": uid}
+    else:
+        vs.pop(art, None)
+    e["versand_status"] = vs
 
 
 def _offene_freigaben() -> list[dict]:
@@ -1220,7 +1248,7 @@ def api_einsatz_speichern():
     if alt and not darf_einsatz(alt, ich()):
         return jsonify(fehler="Dieser Einsatz ist dir nicht zugeteilt."), 403
     liste = e.pop("fotos", None)
-    for k in ("trash", "lsHtml", "sync_abschluss", "serverDocs"):
+    for k in ("trash", "lsHtml", "sync_abschluss", "serverDocs", "versand"):
         e.pop(k, None)
     # Abschluss und Lexware-Nummer bestimmt der Server, nicht das iPad
     if alt.get("status") == "abgeschlossen":
@@ -1234,9 +1262,14 @@ def api_einsatz_speichern():
         if alt.get(k):
             e[k] = alt[k]
     # Felder, die nur das Büro setzt: ein iPad mit älterer Kopie soll sie nicht verlieren
-    for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name", "fotobericht_erledigt",
-              "fotobericht_status", "fotobericht_bestaetigt_am", "fotobericht_bestaetigt_von"):
+    for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name"):
         if k in alt and k not in e:
+            e[k] = alt[k]
+    # Versandstand von Hand: immer der Stand vom Server (das iPad setzt ihn über eine eigene Adresse)
+    for k in ("versand_status", "fotobericht_erledigt", "fotobericht_status", "fotobericht_bestaetigt_am",
+              "fotobericht_bestaetigt_von"):
+        e.pop(k, None)
+        if k in alt:
             e[k] = alt[k]
     if "ipad_aus" in alt:
         e["ipad_aus"] = alt["ipad_aus"]
@@ -1301,7 +1334,7 @@ def api_stand():
         e = _einsatz_mit_fotos(e)
         e["docs"] = _docs_fuer_app(e["id"])
         if e.get("status") == "abgeschlossen":
-            e["versand"] = {k: v for k, v in versandstatus(e).items() if k != "fertig"}
+            e["versand"] = versandstatus(e)
         es.append(e)
     # alle aktiven: auch wer kein eigenes iPad-Login hat, kann im Team sein (z. B. Faro am iPad von Matthias)
     leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("baustelle", True)]
@@ -1897,20 +1930,19 @@ def unterschrift_aendern(eid):
 @app.route("/buero/einsatz/<eid>/fotobericht-erledigt", methods=["POST"])
 @anmeldung(admin=True)
 def fotobericht_erledigt(eid):
-    """Fotobericht-Status von Hand: bestaetigt (schon verschickt, z. B. eigene Mail), nicht_noetig, offen."""
+    """Versandstand von Hand (Lieferschein, Fotodoku, Fotobericht): bestaetigt (schon verschickt,
+    z. B. eigene Mail), nicht_noetig (Kunde braucht keinen), offen."""
     e = _einsatz_oder_404(eid)
     st = request.form.get("status") or ("offen" if request.form.get("zurueck") == "1" else "nicht_noetig")
-    e.pop("fotobericht_erledigt", None)
-    if st in ("bestaetigt", "nicht_noetig"):
-        e["fotobericht_status"] = st
-        e["fotobericht_bestaetigt_am"] = time.time()
-        e["fotobericht_bestaetigt_von"] = session.get("uid")
-    else:
-        e.pop("fotobericht_status", None)
+    art = request.form.get("art") or "fotobericht"
+    if art not in DOK_NAMEN:
+        abort(400)
+    versand_setzen(e, art, st, session.get("uid"))
     speicher.einsatz_speichern(e)
-    speicher.protokoll("fotobericht_status", session.get("uid"), eid, status=st)
-    texte = {"bestaetigt": "als verschickt bestätigt", "nicht_noetig": "Kunde braucht keinen Fotobericht",
-             "offen": "Fotobericht wieder offen"}
+    speicher.protokoll("versand_status", session.get("uid"), eid, art=art, status=st)
+    n = DOK_NAMEN[art]
+    texte = {"bestaetigt": f"{n} als verschickt bestätigt", "nicht_noetig": f"Kunde braucht keinen {n}",
+             "offen": f"{n} wieder offen"}
     flash(f"„{jobname(e)}“: {texte.get(st, st)}.", "ok")
     return redirect(request.referrer or url_for("buero"))
 
@@ -1993,6 +2025,23 @@ def api_kontakte():
         treffer = [k for k in alle if fids & set(k.get("firmen") or []) or
                    any(n and (n in k["firma"].lower() or k["firma"].lower() in n) for n in namen if k["firma"])]
     return jsonify([{"name": k["name"], "mail": k["mail"], "firma": k["firma"]} for k in treffer[:30]])
+
+
+@app.route("/api/einsatz/<eid>/versand", methods=["POST"])
+@anmeldung()
+def api_versand_status(eid):
+    """Vom iPad: „Kunde braucht keinen“ für Lieferschein, Fotodoku oder Fotobericht, oder zurücknehmen."""
+    e = _einsatz_fuer_mich(eid)
+    d = request.get_json(force=True) or {}
+    art, st = d.get("art"), d.get("status")
+    if art not in DOK_NAMEN or st not in ("nicht_noetig", "offen"):
+        return jsonify(fehler="Ungültige Angabe"), 400
+    if e.get("status") != "abgeschlossen":
+        return jsonify(fehler="Der Einsatz ist noch nicht abgeschlossen."), 400
+    versand_setzen(e, art, st, session.get("uid"))
+    speicher.einsatz_speichern(e)
+    speicher.protokoll("versand_status", session.get("uid"), eid, art=art, status=st, quelle="ipad")
+    return jsonify(ok=True, versand=versandstatus(e))
 
 
 @app.route("/api/einsatz/<eid>/senden", methods=["POST"])

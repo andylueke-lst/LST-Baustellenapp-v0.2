@@ -382,7 +382,7 @@ function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).l
   if(e.status==='abgeschlossen')tg.push(e.ergebnis==='unterschrieben'?'<span class="tag green">Unterschrieben</span>':'<span class="tag yellow">Unterschrift ausstehend</span>');
   if(e.status==='abgeschlossen'&&e.versand){const ok=x=>x&&['versendet','bestaetigt','nicht_noetig'].includes(x.stand);
     const teile=[['lieferschein','LS'],['fotodoku','Doku'],['fotobericht','Bericht']].map(([k,n])=>{const x=e.versand[k];return `${n} ${ok(x)?(x.stand==='nicht_noetig'?'–':'✓'):x&&x.stand==='wartet'?'⏳':'offen'}`});
-    const alle=ok(e.versand.lieferschein)&&(ok(e.versand.fotodoku)||ok(e.versand.fotobericht));
+    const alle=ok(e.versand.lieferschein)&&(e.versand.fertig!==undefined?e.versand.fertig:(ok(e.versand.fotodoku)||ok(e.versand.fotobericht)));
     tg.push(`<span class="tag ${alle?'green':'yellow'}" style="white-space:normal;line-height:1.3">✉️ ${teile.join(' · ')}</span>`)}
   const zeit=e.von===e.bis?fD(e.von):`${fD(e.von)} – ${fD(e.bis)}`;
   return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(jn(e))}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
