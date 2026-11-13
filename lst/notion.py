@@ -338,7 +338,8 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
     zweiter = (eig(p, "2. Mann") or [None])[0]
     e = dict(alt or {})
     e.update({
-        "id": (alt or {}).get("id") or "n" + p["id"].replace("-", "")[:11],
+        # volle Notion-ID: Seiten, die am selben Tag angelegt wurden, beginnen gleich (früher [:11] → Kollisionen)
+        "id": (alt or {}).get("id") or "n" + p["id"].replace("-", ""),
         "notion": {"id": p["id"], "url": p.get("url"), "status": eig(p, "LST Status externe Projekte"),
                    "geholt": date.today().isoformat(), "projektname": eig(p, "Projektname"),
                    "firmen": [x for x in (_erstes(eig(p, "Kunde")), _erstes(eig(p, "Einsatz bei"))) if x]},

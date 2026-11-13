@@ -54,6 +54,9 @@
         <div class="field"><label>Fahrzeug</label><select class="inp" name="fahrzeug"><option value="">wie vorgeschlagen</option>{% for x in fahrzeuge %}<option value="{{ x.id }}">{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></div>
         <div class="field"><label>Kompressor</label><select class="inp" name="kompressor"><option value="">wie vorgeschlagen</option><option value="-">ohne Kompressor</option>{% for x in kompressoren %}<option value="{{ x.id }}">{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></div>
       </div>
+      {% if g.reisen %}<div class="field"><label>Reisetage mitnehmen</label>
+        {% for r in g.reisen %}<label class="row small" style="gap:8px;min-height:40px"><input type="checkbox" name="reisetag" value="{{ r.id }}" checked style="width:22px;height:22px">
+          🚐 {{ r.name }} · {{ datum(r.von) }} · als {{ r.art }}{% if not r.verkn %} <span class="muted">(nach Datum vorgeschlagen)</span>{% endif %}</label>{% endfor %}</div>{% endif %}
       <div class="field"><label>Weitere Mitarbeiter (optional)</label><div class="row">{% for m in tour_leute %}<label class="tag" style="gap:6px;padding:8px 10px;font-size:14px"><input type="checkbox" name="weitere" value="{{ m.id }}">{{ m.vorname }}</label>{% endfor %}</div></div>
       <button class="btn pri">{{ g.offen|length }} {{ 'Station' if g.offen|length == 1 else 'Stationen' }} übernehmen</button>
     </form></details>{% endif %}

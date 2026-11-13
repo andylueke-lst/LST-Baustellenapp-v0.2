@@ -453,6 +453,19 @@ def notion_seite():
                 (ausgeblendet if p_ausgeblendet(k, weg) else liste).append(k)
             liste = _gruppieren(liste)
             reisen = _reisetage_uebersicht(alle_e, vorhanden, alle_k)
+            for g in liste:          # Reisetage zur Tour: verknüpft oder 1–2 Tage vor Beginn / nach Ende
+                if g["typ"] != "tour":
+                    continue
+                ids = {p["id"].replace("-", "") for p in g["ps"]}
+                vb, nb = date.fromisoformat(g["von"]), date.fromisoformat(g["bis"])
+                g["reisen"] = []
+                for r in reisen:
+                    if r["angelegt"]:
+                        continue
+                    rd = date.fromisoformat(r["von"])
+                    verkn = bool(ids & (set(r["verknuepft"]) | ({k["id"].replace("-", "") for k in g["ps"] if r["id"].replace("-", "") in k["verknuepft"]})))
+                    if verkn or timedelta(days=1) <= vb - rd <= timedelta(days=2) or timedelta(days=1) <= rd - nb <= timedelta(days=2):
+                        g["reisen"].append({**r, "verkn": verkn, "art": "Anreise" if rd < vb else "Abreise"})
         except notion.NotionFehler as ex:
             fehler = str(ex)
     alle = speicher.stamm("intern", [])
@@ -766,6 +779,13 @@ def notion_tour():
             e["geraete"] = g
         speicher.einsatz_speichern(e)
     n_rt = _reisetage_zu(angelegt)
+    gewaehlt = [x for x in f.getlist("reisetag") if x]
+    if gewaehlt and reihe:
+        for rt in notion.reisetage_abfragen():
+            if rt["id"] in gewaehlt:
+                ziel = reihe[0] if rt["von"] <= (reihe[0].get("von") or rt["von"]) else reihe[-1]
+                _reisetag_anlegen(rt, ziel)
+                n_rt += 1
     speicher.protokoll("notion_tour", session.get("uid"), None, stationen=len(angelegt), reisetage=n_rt)
     flash(f"{len(angelegt)} Stationen der Tour ({len(reihe)} insgesamt)" + (f" und {n_rt} Reisetag(e)" if n_rt else "") + " übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
           + (" Fehler: " + "; ".join(fehler) if fehler else ""), "fehler" if fehler else "ok")
