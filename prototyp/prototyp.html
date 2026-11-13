@@ -380,6 +380,10 @@ function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).l
     const mitF=new Set(e.fotos.map(f=>f.anlage)).size;tg.push(`<span class="tag">${e.fotos.length} Fotos · ${mitF}/${e.anlagen.length} Anlagen</span>`)}
   if(e.status==='abgeschlossen'){const lt=curTag(e);if(lt&&homeOpen(e,lt)&&Object.values(lt.zeiten).some(z=>calc(z).missing.length))tg.push('<span class="tag red">Heimfahrt eintragen</span>')}
   if(e.status==='abgeschlossen')tg.push(e.ergebnis==='unterschrieben'?'<span class="tag green">Unterschrieben</span>':'<span class="tag yellow">Unterschrift ausstehend</span>');
+  if(e.status==='abgeschlossen'&&e.versand){const ok=x=>x&&['versendet','bestaetigt','nicht_noetig'].includes(x.stand);
+    const teile=[['lieferschein','LS'],['fotodoku','Doku'],['fotobericht','Bericht']].map(([k,n])=>{const x=e.versand[k];return `${n} ${ok(x)?(x.stand==='nicht_noetig'?'–':'✓'):x&&x.stand==='wartet'?'⏳':'offen'}`});
+    const alle=ok(e.versand.lieferschein)&&(ok(e.versand.fotodoku)||ok(e.versand.fotobericht));
+    tg.push(`<span class="tag ${alle?'green':'yellow'}" style="white-space:normal;line-height:1.3">✉️ ${teile.join(' · ')}</span>`)}
   const zeit=e.von===e.bis?fD(e.von):`${fD(e.von)} – ${fD(e.bis)}`;
   return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(jn(e))}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
 function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="col"><h3>${t} <span class="tag">${list.length}</span></h3>${list.join('')||`<div class="empty">${empty}</div>`}</section>`;
@@ -433,7 +437,7 @@ function vVorbereitung(e){return `<div class="hr"></div>
 
 function tHeute(e){const open=offenerTag(e);const tag=selTag(e);
   let top='';
-  if(e.status==='abgeschlossen')top=`<div class="callout ok" style="margin-bottom:16px"><span>✅</span><div>Einsatz abgeschlossen am ${fDY(e.abschluss?.datum)}. ${e.ergebnis==='unterschrieben'?'Lieferschein unterschrieben.':'Unterschrift ausstehend, Lieferschein im Büro zur Unterschrift versenden.'}</div></div>${e.lsHtml?`<div style="margin-bottom:24px;overflow-x:auto">${e.lsHtml}</div>`:''}`;
+  if(e.status==='abgeschlossen')top=`<div class="callout ok" style="margin-bottom:16px"><span>✅</span><div>Einsatz abgeschlossen am ${fDY(e.abschluss?.datum)}. ${e.ergebnis==='unterschrieben'?'Lieferschein unterschrieben.':'Unterschrift ausstehend, Lieferschein im Büro zur Unterschrift versenden.'}${typeof versandText==='function'?versandText(e):''}</div></div>${e.lsHtml?`<div style="margin-bottom:24px;overflow-x:auto">${e.lsHtml}</div>`:''}`;
   else if(!open)top=`<div class="callout" style="margin-bottom:16px"><span>🌅</span><div>Tag ${e.tage.length} ist erledigt. Unten geht es mit „Neuer Tag“ weiter oder mit „Job abschließen“ zum Lieferschein.</div></div>`;
   if(!tag)return top+reiseList(e);
   const lk=locked(e,tag);const team=tagTeam(e,tag);
