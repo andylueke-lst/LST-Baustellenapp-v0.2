@@ -75,7 +75,7 @@ async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}cat
     if(unveraendert&&!le.sync_abschluss){const lokaleFotos=new Map((le.fotos||[]).map(f=>[f.id,f]));
       se.fotos=se.fotos.map(f=>({...(lokaleFotos.get(f.id)||{}),...f}));(le.fotos||[]).filter(f=>!f.up).forEach(f=>se.fotos.push(f));
       se.trash=le.trash||[];if(le.lsHtml)se.lsHtml=le.lsHtml;if(le.serverDocs)se.serverDocs=le.serverDocs;neu.push(se);sk()['e:'+se.id]=await stempel(fuerServer(se))}
-    else{if(se.docs)le.docs=se.docs;if(se.ls&&!le.ls)le.ls=se.ls;if(se.status==='abgeschlossen'&&!le.sync_abschluss){le.status='abgeschlossen';le.abschluss=se.abschluss}neu.push(le)}}
+    else{if(se.docs)le.docs=se.docs;if('ls' in se)le.ls=se.ls;if(se.status==='abgeschlossen'&&!le.sync_abschluss){le.status='abgeschlossen';le.abschluss=se.abschluss}neu.push(le)}}
   for(const e of S.einsaetze){if(d.einsaetze.some(x=>x.id===e.id))continue;
     if(e.sync_abschluss||sk()['e:'+e.id]!==await stempel(fuerServer(e)))neu.push(e);else delete sk()['e:'+e.id]}
   S.einsaetze=neu;if(d.ich)S.ich=d.ich;save0();zaehlen();render();syncBald(200)}

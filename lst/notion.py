@@ -275,10 +275,12 @@ def anlagen_vorschlag(technik: str) -> list[str]:
     return [art] if n == 1 else [f"{art} {i}" for i in range(1, n + 1)]
 
 
-def lieferschein_datei(seiten_blocks: list[dict], datum: str | None = None) -> tuple[str, str] | None:
+def lieferschein_datei(seiten_blocks: list[dict], datum: str | None = None) -> tuple[str, str, str] | None:
     """PDF unter Projektinfos → Unterlagen → Lieferschein (nicht im kaufmännischen Teil).
     Liegen mehrere dort (z. B. ein Projekt mit zwei Einsätzen), gewinnt der mit dem Einsatzdatum
-    vorn im Dateinamen (JJMMTT_…), sonst der neueste."""
+    vorn im Dateinamen (JJMMTT_…), sonst der neueste.
+    Gibt (Dateiname, Download-Adresse, Kennung) zurück. Die Kennung (Block + Änderungszeit) ändert sich,
+    sobald die Datei in Notion gelöscht und neu abgelegt oder ersetzt wird – auch bei gleichem Namen."""
     pi = _suche(seiten_blocks, "Projektinfos")
     if not pi:
         return None
@@ -295,7 +297,7 @@ def lieferschein_datei(seiten_blocks: list[dict], datum: str | None = None) -> t
             url = (f.get("file") or f.get("external") or {}).get("url")
             name = f.get("name") or _text(f.get("caption")) or "lieferschein.pdf"
             if url and (b["type"] == "pdf" or name.lower().endswith(".pdf")):
-                gefunden.append((name, url))
+                gefunden.append((name, url, f"{b.get('id')}|{b.get('last_edited_time') or ''}"))
     if not gefunden:
         return None
     if datum:
@@ -396,23 +398,50 @@ def uebernehmen(pid: str) -> tuple[dict, str]:
     if alt and alt.get("status") != "vorbereitet":
         return alt, "Einsatz läuft bereits oder ist abgeschlossen – nicht überschrieben."
     e, blocks = als_einsatz(p, alt)
-    hinweis = ""
-    if not e.get("ls"):
-        try:
-            ls = lieferschein_datei(blocks, e.get("von"))
-        except NotionFehler:
-            ls = None
-        if ls:
-            from .dokumente import lieferschein
-            pdf = herunterladen(ls[1])
-            speicher.pfad("dokumente", e["id"], "lexware.pdf").write_bytes(pdf)
-            e["ls"] = lieferschein.lexware_nummer(pdf) or e.get("ls")
-            hinweis = f"Lexware-Lieferschein {e['ls'] or ''} übernommen."
-        else:
-            hinweis = "Lieferschein liegt noch nicht unter Projektinfos → Unterlagen → Lieferschein."
+    hinweis = lieferschein_abgleichen(e, blocks)
     speicher.einsatz_speichern(e)
     speicher.protokoll("notion_uebernommen", "notion", e["id"], notion=p["id"])
     return e, hinweis
+
+
+def lieferschein_abgleichen(e: dict, blocks: list[dict]) -> str:
+    """Lexware-Lieferschein aus Notion holen. Wird bei jedem Aktualisieren geprüft: ist die Datei in
+    Notion ausgetauscht (auch mit gleichem Namen), wird sie neu eingelesen; ist sie dort gelöscht, wird
+    sie auch hier entfernt. Ein im Büro hochgeladener Lieferschein bleibt, bis in Notion einer liegt,
+    der sich davon unterscheidet."""
+    quelle = e.get("ls_quelle") or {}
+    lex = speicher.pfad("dokumente", e["id"], "lexware.pdf")
+    try:
+        ls = lieferschein_datei(blocks, e.get("von"))
+    except NotionFehler:
+        return "Lieferschein in Notion gerade nicht lesbar – bisheriger Stand bleibt."
+    if ls:
+        if e.get("ls") and quelle.get("kennung") == ls[2] and lex.exists():
+            return ""                                    # unverändert
+        if quelle.get("art") == "buero" and quelle.get("notion_kennung") == ls[2]:
+            return ""                                    # im Büro bewusst durch einen anderen ersetzt
+        from .dokumente import lieferschein
+        pdf = herunterladen(ls[1])
+        lex.write_bytes(pdf)
+        alt_nr = e.get("ls")
+        e["ls"] = lieferschein.lexware_nummer(pdf) or None
+        e["ls_quelle"] = {"art": "notion", "kennung": ls[2], "name": ls[0]}
+        if alt_nr and alt_nr != e["ls"]:
+            return f"Lieferschein ausgetauscht: {alt_nr} → {e['ls'] or ls[0]}."
+        if alt_nr:
+            return f"Lieferschein {e['ls'] or ''} neu eingelesen ({ls[0]})."
+        return f"Lexware-Lieferschein {e['ls'] or ''} übernommen."
+    # In Notion liegt keiner (mehr)
+    if e.get("ls") and quelle.get("art") != "buero":      # ältere Einsätze ohne Quelle: kamen aus Notion
+        alt_nr = e.pop("ls", None)
+        e["ls"] = None
+        e.pop("ls_quelle", None)
+        if lex.exists():
+            lex.unlink()
+        return f"Lieferschein {alt_nr} ist in Notion nicht mehr da – hier entfernt."
+    if not e.get("ls"):
+        return "Lieferschein liegt noch nicht unter Projektinfos → Unterlagen → Lieferschein."
+    return ""
 
 
 # ---------------------------------------------------------------- Interne Aufgaben (LST Aufgaben) → iPad

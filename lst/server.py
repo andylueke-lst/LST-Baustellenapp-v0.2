@@ -995,13 +995,16 @@ def notion_abgleichen():
         if not pid:
             continue
         try:
-            e, _ = notion.uebernehmen(pid)
+            e, hinweis = notion.uebernehmen(pid)
         except notion.NotionFehler as ex:
             fehler.append(f"{jobname(alt)}: {ex}")
             continue
         aktualisiert.append(e)
         if e.get("ls") and not alt.get("ls"):
             neue_ls.append(f"{jobname(e)} ({e['ls']})")
+        elif hinweis and (hinweis.startswith("Lieferschein ausgetauscht") or hinweis.startswith("Lieferschein ")
+                          and ("entfernt" in hinweis or "neu eingelesen" in hinweis)):
+            neue_ls.append(f"{jobname(e)}: {hinweis}")
         elif any(e.get(k) != alt.get(k) for k in felder):
             geaendert.append(jobname(e))
     n_rt = _reisetage_zu(aktualisiert) if aktualisiert else 0
@@ -1009,7 +1012,7 @@ def notion_abgleichen():
     aufgaben_holen()
     teile = [f"{len(aktualisiert)} Einsätze mit Notion abgeglichen."]
     if neue_ls:
-        teile.append("Neuer Lieferschein: " + ", ".join(neue_ls) + ".")
+        teile.append("Lieferscheine: " + "; ".join(neue_ls))
     if geaendert:
         teile.append("Geändert: " + ", ".join(geaendert) + ".")
     if not neue_ls and not geaendert:
@@ -1188,7 +1191,11 @@ def lexware_hochladen(eid):
     nr = lieferschein.lexware_nummer(daten)
     if nr:
         e["ls"] = nr
-        speicher.einsatz_speichern(e)
+    # merken, welcher Notion-Lieferschein dadurch ersetzt wurde, damit der Abgleich ihn nicht zurückholt
+    e["ls_quelle"] = {"art": "buero", "name": f.filename,
+                      "notion_kennung": (e.get("ls_quelle") or {}).get("kennung")
+                      or (e.get("ls_quelle") or {}).get("notion_kennung")}
+    speicher.einsatz_speichern(e)
     flash(f"Lexware-Lieferschein {nr or ''} gespeichert.".replace("  ", " "), "ok")
     return redirect(url_for("einsatz_seite", eid=eid))
 
@@ -1341,8 +1348,10 @@ def api_einsatz_speichern():
     elif e.get("status") == "abgeschlossen":
         e["status"] = "inarbeit"
         e.pop("abschluss", None)
-    if alt.get("ls") and not e.get("ls"):
-        e["ls"] = alt["ls"]
+    if alt:                                   # Lieferschein-Nummer bestimmt nur der Server (Notion/Büro)
+        e["ls"] = alt.get("ls")
+        if alt.get("ls_quelle"):
+            e["ls_quelle"] = alt["ls_quelle"]
     for k in ("unterschrift", "uebernommen_aus_alter_app"):
         if alt.get(k):
             e[k] = alt[k]
