@@ -19,6 +19,9 @@
 <p class="muted">{{ fotos }} Fotos hochgeladen. Welchen Einsatz übernehmen?</p>
 <div class="list">
 {% for v in liste %}
+  {% if v.erledigt %}<div class="item"><div><b>{{ v.einsatzort }}</b> <span class="tag green">übernommen</span>
+    <div class="meta">als <a href="{{ url_for('einsatz_seite', eid=v.erledigt.eid) }}">{{ v.erledigt.name }}</a></div></div></div>
+  {% else %}
   <form class="item" method="post" action="{{ url_for('altdaten_uebernehmen', token=token, index=v.index) }}" style="align-items:flex-start">
     <div><b>{{ v.einsatzort }}</b>
       <div class="meta">{{ v.kunde }} · {{ zeitraum(v.von, v.bis) if v.von else '' }} · {{ v.status }} · {{ v.tage }} Tage · Fotos: {{ v.fotos_passend }} von {{ v.fotos_alt }} gefunden
@@ -27,13 +30,13 @@
       <div class="field" style="margin-top:8px"><label>Ziel</label>
         <select class="inp" name="ziel">
           <option value="">als neuer Einsatz anlegen</option>
-          {% for x in server_es %}<option value="{{ x.id }}"{% if x.id == v.vorschlag %} selected{% endif %}>in „{{ x.einsatzort }}“ ({{ zeitraum(x.von, x.bis) }}) übernehmen</option>{% endfor %}
+          {% for x in server_es %}<option value="{{ x.id }}"{% if x.id == v.vorschlag %} selected{% endif %}>in „{{ jobname(x) }}“ ({{ zeitraum(x.von, x.bis) }}) übernehmen</option>{% endfor %}
         </select></div>
     </div>
     <button class="btn pri small">Übernehmen</button>
-  </form>
+  </form>{% endif %}
 {% else %}<div class="empty">Keine Einsätze in der Datei.</div>{% endfor %}
 </div>
-<p class="small muted">„In … übernehmen“ nutzt den vorhandenen Einsatz (z. B. aus Notion) mit seinem Lexware-Lieferschein und ersetzt Zeiten, Berichte und Fotos durch die aus der alten App.</p>
+<p class="small muted">Bitte bei jedem Job das Ziel prüfen. Vorgeschlagen wird nur, wenn Zeitraum und Ort zusammenpassen. „In … übernehmen“ nutzt den vorhandenen Einsatz (z. B. aus Notion) mit seinem Lexware-Lieferschein und ersetzt Zeiten, Berichte und Fotos durch die aus der alten App.</p>
 {% endif %}
 {% endblock %}

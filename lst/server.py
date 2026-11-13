@@ -467,13 +467,14 @@ def _auswahl():
 @anmeldung(admin=True)
 def einsatz_loeschen(eid):
     e = _einsatz_oder_404(eid)
-    if e.get("status") != "vorbereitet":
-        flash("Nur vorbereitete Einsätze lassen sich löschen.", "fehler")
+    if e.get("status") != "vorbereitet" and not darf("loeschen"):
+        flash("Laufende oder abgeschlossene Einsätze darf nur löschen, wer „Dokumente löschen“ hat.", "fehler")
         return redirect(url_for("einsatz_seite", eid=eid))
     with speicher.db() as c:
         c.execute("DELETE FROM einsaetze WHERE id=?", (eid,))
+        c.execute("UPDATE fotos SET geloescht=1 WHERE einsatz_id=?", (eid,))
     speicher.protokoll("einsatz_geloescht", session.get("uid"), eid, einsatzort=e.get("einsatzort"))
-    flash(f"Einsatz {e['einsatzort']} gelöscht.", "ok")
+    flash(f"Einsatz {jobname(e)} gelöscht.", "ok")
     return redirect(url_for("buero"))
 
 
@@ -1427,16 +1428,47 @@ def altdaten_seite():
         (ordner / "fotos").mkdir(exist_ok=True)
         (ordner / "fotos" / name).write_bytes(f.read())
         namen.append(name)
-    server_es = [e for e in speicher.einsaetze() if e.get("status") != "abgeschlossen"]
     liste = []
     for i, e in enumerate(einsaetze):
         v = altdaten.vorschau(e, namen)
         v["index"] = i
-        ort = (e.get("einsatzort") or "").lower()
-        v["vorschlag"] = next((x["id"] for x in server_es if ort and (ort in (x.get("einsatzort") or "").lower()
-                                                                       or (x.get("einsatzort") or "").lower() in ort)), "")
         liste.append(v)
-    return render_template("altdaten.html", schritt=2, token=token, liste=liste, fotos=len(namen),
+    (ordner / "liste.json").write_text(json.dumps({"liste": liste, "fotos": len(namen), "erledigt": {}}, ensure_ascii=False))
+    return redirect(url_for("altdaten_liste", token=token))
+
+
+def _altdaten_vorschlag(v: dict, server_es: list[dict]) -> str:
+    """Ziel nur vorschlagen, wenn Zeitraum UND ein markantes Wort (Ort/Name) passen."""
+    def woerter(t):
+        return {w for w in re.findall(r"[a-zäöüß]{4,}", (t or "").lower())} - {"aldi", "epta", "edeka", "gmbh", "lidl"}
+    try:
+        av, ab = date.fromisoformat(v["von"]), date.fromisoformat(v.get("bis") or v["von"])
+    except (KeyError, ValueError):
+        return ""
+    for x in server_es:
+        try:
+            xv, xb = date.fromisoformat(x.get("von", "")), date.fromisoformat(x.get("bis") or x.get("von", ""))
+        except ValueError:
+            continue
+        if xv <= ab + timedelta(days=2) and xb >= av - timedelta(days=2) and \
+                woerter(v.get("einsatzort")) & woerter(f"{x.get('einsatzort', '')} {jobname(x)}"):
+            return x["id"]
+    return ""
+
+
+@app.route("/buero/altdaten/<token>")
+@anmeldung(admin=True)
+def altdaten_liste(token):
+    ordner = speicher.DATEN / "import" / Path(token).name
+    if not (ordner / "liste.json").exists():
+        return redirect(url_for("altdaten_seite"))
+    d = json.loads((ordner / "liste.json").read_text())
+    server_es = sorted((e for e in speicher.einsaetze() if e.get("status") != "abgeschlossen"),
+                       key=lambda e: e.get("von") or "")
+    for v in d["liste"]:
+        v["vorschlag"] = _altdaten_vorschlag(v, server_es)
+        v["erledigt"] = d["erledigt"].get(str(v["index"]))
+    return render_template("altdaten.html", schritt=2, token=token, liste=d["liste"], fotos=d["fotos"],
                            server_es=server_es)
 
 
@@ -1460,6 +1492,12 @@ def altdaten_uebernehmen(token, index):
         if not lex_pdf:
             text += " Ohne Lexware-Lieferschein – nach dem Hochladen „Neu erzeugen“ klicken."
     flash(text, "ok")
+    lp = ordner / "liste.json"
+    if lp.exists():
+        d = json.loads(lp.read_text())
+        d["erledigt"][str(index)] = {"eid": eid, "name": jobname(speicher.einsatz(eid))}
+        lp.write_text(json.dumps(d, ensure_ascii=False))
+        return redirect(url_for("altdaten_liste", token=token))
     return redirect(url_for("einsatz_seite", eid=eid))
 
 

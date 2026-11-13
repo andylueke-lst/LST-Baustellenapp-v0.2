@@ -50,6 +50,13 @@
   {% if e.status == 'inarbeit' and e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn pri">Mit gespeicherter Unterschrift abschließen</button></form>{% endif %}{% endif %}
 </div>
 
+{% if e.status != 'vorbereitet' and darf('loeschen') %}
+<details style="margin-top:12px"><summary class="small muted" style="cursor:pointer">Einsatz löschen …</summary>
+<form method="post" action="{{ url_for('einsatz_loeschen', eid=e.id) }}" style="margin-top:8px" onsubmit="return confirm('„{{ jobname(e) }}“ mit allen Zeiten, Berichten und Fotos endgültig löschen? Die Dokumente bleiben im Dokumentenordner erhalten.')">
+  <button class="btn" style="color:var(--danger)">Einsatz endgültig löschen</button>
+  <span class="small muted">z. B. eine doppelte Übernahme. Nicht rückgängig zu machen.</span></form></details>
+{% endif %}
+
 <h2>Lexware-Lieferschein</h2>
 <p class="small muted">{% if lexware %}Liegt vor. Ein neues Hochladen ersetzt ihn.{% else %}Noch nicht hochgeladen. Später kommt er automatisch aus dem Notion-Projekt.{% endif %}</p>
 <form method="post" enctype="multipart/form-data" action="{{ url_for('lexware_hochladen', eid=e.id) }}" class="row">

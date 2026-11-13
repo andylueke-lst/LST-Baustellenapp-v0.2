@@ -73,7 +73,7 @@ def uebernehmen(e: dict, fotos: list[tuple[str, bytes]], ziel_id: str | None) ->
     if ziel_id:
         ziel = speicher.einsatz(ziel_id) or {}
         neu["id"] = ziel_id
-        for k in ("notion", "ls", "apKunde", "apOrt", "technisch", "bestellnummer"):
+        for k in ("notion", "notion_weitere", "name", "ls", "apKunde", "apOrt", "technisch", "bestellnummer", "tour"):
             if ziel.get(k) and not neu.get(k):
                 neu[k] = ziel[k]
         if ziel.get("ls"):
