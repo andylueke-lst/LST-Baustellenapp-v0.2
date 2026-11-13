@@ -105,3 +105,7 @@ a.kachel:hover{background:var(--hover);border-color:rgba(55,53,47,.25)}
 .kachel.neu{border-style:dashed;align-items:center;justify-content:center;color:var(--muted);font-weight:500}
 .leer{color:var(--faint);font-size:14px;border:1px dashed var(--line);border-radius:10px;padding:14px}
 .kopfzeile{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+/* Notion-Projekte: Knöpfe umbrechen statt den Namen zu quetschen */
+.projekte .item{grid-template-columns:minmax(260px,1fr) minmax(0,max-content)}
+.projekte .item>.row{justify-content:flex-end}
+@media (max-width:900px){.projekte .item{grid-template-columns:1fr}.projekte .item>.row{justify-content:flex-start}}

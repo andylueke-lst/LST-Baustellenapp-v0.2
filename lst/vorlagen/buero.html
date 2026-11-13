@@ -45,6 +45,7 @@
     {% for n in k.team %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}
     {% if e.status == 'abgeschlossen' %}{% if k.ohne_unterschrift %}<span class="tag yellow">Unterschrift fehlt</span>{% else %}<span class="tag green">unterschrieben</span>{% endif %}{% endif %}
     {% if e.status == 'inarbeit' %}<span class="tag blue">Tag {{ k.tage }}</span>{% endif %}
+    {% if e.tour %}<span class="tag blue">🔗 Tour {{ e.tour.nr }}/{{ e.tour.anzahl }}</span>{% endif %}
   </div></a>
 {% endmacro %}
 

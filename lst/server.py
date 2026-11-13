@@ -49,7 +49,7 @@ def darf_einsatz(e: dict | None, m: dict | None) -> bool:
         return True
     uid = m["id"]
     team = e.get("team") or {}
-    if uid in (team.get("vor"), team.get("fach")):
+    if uid in (team.get("vor"), team.get("fach")) or uid in (team.get("weitere") or []):
         return True
     return any(uid in (t.get("zeiten") or {}) for t in e.get("tage") or [])
 
@@ -176,7 +176,8 @@ def buero():
 def _kachel(e: dict, namen: dict) -> dict:
     """Was eine Einsatz-Kachel auf der Startseite zeigt: Team, heutiger Stand, Hinweise."""
     from .auswertung import berechnen
-    team = [x for x in [(e.get("team") or {}).get("vor"), (e.get("team") or {}).get("fach")] if x]
+    team = [x for x in [(e.get("team") or {}).get("vor"), (e.get("team") or {}).get("fach")]
+            + list((e.get("team") or {}).get("weitere") or []) if x]
     for t in e.get("tage") or []:
         team += [mid for mid in (t.get("zeiten") or {}) if mid not in team]
     heute = date.today().isoformat()
@@ -376,7 +377,9 @@ def einsatz_neu(eid=None):
                   "ls": f.get("ls", "").strip().upper() or e.get("ls"), "technisch": f.get("technisch", "").strip(),
                   "anlagen": _zeilen(f.get("anlagen"), e.get("anlagen", [])),
                   "zusatz": _zeilen(f.get("zusatz"), e.get("zusatz", [])),
-                  "team": {"vor": f.get("vor") or None, "fach": f.get("fach") or None},
+                  "team": {"vor": f.get("vor") or None, "fach": f.get("fach") or None,
+                           "weitere": [x for x in f.getlist("weitere") if x and x not in (f.get("vor"), f.get("fach"))]},
+                  "team_manuell": True,
                   "zeitenAufLs": bool(f.get("zeitenAufLs")), "tagesUnterschrift": bool(f.get("tagesUnterschrift"))})
         e["geraete"] = {**e.get("geraete", {}), "fahrzeug": f.get("fahrzeug"), "kompressor": f.get("kompressor") or None,
                        "strahl": f.getlist("strahl")[:2]}
@@ -393,7 +396,7 @@ def einsatz_neu(eid=None):
 
 def _auswahl():
     return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)],
-            "fahrzeuge": speicher.stamm("fahrzeuge", []),
+            "fahrzeuge": [f for f in speicher.stamm("fahrzeuge", []) if f.get("aktiv", True)],
             "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
             "strahlgeraete": [g for g in speicher.stamm("strahlgeraete", []) if g.get("aktiv", True)]}
 
@@ -441,9 +444,14 @@ def notion_seite():
                 kid = k["id"].replace("-", "")
                 partner = set(k["verknuepft"]) | {x["id"].replace("-", "") for x in alle_k if kid in x["verknuepft"]}
                 k["partner"] = [namen.get(x) or (jobname(vorhanden[x]) if x in vorhanden else "weiteres Projekt") for x in partner]
+                k["partner_ids"] = partner
                 if not k["einsatz"]:
-                    k["kandidaten"] = list({id(e): e for e in (vorhanden.get(x) for x in partner) if e}.values())
+                    # „Gehört zu“ nur, wenn der Einsatz eines verknüpften Projekts zeitlich passt (±1 Tag);
+                    # sonst ist es eine weitere Station (Tour) und wird eigener Einsatz
+                    k["kandidaten"] = [e for e in {id(e): e for e in (vorhanden.get(x) for x in partner) if e}.values()
+                                       if _ueberschneidet(k, e)]
                 (ausgeblendet if p_ausgeblendet(k, weg) else liste).append(k)
+            liste = _gruppieren(liste)
         except notion.NotionFehler as ex:
             fehler = str(ex)
     alle = speicher.stamm("intern", [])
@@ -454,7 +462,8 @@ def notion_seite():
     zuordenbar = sorted((e for e in speicher.einsaetze() if (e.get("bis") or e.get("von") or "") >= grenze_z),
                         key=lambda e: e.get("von") or "", reverse=True)
     return render_template("notion.html", liste=liste, ausgeblendet=ausgeblendet, fehler=fehler, eingerichtet=notion.eingerichtet(),
-                           zuordenbar=zuordenbar,
+                           zuordenbar=zuordenbar, tour_leute=_auswahl()["leute"], fahrzeuge=_auswahl()["fahrzeuge"],
+                           kompressoren=_auswahl()["kompressoren"],
                            schreiben=bool(notion.einstellungen().get("schreiben")),
                            aufgaben_offen=[i for i in intern if i.get("status") != "erledigt"],
                            aufgaben_erledigt=[i for i in alle if i.get("status") == "erledigt" and (
@@ -580,8 +589,88 @@ def notion_aufgaben():
     return redirect(request.referrer or url_for("notion_seite"))
 
 
+def _ueberschneidet(k: dict, e: dict) -> bool:
+    try:
+        kv, kb = date.fromisoformat(k["von"]), date.fromisoformat(k["bis"] or k["von"])
+        ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
+    except (KeyError, ValueError):
+        return False
+    return ev <= kb + timedelta(days=1) and eb >= kv - timedelta(days=1)
+
+
+def _gruppieren(liste: list[dict]) -> list[dict]:
+    """Verknüpfte Projekte (Notion „Projektverknüpfung“) zu Gruppen zusammenfassen, z. B. eine Tour.
+    Ergebnis: [{"typ": "einzel", "p": …} | {"typ": "tour", "ps": […], "id": …}] in zeitlicher Reihenfolge."""
+    nach_id = {k["id"].replace("-", ""): k for k in liste}
+    gesehen, aus = set(), []
+    for k in liste:
+        kid = k["id"].replace("-", "")
+        if kid in gesehen:
+            continue
+        gruppe, stapel = [], [kid]
+        while stapel:
+            x = stapel.pop()
+            if x in gesehen or x not in nach_id:
+                continue
+            gesehen.add(x)
+            gruppe.append(nach_id[x])
+            stapel += list(nach_id[x].get("partner_ids") or [])
+        if len(gruppe) > 1:
+            gruppe.sort(key=lambda g: (g["von"], g["name"]))
+            aus.append({"typ": "tour", "ps": gruppe, "id": "-".join(sorted(g["id"].replace("-", "")[:8] for g in gruppe)),
+                        "von": gruppe[0]["von"], "bis": max(g["bis"] or g["von"] for g in gruppe),
+                        "offen": [g for g in gruppe if not g["einsatz"] and not g.get("kandidaten")]})
+        else:
+            aus.append({"typ": "einzel", "p": k})
+    return aus
+
+
 def p_ausgeblendet(k: dict, weg: set) -> bool:
     return k["id"] in weg
+
+
+@app.route("/buero/notion/tour", methods=["POST"])
+@anmeldung(admin=True)
+def notion_tour():
+    """Alle Stationen einer Tour übernehmen. Team und Geräte gelten für alle, wenn gewählt
+    („wie in Notion“ lässt die Angaben aus Notion stehen); jede Station bleibt einzeln änderbar."""
+    f = request.form
+    pids = [x for x in f.getlist("pid") if x]
+    tour_id = f.get("tour") or speicher.neue_id()
+    angelegt, fehler = [], []
+    for pid in pids:
+        try:
+            e, _ = notion.uebernehmen(pid)
+        except notion.NotionFehler as ex:
+            fehler.append(str(ex))
+            continue
+        angelegt.append(e)
+    angelegt.sort(key=lambda e: (e.get("von") or "", jobname(e)))
+    for n, e in enumerate(angelegt, 1):
+        e["tour"] = {"id": tour_id, "nr": n, "anzahl": len(angelegt)}
+        if e.get("status") == "vorbereitet":
+            team = dict(e.get("team") or {})
+            for k in ("vor", "fach"):
+                if f.get(k) == "-":
+                    team[k] = None
+                elif f.get(k):
+                    team[k] = f[k]
+            if f.getlist("weitere"):
+                team["weitere"] = [x for x in f.getlist("weitere") if x not in (team.get("vor"), team.get("fach"))]
+            if any(f.get(k) for k in ("vor", "fach")) or f.getlist("weitere"):
+                e["team_manuell"] = True
+            e["team"] = team
+            g = dict(e.get("geraete") or {})
+            if f.get("fahrzeug"):
+                g["fahrzeug"] = f["fahrzeug"]
+            if f.get("kompressor"):
+                g["kompressor"] = None if f["kompressor"] == "-" else f["kompressor"]
+            e["geraete"] = g
+        speicher.einsatz_speichern(e)
+    speicher.protokoll("notion_tour", session.get("uid"), None, stationen=len(angelegt))
+    flash(f"Tour mit {len(angelegt)} Stationen übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
+          + (" Fehler: " + "; ".join(fehler) if fehler else ""), "fehler" if fehler else "ok")
+    return redirect(url_for("notion_seite"))
 
 
 @app.route("/buero/notion/<pid>/verknuepfen", methods=["POST"])

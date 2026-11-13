@@ -10,8 +10,7 @@
 {% elif fehler %}
 <div class="callout fehler" role="alert">{{ fehler }}</div>
 {% endif %}
-<div class="list">
-{% for p in liste %}
+{% macro projekt(p) %}
   <div class="item">
     <div><b>{{ p.name }}</b>
       {% if p.einsatz %}<span class="tag {{ 'green' if p.einsatz.status == 'vorbereitet' else 'blue' }}">{{ 'übernommen' if p.einsatz.status == 'vorbereitet' else ('läuft' if p.einsatz.status == 'inarbeit' else 'abgeschlossen') }}</span>{% endif %}
@@ -33,6 +32,32 @@
       {% if not p.einsatz %}<form method="post" action="{{ url_for('notion_ausblenden', pid=p.id) }}"><button class="btn small" title="Hier nicht mehr anzeigen (z. B. schon in der alten App erledigt)">Ausblenden</button></form>{% endif %}
     </div>
   </div>
+{% endmacro %}
+<div class="list projekte">
+{% for g in liste %}
+{% if g.typ == 'einzel' %}{{ projekt(g.p) }}
+{% else %}
+  <div style="border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:4px 12px 12px;margin:12px 0">
+    <div class="row" style="justify-content:space-between;padding:10px 4px 0">
+      <b>🔗 {{ 'Tour' if g.ps|map(attribute='von')|unique|list|length > 1 else 'Zusammengehörig' }} · {{ g.ps|length }} Projekte · {{ zeitraum(g.von, g.bis) }}</b></div>
+    {% for p in g.ps %}{{ projekt(p) }}{% endfor %}
+    {% if g.offen|length > 1 %}
+    <details style="margin-top:10px"><summary class="btn small pri">Alle {{ g.offen|length }} übernehmen …</summary>
+    <form method="post" action="{{ url_for('notion_tour') }}" style="margin-top:10px">
+      <input type="hidden" name="tour" value="{{ g.id }}">
+      {% for p in g.offen %}<input type="hidden" name="pid" value="{{ p.id }}">{% endfor %}
+      <p class="small muted">Für alle Stationen gleich. „wie in Notion“ übernimmt die Angaben aus dem jeweiligen Projekt. Jede Station lässt sich danach einzeln ändern.</p>
+      <div class="grid2">
+        <div class="field"><label>Vorarbeiter</label><select class="inp" name="vor"><option value="">wie in Notion</option><option value="-">–</option>{% for m in tour_leute %}<option value="{{ m.id }}">{{ m.vorname }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Facharbeiter</label><select class="inp" name="fach"><option value="">wie in Notion</option><option value="-">–</option>{% for m in tour_leute %}<option value="{{ m.id }}">{{ m.vorname }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Fahrzeug</label><select class="inp" name="fahrzeug"><option value="">wie vorgeschlagen</option>{% for x in fahrzeuge %}<option value="{{ x.id }}">{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></div>
+        <div class="field"><label>Kompressor</label><select class="inp" name="kompressor"><option value="">wie vorgeschlagen</option><option value="-">ohne Kompressor</option>{% for x in kompressoren %}<option value="{{ x.id }}">{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="field"><label>Weitere Mitarbeiter (optional)</label><div class="row">{% for m in tour_leute %}<label class="tag" style="gap:6px;padding:8px 10px;font-size:14px"><input type="checkbox" name="weitere" value="{{ m.id }}">{{ m.vorname }}</label>{% endfor %}</div></div>
+      <button class="btn pri">{{ g.offen|length }} Stationen übernehmen</button>
+    </form></details>{% endif %}
+  </div>
+{% endif %}
 {% else %}{% if eingerichtet and not fehler %}<div class="empty">Keine bestätigten Projekte im Zeitraum.</div>{% endif %}{% endfor %}
 </div>
 {% if ausgeblendet %}<details style="margin-top:10px"><summary class="small muted">{{ ausgeblendet|length }} ausgeblendet</summary>

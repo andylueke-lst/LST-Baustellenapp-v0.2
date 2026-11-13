@@ -349,7 +349,7 @@ def als_einsatz(p: dict, alt: dict | None = None) -> tuple[dict, list[dict]]:
                   "team": {"vor": _person_id("Matthias"), "fach": _person_id(zweiter)},
                   "geraete": {"fahrzeug": "f2", "kompressor": "k1", "strahl": ["s1"]},
                   "tage": [], "trash": [], "zeitenAufLs": False, "tagesUnterschrift": False})
-    elif zweiter and alt.get("status") == "vorbereitet":
+    elif zweiter and alt.get("status") == "vorbereitet" and not alt.get("team_manuell"):   # im Büro geändert: bleibt
         e.setdefault("team", {})["fach"] = _person_id(zweiter) or e["team"].get("fach")
     # „Material für Job“ (Verknüpfung zu LST Werkzeug, Geräte, Material) → Zusatzmaterial.
     # Von Hand im Büro eingetragene Zeilen bleiben, die aus Notion werden jedes Mal neu gesetzt.
