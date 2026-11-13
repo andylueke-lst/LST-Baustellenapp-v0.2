@@ -1,0 +1,35 @@
+{% extends "basis.html" %}
+{% block titel %}Meine To-dos · LST Baustelle{% endblock %}
+{% block pfad %} › Meine To-dos{% endblock %}
+{% block inhalt %}
+<div class="icon">✅</div>
+<div class="kopfzeile">
+  <div><h1>Meine To-dos</h1>
+  <p class="muted" style="margin:0">Aufgaben aus LST Aufgaben mit „iPad für {{ ich.vorname }}“, alle nicht erledigten. Abhaken in Notion.{% if stand.zeit %} Zuletzt geholt um {{ stand.zeit }} Uhr.{% endif %}</p></div>
+  {% if eingerichtet %}<div class="row" style="gap:8px">
+    <a class="btn small" href="{{ NOTION_AUFGABEN }}" target="_blank" rel="noopener">＋ Neue Aufgabe in Notion ↗</a>
+    <form method="post" action="{{ url_for('todo_holen') }}"><button class="btn small">🔄 Aufgaben holen</button></form></div>{% endif %}
+</div>
+{% if stand.fehler %}<div class="callout fehler" role="alert">{{ stand.fehler }}</div>{% endif %}
+
+{% for titel, liste in gruppen %}{% if liste %}
+<section class="bereich"><h2>{{ titel }} <span class="tag{% if titel == 'Überfällig' %} red{% elif titel == 'Heute' %} yellow{% endif %}">{{ liste|length }}</span></h2>
+<div style="display:grid;gap:8px">{% for a in liste %}
+  <div class="kachel{% if titel == 'Überfällig' %} rot{% endif %}" style="min-height:0">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <div class="t">{{ a.titel }}</div>
+        <div class="s"{% if titel == 'Überfällig' %} style="color:var(--danger)"{% endif %}>{% if a.datum %}{{ datum(a.datum) }}{% else %}ohne Termin{% endif %}{% if a.nstatus %} · {{ a.nstatus }}{% endif %}{% if a.projekt %} · {{ a.projekt }}{% endif %}</div>
+      </div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        {% if a.prio %}<span class="tag{% if a.prio|lower in ('hoch','high') %} red{% elif a.prio|lower in ('mittel','medium') %} yellow{% endif %}">{{ a.prio }}</span>{% endif %}
+        {% if a.gemeinsam %}<span class="tag blue">gemeinsam</span>{% endif %}
+        {% if darf('aufgaben') %}<a class="btn small" href="{{ url_for('intern_seite', iid=a.id) }}">Details</a>{% endif %}
+        {% if a.notion and a.notion.url %}<a class="btn small pri" href="{{ a.notion.url }}" target="_blank" rel="noopener">In Notion öffnen ↗</a>{% endif %}
+      </div>
+    </div>
+    {% if a.beschreibung %}<details><summary class="small" style="cursor:pointer">Arbeitsanweisung</summary><div class="small" style="white-space:pre-wrap;padding-top:6px">{{ a.beschreibung }}</div></details>{% endif %}
+  </div>{% endfor %}</div></section>
+{% endif %}{% endfor %}
+{% if not anzahl %}<div class="leer" style="margin-top:20px">Nichts offen. In Notion bei LST Aufgaben „iPad für {{ ich.vorname }}“ setzen, dann erscheint es hier.</div>{% endif %}
+{% endblock %}

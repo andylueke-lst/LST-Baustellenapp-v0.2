@@ -448,6 +448,9 @@ def lieferschein_abgleichen(e: dict, blocks: list[dict]) -> str:
 # Eine Aufgabe kommt aufs iPad, wenn „iPad für“ gesetzt ist, „Erledigt“ nicht angehakt ist und der
 # Status einer dieser ist. Die Zahl ist der Rang für die Reihenfolge auf dem iPad (kleiner = weiter oben).
 AUFGABEN_STATUS = {"Zu tun": 1, "Läuft": 1, "Wartet": 2, "Geplant": 2, "Wenn Zeit dann tun": 3, "Wenn Zeit": 3}
+# Alle anderen nicht erledigten Status (Akquise, Vertrieb, 00 Job …) kommen auf „Meine To-dos“ im Büro
+# und aufs Admin-iPad, aber nicht auf die iPads der Mitarbeiter.
+STATUS_ERLEDIGT = ("Fertig", "Ablage", "Urlaub genehmigt")
 IPAD_FELD = "iPad für"
 AUFGABEN_QUELLE = "930c0024-ee04-4560-bf79-a47f02f2e709"   # LST Aufgaben
 AUFGABEN_SEITE = "https://www.notion.so/7485e34e897d455bb96646e618772a88"   # Datenbank LST Aufgaben (zum Anlegen)
@@ -550,7 +553,7 @@ def aufgaben_abgleichen() -> dict:
         status = eig(p, "LST Status intern")
         roh = eig(p, IPAD_FELD) or []
         namen = [n.strip() for n in (roh if isinstance(roh, list) else [roh]) if n and n.strip()]
-        if status not in AUFGABEN_STATUS:
+        if status in STATUS_ERLEDIGT:
             continue
         fuer_ids = []
         gemeinsam = any(n.lower() == "gemeinsam" for n in namen)
@@ -587,7 +590,8 @@ def aufgaben_abgleichen() -> dict:
                 projekt = projekt or projektnamen[rid]
         a = {"id": aid, "titel": eig(p, "Aufgabe") or titel(p) or "Aufgabe", "beschreibung": text,
              "datum": ((eig(p, "Wann tun") or {}).get("start") or "")[:10], "zust": zust,
-             "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS[status],
+             "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS.get(status, 4),
+             "ipad": status in AUFGABEN_STATUS,
              "prio": eig(p, "Priorität") or "", "projekt": projekt, "fuer": fuer_ids if (len(fuer_ids) > 1 or gemeinsam) else [],
              "gemeinsam": gemeinsam,
              "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert, "text": TEXT_STAND}}

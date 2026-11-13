@@ -68,15 +68,44 @@ BEREICHE = [("einsaetze", "Einsätze & Dokumente"), ("notion", "Notion"), ("aufg
             ("mitarbeiter", "Mitarbeiter & Rechte"), ("loeschen", "Dokumente löschen")]
 _BEREICH_PFAD = [("/buero/stunden", "stunden"), ("/buero/tanken", "tanken"), ("/buero/geraete", "geraete"),
                  ("/buero/mitarbeiter", "mitarbeiter"), ("/buero/notion", "notion"), ("/buero/aufgaben", "aufgaben"),
-                 ("/buero/intern", "aufgaben"), ("/buero/postausgang", "einsaetze")]
+                 ("/buero/intern", "aufgaben"), ("/buero/postausgang", "einsaetze"), ("/buero/todo", "todo")]
 
 
 def rechte(m: dict | None) -> set:
     if not m:
         return set()
     if m.get("rolle") == "admin":
-        return {b for b, _ in BEREICHE}
-    return set(m.get("rechte") or [])
+        return {b for b, _ in BEREICHE} | {"todo"}
+    return set(m.get("rechte") or []) | ({"todo"} if m.get("buero") else set())
+
+
+# ---------------------------------------------------------------- Wer sieht wessen interne Aufgaben
+def aufgabe_leute(i: dict) -> list:
+    """Für wen eine interne Aufgabe ist: zuständig oder die Auswahl; leer = für alle."""
+    return [i["zust"]] if i.get("zust") else list(i.get("fuer") or [])
+
+
+def aufgaben_sichtbar(m: dict | None) -> set | None:
+    """Wessen Aufgaben jemand sehen darf: None = alle (Admin). Sonst die eigenen und die unter „Aufgaben von“."""
+    if not m or m.get("rolle") == "admin":
+        return None
+    return {m["id"]} | set(m.get("aufgaben_von") or [])
+
+
+def aufgabe_sichtbar(i: dict, m: dict | None) -> bool:
+    s = aufgaben_sichtbar(m)
+    if s is None:
+        return True
+    leute = aufgabe_leute(i)
+    return not leute or bool(set(leute) & s) or i.get("erledigt_von") in s
+
+
+def meine_todos(m: dict | None) -> list[dict]:
+    """Offene Aufgaben, die ausdrücklich für diese Person sind (nicht „für alle“)."""
+    if not m:
+        return []
+    namen = {x["id"]: x.get("vorname", "") for x in speicher.stamm("mitarbeiter", [])}
+    return [a for a in _aufgaben_liste(namen) if a.get("status") != "erledigt" and m["id"] in aufgabe_leute(a)]
 
 
 def stunden_sichtbar(m: dict | None) -> set | None:
@@ -101,6 +130,8 @@ def buero_start(m: dict | None) -> str:
     for b, _ in BEREICHE:
         if b in r and b in ziele:
             return url_for(ziele[b])
+    if "todo" in r:
+        return url_for("todo_seite")
     return "/app"
 
 
@@ -142,6 +173,7 @@ def jobname(e: dict | None) -> str:
 def vorlagen_helfer():
     return {"ich": ich(), "jobname": jobname, "darf": darf, "BEREICHE": BEREICHE, "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
             "mail_eingerichtet": mail.eingerichtet(), "NOTION_AUFGABEN": notion.AUFGABEN_SEITE,
+            "todo_zahl": (lambda: len(meine_todos(ich()))),
             "zeitpunkt": lambda ts: time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ts)) if ts else ""}
 
 
@@ -307,7 +339,8 @@ def buero():
     n_berechnet = sum(1 for e in alle_fertig if berechnet(e))
     fertig = sorted((e for e in alle_fertig if archiv or not berechnet(e)),
                     key=lambda e: (e.get("abschluss") or {}).get("datum") or e.get("bis") or "", reverse=True)
-    aufgaben = _aufgaben_liste(namen)
+    m = ich()
+    aufgaben = [a for a in _aufgaben_liste(namen) if aufgabe_sichtbar(a, m)]
     return render_template("buero.html", freigaben=_offene_freigaben(),
                            laufend=[kachel(e) for e in alle if e.get("status") == "inarbeit"],
                            geplant=[kachel(e) for e in sorted((e for e in alle if e.get("status") == "vorbereitet"),
@@ -375,11 +408,45 @@ def _aufgaben_liste(namen: dict) -> list[dict]:
     return aus
 
 
+PRIO_RANG = {"hoch": 0, "high": 0, "mittel": 1, "medium": 1, "niedrig": 3, "low": 3}
+
+
+@app.route("/buero/todo")
+@anmeldung(admin=True)
+def todo_seite():
+    """Meine To-dos: offene Aufgaben aus LST Aufgaben mit „iPad für“ = ich, alle Status außer erledigt."""
+    m = ich()
+    heute = date.today()
+    sonntag = (heute + timedelta(days=6 - heute.weekday())).isoformat()
+    h = heute.isoformat()
+    liste = sorted(meine_todos(m), key=lambda a: (PRIO_RANG.get((a.get("prio") or "").lower(), 2),
+                                                 a.get("datum") or "9999", a.get("titel") or ""))
+    gruppen = [("Überfällig", [a for a in liste if a.get("datum") and a["datum"] < h]),
+               ("Heute", [a for a in liste if a.get("datum") == h]),
+               ("Diese Woche", [a for a in liste if a.get("datum") and h < a["datum"] <= sonntag]),
+               ("Später", [a for a in liste if a.get("datum") and a["datum"] > sonntag]),
+               ("Ohne Termin", [a for a in liste if not a.get("datum")])]
+    return render_template("todo.html", gruppen=gruppen, anzahl=len(liste), stand=AUFGABEN_STAND,
+                           eingerichtet=notion.eingerichtet())
+
+
+@app.route("/buero/todo/holen", methods=["POST"])
+@anmeldung(admin=True)
+def todo_holen():
+    aufgaben_holen()
+    if AUFGABEN_STAND["fehler"]:
+        flash(AUFGABEN_STAND["fehler"], "fehler")
+    else:
+        flash("Aufgaben aus Notion geholt.", "ok")
+    return redirect(url_for("todo_seite"))
+
+
 @app.route("/buero/aufgaben")
 @anmeldung(admin=True)
 def aufgaben_seite():
     namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
-    alle = _aufgaben_liste(namen)
+    ich_ = ich()
+    alle = [a for a in _aufgaben_liste(namen) if aufgabe_sichtbar(a, ich_)]
     wer = [w for w in request.args.getlist("wer") if w]
     if wer:
         alle = [a for a in alle if (a.get("zust") in wer) or any(f in wer for f in (a.get("fuer") or []))
@@ -390,7 +457,9 @@ def aufgaben_seite():
                ("Heute", [a for a in offen if a["heute"]]),
                ("Demnächst", [a for a in offen if a.get("datum") and not a["ueberfaellig"] and not a["heute"]]),
                ("Ohne Termin", [a for a in offen if not a.get("datum")])]
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("ipad", True)]
+    s = aufgaben_sichtbar(ich_)
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)
+             and (m.get("ipad", True) or m.get("rolle") == "admin") and (s is None or m["id"] in s)]
     return render_template("aufgaben.html", gruppen=gruppen, erledigt=erledigt[:30], leute=leute, wer=wer,
                            stand=AUFGABEN_STAND, eingerichtet=notion.eingerichtet())
 
@@ -457,6 +526,8 @@ def mitarbeiter_seite():
             m["buero"] = bool(f.get(f"buero_{i}"))
             m["rechte"] = [b for b, _ in BEREICHE if f.get(f"recht_{i}_{b}")]
             m["stunden_von"] = [x for x in f.getlist(f"stunden_von_{i}") if x]
+            m["aufgaben_von"] = [x for x in f.getlist(f"aufgaben_von_{i}") if x and x != i]
+            m["aufgaben_von_ipad"] = bool(f.get(f"aufgaben_von_ipad_{i}"))
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -732,7 +803,7 @@ def intern_seite(iid):
     """Eine interne Aufgabe im Büro: alles aus Notion und was auf dem iPad eingetragen wurde."""
     leute = {m["id"]: m for m in speicher.stamm("mitarbeiter", [])}
     namen = {mid: m.get("vorname", "") for mid, m in leute.items()}
-    a = next((x for x in _aufgaben_liste(namen) if x.get("id") == iid), None)
+    a = next((x for x in _aufgaben_liste(namen) if x.get("id") == iid and aufgabe_sichtbar(x, ich())), None)
     if not a:
         flash("Diese Aufgabe gibt es nicht mehr (in Notion erledigt oder gelöscht?).", "fehler")
         return redirect(url_for("aufgaben_seite"))
@@ -749,7 +820,7 @@ def intern_seite(iid):
 @anmeldung(admin=True)
 def intern_bericht(iid):
     i = _intern(iid)
-    if not i:
+    if not i or not aufgabe_sichtbar(i, ich()):
         abort(404)
     from .dokumente import intern as dok_intern
     z = i.get("zeit") or {}
@@ -1458,8 +1529,18 @@ def api_stand():
            "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}
     for k in LISTEN:
         aus[k] = speicher.stamm(k, [])
-    if (m or {}).get("rolle") != "admin":   # interne Aufträge: eigene und „offen für alle“
-        aus["intern"] = [i for i in aus["intern"] if intern_fuer(i, m["id"]) or i.get("erledigt_von") == m["id"]]
+    if (m or {}).get("rolle") != "admin":
+        # interne Aufträge: eigene und „offen für alle“, nur mit iPad-Status (Zu tun, Läuft, Wartet …)
+        alle_i = [i for i in aus["intern"] if isinstance(i, dict) and i.get("ipad", True)]
+        eigene = [i for i in alle_i if intern_fuer(i, m["id"]) or i.get("erledigt_von") == m["id"]]
+        ids = {i.get("id") for i in eigene}
+        andere = []
+        if m.get("aufgaben_von_ipad") and m.get("aufgaben_von"):      # zum Nachschauen, ohne Bearbeiten
+            von = set(m["aufgaben_von"])
+            andere = [{**i, "nur_lesen": True} for i in alle_i
+                      if i.get("id") not in ids and set(aufgabe_leute(i)) & von]
+        aus["intern"] = eigene + andere
+    aus["namen"] = {x["id"]: x.get("vorname", "") for x in speicher.stamm("mitarbeiter", [])}
     return jsonify(aus)
 
 
@@ -1491,6 +1572,12 @@ def api_listen():
                     a_["saecke"] = x["saecke"]
                 continue
             vorher = alt.get(x["id"], {})
+            if k == "intern":
+                x = {kk: vv for kk, vv in x.items() if kk != "nur_lesen"}
+                m_ = ich()
+                if (m_ or {}).get("rolle") != "admin" and vorher and not (
+                        intern_fuer(vorher, m_["id"]) or vorher.get("erledigt_von") == m_["id"]):
+                    continue                          # fremde Aufgabe (nur zum Nachschauen): nicht ändern
             neu = {**vorher, **x}
             if k == "intern" and (isinstance(vorher.get("zeiten"), dict) or isinstance(x.get("zeiten"), dict)):
                 # gemeinsame Aufgabe: jedes iPad bringt seine eigene Zeit mit, die der anderen bleiben

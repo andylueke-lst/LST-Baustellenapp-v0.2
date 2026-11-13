@@ -63,7 +63,7 @@ async function syncen(){if(!S.user)return;if(SY.busy){SY.again=true;return}SY.bu
   finally{SY.busy=false;zaehlen();chip();if(SY.again)syncBald(300)}}
 /* Server-Stand übernehmen. Was auf dem iPad geändert und noch nicht übertragen ist, bleibt. */
 async function holen(){if(!S.user)return;let d;try{d=await api('/api/stand')}catch(err){SY.offline=!!err.netz;SY.err=err.message;chip();if(err.auth){S.user=null;save0();V={name:'login'};render()}return}
-  ['mitarbeiter','strahlgeraete','typen','strahlmittel','checkliste'].forEach(k=>{if(d[k]!=null)S[k]=d[k]});
+  ['mitarbeiter','strahlgeraete','typen','strahlmittel','checkliste','namen'].forEach(k=>{if(d[k]!=null)S[k]=d[k]});
   const lokalL=await stempel(listen());const listenUnveraendert=sk().listen===lokalL;
   for(const k of ['maengel','tanken','reisetage','fahrzeuge','kompressoren','intern','notizen']){const srv=d[k]||[];
     if(listenUnveraendert)S[k]=srv;else{const m=new Map(srv.map(x=>[x.id,x]));(S[k]||[]).forEach(x=>m.set(x.id,x));S[k]=[...m.values()]}}
@@ -97,13 +97,26 @@ async function pinPruefsumme(id,pin){return sha('lst|'+id+'|'+pin)}
    (Zu tun/Läuft, Wartet, Wenn Zeit dann tun) */
 function internKey(i){const d=i.datum||'';if(d&&d<=today())return [0,d];if(d)return [1,d];return [1+(i.rang||1),i.titel||'']}
 function internSort(a,b){const x=internKey(a),y=internKey(b);return x[0]-y[0]||String(x[1]).localeCompare(String(y[1]))}
+/* Wer gehört zur Aufgabe; Name auch für Leute ohne Baustelle (Tina) */
+function nameVon(id){return (ma(id)||{}).name||(S.namen||{})[id]||id}
+function internLeute(i){return i.zust?[i.zust]:(i.fuer||[])}
+function internWer(i){const l=internLeute(i);return l.length?l.map(nameVon).join(', '):'alle'}
+/* Admin-iPad: Aufgaben selbst filtern (wer, welche Status). Mitarbeiter sehen nur ihre iPad-Aufgaben. */
+function ifilt(){S.ifilt=S.ifilt||{wer:'alle',art:'ipad'};return S.ifilt}
+function internFilter(list){if(!isAdmin())return list;const f=ifilt();
+  return list.filter(i=>(f.art==='alle'||i.ipad!==false)&&(f.wer==='alle'||(f.wer==='ich'?internLeute(i).includes(S.user):internLeute(i).includes(f.wer))))}
+function internLeiste(){if(!isAdmin())return '';const f=ifilt();const offen=S.intern.filter(i=>i.status==='offen');
+  const ids=[...new Set(offen.flatMap(internLeute))].filter(x=>x!==S.user);
+  const k=(key,v,t)=>`<button class="btn small${f[key]===v?' pri':''}" data-a="ifilt" data-k="${key}" data-v="${esc(v)}" style="padding:4px 10px;min-height:32px">${esc(t)}</button>`;
+  return `<div class="row" style="flex-wrap:wrap;gap:6px;margin:4px 0 6px">${k('wer','alle','Alle')}${k('wer','ich','Meine')}${ids.map(x=>k('wer',x,nameVon(x))).join('')}</div>
+  <div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">${k('art','ipad','iPad-Aufgaben')}${k('art','alle','Alle offenen (auch Büro)')}</div>`}
 function internMeta(i){const d=i.datum,t=[];t.push(d?fD(d)+(d<today()?' · überfällig':d===today()?' · heute':''):'ohne Termin');
   if(i.nstatus)t.push(i.nstatus);if(i.prio)t.push('Priorität '+i.prio);if(i.projekt)t.push(i.projekt);return t.join(' · ')}
 /* ---------- Interner Auftrag mit Arbeitsbericht ----------
    Pflicht zum Abhaken ist nur „Was wurde gemacht?“. Zeit, Material und Fotos sind freiwillig.
    Fotos gehen direkt zum Büro (brauchen also Verbindung). */
 function dauerText(z){if(!z||!z.von||!z.bis)return '–';const m0=(+z.bis.slice(0,2)*60+ +z.bis.slice(3,5))-(+z.von.slice(0,2)*60+ +z.von.slice(3,5));const m=m0<0?m0+1440:m0;return `${Math.floor(m/60)}:${pad(m%60)} h`}
-function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const offen=i.status==='offen';const gem=!!i.gemeinsam;const z=gem?((i.zeiten||{})[S.user]||{}):(i.zeit||{});const ro=offen?'':' disabled';
+function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();const lesen=!!i.nur_lesen;const offen=i.status==='offen'&&!lesen;const gem=!!i.gemeinsam;const z=gem?((i.zeiten||{})[S.user]||{}):(i.zeit||{});const ro=offen?'':' disabled';
   const andere=gem?Object.entries(i.zeiten||{}).filter(([m])=>m!==S.user):[];
   const fotos=ph=>(i.fotos||[]).filter(f=>f.phase===ph).map(f=>`<img src="/intern-foto/${encodeURIComponent(i.id)}/${encodeURIComponent(f.id)}?v=1" alt="Foto ${ph}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px">`).join('');
   return `<div class="page"><div class="icon">🔧</div><h1>${esc(i.titel)}</h1>
@@ -111,7 +124,8 @@ function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
   ${i.nstatus?`<div class="k">In Notion</div><div>${esc(i.nstatus)}${i.prio?' · Priorität '+esc(i.prio):''}</div>`:''}
   ${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}
   <div class="k">Zuständig</div><div>${gem?`${(i.fuer||[]).map(m=>`<span class="tag purple">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="tag blue">gemeinsam</span>`:i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:(i.fuer||[]).length?`${i.fuer.map(m=>`<span class="tag">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="small muted">einer übernimmt</span>`:'<span class="tag">offen für alle</span>'}</div>
-  <div class="k">Status</div><div>${offen?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
+  <div class="k">Status</div><div>${i.status==='offen'?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
+  ${lesen?`<div class="callout" style="margin-top:12px"><span>👁</span><div>Nur zum Nachschauen: Aufgabe von ${esc(internWer(i))}. Bearbeiten kann nur, wem sie gehört.</div></div>`:''}
   ${i.beschreibung?`<div class="hr"></div><div class="small muted" style="margin-bottom:4px">Arbeitsanweisung</div><p style="white-space:pre-wrap;margin-top:0">${esc(i.beschreibung)}</p>`:''}
   <div class="hr"></div><h2>Arbeitsbericht</h2>
   <div class="field"><label for="ib-t">Was wurde gemacht? <span class="small muted">(nötig zum Abhaken)</span></label><textarea class="inp" id="ib-t" data-ib="notiz" placeholder="z. B. Kupplung getauscht, neue bestellt"${ro}>${esc(i.notiz||'')}</textarea></div>
@@ -126,11 +140,11 @@ function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
   ${['vorher','nachher'].map(ph=>`<div class="small muted" style="margin:6px 0">${ph==='vorher'?'Vorher':'Nachher'}</div><div class="thumbs">${fotos(ph)}${offen?`<label class="btn small" style="cursor:pointer;justify-content:center">📷 Foto<input type="file" accept="image/*" multiple hidden data-ifoto="${ph}"></label>`:''}</div>`).join('')}
   <div class="small muted" id="ib-st" role="status" style="min-height:18px"></div></div>
   <div class="fab">${!i.zust&&!gem&&offen?'<button class="btn" data-a="mache">Mache ich</button>':''}${offen?'<button class="btn pri" data-a="erledigt">Erledigt</button>':''}</div></div>`}
-function internErledigt(){const i=S.intern.find(x=>x.id===V.id);if(!i)return;
+function internErledigt(){const i=S.intern.find(x=>x.id===V.id);if(!i||i.nur_lesen)return;
   if(!(i.notiz||'').trim()){toast('Bitte kurz eintragen, was gemacht wurde.');const t=document.getElementById('ib-t');if(t)t.focus();return}
   i.status='erledigt';i.erledigt_am=today();i.erledigt_von=S.user;if(i.gemeinsam){i.zeiten=i.zeiten||{};i.zeiten[S.user]=i.zeiten[S.user]||{datum:today()}}else{i.zeit=i.zeit||{datum:today()};if(!i.zust)i.zust=S.user}
   save();V={name:'start'};render();toast('Auftrag erledigt')}
-function internFeld(ev){const t=ev.target;if(!t||!t.dataset||!t.dataset.ib)return;const i=S.intern.find(x=>x.id===V.id);if(!i||i.status!=='offen')return;const k=t.dataset.ib;
+function internFeld(ev){const t=ev.target;if(!t||!t.dataset||!t.dataset.ib)return;const i=S.intern.find(x=>x.id===V.id);if(!i||i.status!=='offen'||i.nur_lesen)return;const k=t.dataset.ib;
   if(k.startsWith('z.')){let zz;if(i.gemeinsam){i.zeiten=i.zeiten||{};zz=i.zeiten[S.user]=i.zeiten[S.user]||{datum:today()}}else zz=i.zeit=i.zeit||{datum:today()};zz[k.slice(2)]=t.value;const d=document.getElementById('ib-dauer');if(d)d.textContent=dauerText(zz)}else i[k]=t.value;save()}
 document.addEventListener('input',internFeld);document.addEventListener('change',internFeld);
 document.addEventListener('change',async ev=>{const t=ev.target;if(!t||!t.dataset||!t.dataset.ifoto)return;const i=S.intern.find(x=>x.id===V.id);if(!i)return;
@@ -238,6 +252,12 @@ ERSETZUNGEN = [
     # Interne Aufgaben (auch aus Notion): Reihenfolge, Termin optional, Status/Priorität/Projekt
     ("sort((a,b)=>a.datum.localeCompare(b.datum)).map(i=>`<button class=\"card\" data-a=\"intern\"",
      "sort(internSort).map(i=>`<button class=\"card\" data-a=\"intern\""),
+    ("const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin()))",
+     "const intern=internFilter(S.intern.filter(i=>i.status==='offen'&&(!i.zust||i.zust===meId||isAdmin()||i.nur_lesen)))"),
+    ("col('Intern',intern,'Keine offenen Aufträge')",
+     "col('Intern',intern,'Keine offenen Aufträge').replace('</h3>','</h3>'+internLeiste())"),
+    ('<div class="tags">${i.zust?`<span class="tag purple">📱 ${esc(ma(i.zust)?.name)}</span>`:\'<span class="tag">📱 alle</span>\'}</div>',
+     '<div class="tags">${i.nur_lesen?\'<span class="tag">👁 nur ansehen</span>\':\'\'}${i.ipad===false?\'<span class="tag yellow">Büro</span>\':\'\'}<span class="tag purple">📱 ${esc(internWer(i))}</span>${i.gemeinsam?\'<span class="tag blue">gemeinsam</span>\':\'\'}</div>'),
     ("<div class=\"meta\">${fD(i.datum)}${i.datum<today()?' · überfällig':''}</div>",
      "<div class=\"meta\"${i.datum&&i.datum<today()?' style=\"color:var(--danger)\"':''}>${esc(internMeta(i))}</div>"),
     ("<div class=\"k\">Erledigen am</div><div>${fDY(i.datum)}</div>",
@@ -247,7 +267,7 @@ ERSETZUNGEN = [
     # Abgeschlossener Einsatz: Lieferschein und Fotodoku zum Teilen
     ("${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}",
      "${dokLeiste(e)}${e.lsHtml?`<div style=\"margin-bottom:24px;overflow-x:auto\">${e.lsHtml}</div>`:''}"),
-    ("case 'fteilen':teilenSheet(e);break;", "case 'fteilen':teilenSheet(e);break;\n  case 'dok':dokTeilen(b,e);break;\n  case 'dokzeigen':dokAnsicht(e,b.dataset.id);break;\n  case 'versandst':versandSetzen(e,b);break;"),
+    ("case 'fteilen':teilenSheet(e);break;", "case 'fteilen':teilenSheet(e);break;\n  case 'dok':dokTeilen(b,e);break;\n  case 'dokzeigen':dokAnsicht(e,b.dataset.id);break;\n  case 'versandst':versandSetzen(e,b);break;\n  case 'ifilt':ifilt()[b.dataset.k]=b.dataset.v;save0();render();break;"),
     ("const me=()=>S.mitarbeiter.find(m=>m.id===S.user);",
      "const me=()=>S.mitarbeiter.find(m=>m.id===S.user)||S.ich||{id:S.user,name:'',rolle:'mitarbeiter'};"),
     ("hydrateImages();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();", "hydrateImages();chip();\n  if(V.name==='abschluss'&&ui.wiz===4)initSign();"),
