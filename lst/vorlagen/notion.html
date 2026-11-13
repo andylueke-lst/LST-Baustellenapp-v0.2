@@ -41,11 +41,12 @@
     <div class="row" style="justify-content:space-between;padding:10px 4px 0">
       <b>🔗 {{ 'Tour' if g.ps|map(attribute='von')|unique|list|length > 1 else 'Zusammengehörig' }} · {{ g.ps|length }} Projekte · {{ zeitraum(g.von, g.bis) }}</b></div>
     {% for p in g.ps %}{{ projekt(p) }}{% endfor %}
-    {% if g.offen|length > 1 %}
-    <details style="margin-top:10px"><summary class="btn small pri">Alle {{ g.offen|length }} übernehmen …</summary>
+    {% if g.offen %}
+    <details style="margin-top:10px"><summary class="btn small pri">{{ ('Alle ' ~ g.offen|length) if g.offen|length == g.ps|length else ('Restliche ' ~ g.offen|length) }} übernehmen …</summary>
     <form method="post" action="{{ url_for('notion_tour') }}" style="margin-top:10px">
       <input type="hidden" name="tour" value="{{ g.id }}">
       {% for p in g.offen %}<input type="hidden" name="pid" value="{{ p.id }}">{% endfor %}
+      {% for p in g.ps %}<input type="hidden" name="alle" value="{{ p.id }}">{% endfor %}
       <p class="small muted">Für alle Stationen gleich. „wie in Notion“ übernimmt die Angaben aus dem jeweiligen Projekt. Jede Station lässt sich danach einzeln ändern.</p>
       <div class="grid2">
         <div class="field"><label>Vorarbeiter</label><select class="inp" name="vor"><option value="">wie in Notion</option><option value="-">–</option>{% for m in tour_leute %}<option value="{{ m.id }}">{{ m.vorname }}</option>{% endfor %}</select></div>
@@ -54,7 +55,7 @@
         <div class="field"><label>Kompressor</label><select class="inp" name="kompressor"><option value="">wie vorgeschlagen</option><option value="-">ohne Kompressor</option>{% for x in kompressoren %}<option value="{{ x.id }}">{{ x.kz }} · {{ x.name }}</option>{% endfor %}</select></div>
       </div>
       <div class="field"><label>Weitere Mitarbeiter (optional)</label><div class="row">{% for m in tour_leute %}<label class="tag" style="gap:6px;padding:8px 10px;font-size:14px"><input type="checkbox" name="weitere" value="{{ m.id }}">{{ m.vorname }}</label>{% endfor %}</div></div>
-      <button class="btn pri">{{ g.offen|length }} Stationen übernehmen</button>
+      <button class="btn pri">{{ g.offen|length }} {{ 'Station' if g.offen|length == 1 else 'Stationen' }} übernehmen</button>
     </form></details>{% endif %}
   </div>
 {% endif %}

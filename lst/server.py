@@ -446,7 +446,7 @@ def notion_seite():
                 k["partner"] = [namen.get(x) or (jobname(vorhanden[x]) if x in vorhanden else "weiteres Projekt") for x in partner]
                 k["partner_ids"] = partner
                 if not k["einsatz"]:
-                    # „Gehört zu“ nur, wenn der Einsatz eines verknüpften Projekts zeitlich passt (±1 Tag);
+                    # „Gehört zu“ nur, wenn der Einsatz eines verknüpften Projekts am selben Tag/Zeitraum liegt;
                     # sonst ist es eine weitere Station (Tour) und wird eigener Einsatz
                     k["kandidaten"] = [e for e in {id(e): e for e in (vorhanden.get(x) for x in partner) if e}.values()
                                        if _ueberschneidet(k, e)]
@@ -624,7 +624,7 @@ def _ueberschneidet(k: dict, e: dict) -> bool:
         ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
     except (KeyError, ValueError):
         return False
-    return ev <= kb + timedelta(days=1) and eb >= kv - timedelta(days=1)
+    return ev <= kb and eb >= kv      # echte Überschneidung; Tourstationen an Folgetagen sind eigene Jobs
 
 
 def _gruppieren(liste: list[dict]) -> list[dict]:
@@ -733,9 +733,19 @@ def notion_tour():
             fehler.append(str(ex))
             continue
         angelegt.append(e)
-    angelegt.sort(key=lambda e: (e.get("von") or "", jobname(e)))
-    for n, e in enumerate(angelegt, 1):
-        e["tour"] = {"id": tour_id, "nr": n, "anzahl": len(angelegt)}
+    neu_ids = {e["id"] for e in angelegt}
+    # Nummerierung über die ganze Tour, auch Stationen, die schon vorher übernommen waren
+    alle_pids = {x.replace("-", "") for x in f.getlist("alle") if x} | {x.replace("-", "") for x in pids}
+    stationen = {e["id"]: e for e in angelegt}
+    for e in speicher.einsaetze():
+        if str((e.get("notion") or {}).get("id", "")).replace("-", "") in alle_pids:
+            stationen.setdefault(e["id"], e)
+    reihe = sorted(stationen.values(), key=lambda e: (e.get("von") or "", jobname(e)))
+    for n, e in enumerate(reihe, 1):
+        e["tour"] = {"id": tour_id, "nr": n, "anzahl": len(reihe)}
+        if e["id"] not in neu_ids:
+            speicher.einsatz_speichern(e)
+            continue
         if e.get("status") == "vorbereitet":
             team = dict(e.get("team") or {})
             for k in ("vor", "fach"):
@@ -757,7 +767,7 @@ def notion_tour():
         speicher.einsatz_speichern(e)
     n_rt = _reisetage_zu(angelegt)
     speicher.protokoll("notion_tour", session.get("uid"), None, stationen=len(angelegt), reisetage=n_rt)
-    flash(f"Tour mit {len(angelegt)} Stationen" + (f" und {n_rt} Reisetag(en)" if n_rt else "") + " übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
+    flash(f"{len(angelegt)} Stationen der Tour ({len(reihe)} insgesamt)" + (f" und {n_rt} Reisetag(e)" if n_rt else "") + " übernommen. Jede Station lässt sich einzeln unter „Bearbeiten“ anpassen."
           + (" Fehler: " + "; ".join(fehler) if fehler else ""), "fehler" if fehler else "ok")
     return redirect(url_for("notion_seite"))
 
