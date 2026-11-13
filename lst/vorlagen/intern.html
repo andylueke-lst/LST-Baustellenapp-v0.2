@@ -1,0 +1,40 @@
+{% extends "basis.html" %}
+{% block titel %}{{ a.titel }} · LST Baustelle{% endblock %}
+{% block pfad %} › <a href="{{ url_for('aufgaben_seite') }}">Aufgaben</a> › {{ a.titel }}{% endblock %}
+{% block inhalt %}
+<div class="icon">📋</div>
+<div class="kopfzeile">
+  <div><h1>{{ a.titel }}</h1>
+  <p class="muted" style="margin:0">Interne Aufgabe{% if a.notion %} aus Notion (LST Aufgaben){% else %}, auf dem iPad angelegt{% endif %}</p></div>
+  <div class="row" style="gap:8px">
+    {% if a.notion and a.notion.url %}<a class="btn small pri" href="{{ a.notion.url }}" target="_blank" rel="noopener">In Notion bearbeiten ↗</a>{% endif %}
+    {% if a.status == 'erledigt' or a.notiz or a.fotos %}<a class="btn small" href="{{ url_for('intern_bericht', iid=a.id) }}" target="_blank" rel="noopener">📄 Arbeitsbericht</a>{% endif %}
+  </div>
+</div>
+
+<div class="props" style="margin-top:16px">
+  <div class="k">Stand</div><div>{% if a.status == 'erledigt' %}<span class="tag green">erledigt{% if a.erledigt_am %} am {{ datum(a.erledigt_am) }}{% endif %}{% if erledigt_von %} von {{ erledigt_von }}{% endif %}</span>{% elif a.ueberfaellig %}<span class="tag red">überfällig</span>{% elif a.status == 'laeuft' %}<span class="tag blue">läuft</span>{% else %}<span class="tag">offen</span>{% endif %}</div>
+  <div class="k">Erledigen am</div><div>{% if a.datum %}{{ datum(a.datum) }}{% if a.heute %} · heute{% endif %}{% else %}ohne Termin{% endif %}</div>
+  {% if a.nstatus %}<div class="k">In Notion</div><div>{{ a.nstatus }}{% if a.prio %} · Priorität {{ a.prio }}{% endif %}</div>{% endif %}
+  {% if a.projekt %}<div class="k">Projekt</div><div>{{ a.projekt }}</div>{% endif %}
+  <div class="k">Auf dem iPad bei</div><div>{% for n in a.wer %}<span class="tag purple">📱 {{ n }}</span> {% endfor %}{% if a.gemeinsam %}<span class="tag blue">gemeinsam</span>{% endif %}</div>
+  {% if a.minuten %}<div class="k">Arbeitszeit</div><div><b>{{ a.minuten // 60 }}:{{ '%02d' % (a.minuten % 60) }} h</b></div>{% endif %}
+</div>
+
+{% if a.beschreibung %}<h2>Beschreibung</h2><div style="white-space:pre-line">{{ a.beschreibung }}</div>{% endif %}
+
+{% if zeiten %}<h2>Zeiten</h2>
+<table class="tab" style="max-width:560px"><tr><th>Wer</th><th>Datum</th><th>Von</th><th>Bis</th></tr>
+{% for z in zeiten %}<tr><td>{{ z.name }}</td><td>{{ datum(z.datum) if z.datum else '–' }}</td><td>{{ z.von or '–' }}</td><td>{{ z.bis or '–' }}</td></tr>{% endfor %}</table>{% endif %}
+
+{% if a.notiz %}<h2>Bericht vom iPad</h2><div style="white-space:pre-line">{{ a.notiz }}</div>{% endif %}
+{% if a.material %}<h2>Material</h2><div style="white-space:pre-line">{{ a.material }}</div>{% endif %}
+
+{% if a.fotos %}<h2>Fotos <span class="tag">{{ a.fotos|length }}</span></h2>
+<div class="kacheln" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+{% for f in a.fotos %}<a href="{{ url_for('intern_foto', iid=a.id, fid=f.id) }}" target="_blank" rel="noopener" style="display:block">
+  <img src="{{ url_for('intern_foto', iid=a.id, fid=f.id, v=1) }}" alt="Foto {{ loop.index }} ({{ f.phase or '' }})" loading="lazy" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
+  <span class="small muted">{{ f.phase or '' }}</span></a>{% endfor %}</div>{% endif %}
+
+{% if a.status != 'erledigt' and not a.notiz and not a.fotos and not zeiten %}<div class="leer" style="margin-top:20px">Auf dem iPad ist noch nichts eingetragen.</div>{% endif %}
+{% endblock %}

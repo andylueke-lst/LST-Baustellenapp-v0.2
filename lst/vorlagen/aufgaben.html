@@ -17,7 +17,7 @@
 
 {% macro karte(a) %}
 <div class="kachel{% if a.ueberfaellig %} rot{% endif %}" id="a-{{ a.id }}">
-  <div class="t">{{ a.titel }}</div>
+  <div class="t"><a href="{{ url_for('intern_seite', iid=a.id) }}" style="color:inherit">{{ a.titel }}</a></div>
   <div class="s">{% if a.datum %}{{ datum(a.datum) }}{% else %}ohne Termin{% endif %}{% if a.nstatus %} · {{ a.nstatus }}{% endif %}{% if a.prio %} · Priorität {{ a.prio }}{% endif %}</div>
   {% if a.projekt %}<div class="s">{{ a.projekt }}</div>{% endif %}
   {% if a.status == 'erledigt' %}<div class="s">Erledigt{% if a.erledigt_am %} am {{ datum(a.erledigt_am) }}{% endif %}{% if a.minuten %} · {{ a.minuten // 60 }}:{{ '%02d' % (a.minuten % 60) }} h{% endif %}</div>

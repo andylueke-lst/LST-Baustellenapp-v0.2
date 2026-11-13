@@ -726,6 +726,25 @@ def intern_foto(iid, fid):
     return send_file(p, mimetype="image/jpeg", max_age=86400)
 
 
+@app.route("/buero/intern/<iid>")
+@anmeldung(admin=True)
+def intern_seite(iid):
+    """Eine interne Aufgabe im Büro: alles aus Notion und was auf dem iPad eingetragen wurde."""
+    leute = {m["id"]: m for m in speicher.stamm("mitarbeiter", [])}
+    namen = {mid: m.get("vorname", "") for mid, m in leute.items()}
+    a = next((x for x in _aufgaben_liste(namen) if x.get("id") == iid), None)
+    if not a:
+        flash("Diese Aufgabe gibt es nicht mehr (in Notion erledigt oder gelöscht?).", "fehler")
+        return redirect(url_for("aufgaben_seite"))
+    zeiten = []
+    for mid, z in (a.get("zeiten") or {}).items():
+        zeiten.append({"name": voller_name(leute.get(mid)) or mid, **(z or {})})
+    if not zeiten and a.get("zeit"):
+        zeiten.append({"name": voller_name(leute.get(a.get("erledigt_von") or a.get("zust"))) or "", **a["zeit"]})
+    return render_template("intern.html", a=a, zeiten=zeiten,
+                           erledigt_von=voller_name(leute.get(a.get("erledigt_von"))) if a.get("erledigt_von") else "")
+
+
 @app.route("/buero/intern/<iid>/bericht")
 @anmeldung(admin=True)
 def intern_bericht(iid):

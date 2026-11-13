@@ -79,7 +79,7 @@
   <form method="post" action="{{ url_for('notion_aufgaben') }}"><button class="btn small" title="Neue und geänderte Aufgaben sofort holen statt in bis zu 5 Minuten">🔄 Aufgaben holen</button></form>{% endif %}
   <a class="btn small" href="{{ url_for('aufgaben_seite') }}">Alle Aufgaben</a></span></h2>
 {% if aufgaben %}<div class="kacheln">{% for a in aufgaben %}
-  <a class="kachel{% if a.ueberfaellig %} rot{% endif %}" href="{{ url_for('aufgaben_seite') }}#a-{{ a.id }}">
+  <a class="kachel{% if a.ueberfaellig %} rot{% endif %}" href="{{ url_for('intern_seite', iid=a.id) }}">
     <div class="t">{{ a.titel }}</div>
     <div class="s" {% if a.ueberfaellig %}style="color:var(--danger)"{% endif %}>{% if a.datum %}{{ datum(a.datum) }}{% if a.ueberfaellig %} · überfällig{% elif a.heute %} · heute{% endif %}{% else %}ohne Termin{% endif %}{% if a.nstatus %} · {{ a.nstatus }}{% endif %}</div>
     {% if a.projekt %}<div class="s">{{ a.projekt }}</div>{% endif %}
