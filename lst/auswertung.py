@@ -394,7 +394,8 @@ def letzte_staende() -> dict:
     aus = {}
     def merken(gid, stand, datum, quelle):
         try:
-            stand = float(stand)
+            stand = float(str(stand).replace(".", "").replace(",", ".")) if isinstance(stand, str) and "," in stand \
+                else float(stand)
         except (TypeError, ValueError):
             return
         if stand <= 0:

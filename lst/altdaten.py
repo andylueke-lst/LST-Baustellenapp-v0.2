@@ -80,6 +80,13 @@ def uebernehmen(e: dict, fotos: list[tuple[str, bytes]], ziel_id: str | None) ->
             neu["ls"] = ziel["ls"]
     elif speicher.einsatz(neu["id"]):
         neu["id"] = neu["id"] + "-alt"
+    for teil in ("start", "ende"):              # „5309,97“ aus dem Textfeld der alten App → Zahl
+        for k, v in list((neu.get(teil) or {}).items()):
+            if isinstance(v, str):
+                try:
+                    neu[teil][k] = float(v.replace(".", "").replace(",", ".")) if "," in v else float(v)
+                except ValueError:
+                    pass
     eid = neu["id"]
     alt_status = e.get("status")
     neu["status"] = "inarbeit" if alt_status == "abgeschlossen" else (alt_status or "vorbereitet")
