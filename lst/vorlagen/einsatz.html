@@ -31,6 +31,20 @@
   <button class="btn">Speichern{% if e.status == 'abgeschlossen' %} und Dokumente neu erzeugen{% endif %}</button>
 </form></details>
 {% endif %}
+{% if versand %}
+<h2>Versand an den Kunden</h2>
+<table class="tab" style="max-width:760px">
+  {% for art, name in DOK_NAMEN.items() %}{% set x = versand[art] %}<tr><td><b>{{ name }}</b></td>
+    <td>{% if x.stand == 'versendet' %}<span class="tag green">versendet</span>{% elif x.stand == 'bestaetigt' %}<span class="tag green">von Hand bestätigt</span>{% elif x.stand == 'nicht_noetig' %}<span class="tag">Kunde braucht keinen</span>{% elif x.stand == 'wartet' %}<span class="tag yellow">im Postausgang</span>{% elif x.stand == 'erstellt' %}<span class="tag">erstellt, nicht verschickt</span>{% else %}<span class="tag">noch nicht erstellt</span>{% endif %}</td>
+    <td class="small muted">{% if x.wann %}{{ zeitpunkt(x.wann) }}{% endif %}{% if x.an and x.stand == 'versendet' %} · an {{ x.an }}{% endif %}</td>
+    <td>{% if art == 'fotobericht' %}<div class="row">
+      {% if x.stand not in ('versendet', 'bestaetigt') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="bestaetigt"><button class="btn small">Schon verschickt</button></form>{% endif %}
+      {% if x.stand not in ('versendet', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="nicht_noetig"><button class="btn small">Kunde braucht keinen</button></form>{% endif %}
+      {% if x.stand in ('bestaetigt', 'nicht_noetig') %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}"><input type="hidden" name="status" value="offen"><button class="btn small">Wieder offen</button></form>{% endif %}
+    </div>{% endif %}</td></tr>{% endfor %}
+</table>
+<p class="small muted">Gezählt wird jeder Versand über die App, egal ob vom Büro oder vom iPad. Was außerhalb verschickt wurde (eigene Mail, Teilen am iPad), hier mit „Schon verschickt“ bestätigen.</p>
+{% endif %}
 <h2>Dokumente</h2>
 <div class="list">
 {% for d in docs %}
@@ -44,7 +58,7 @@
 
 <div class="row" style="margin-top:16px">
   {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>
-  {% if e.fotobericht_erledigt %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}" style="display:inline"><input type="hidden" name="zurueck" value="1"><button class="btn small" title="steht dann wieder unter „Braucht dich“">Fotobericht doch noch offen</button></form>{% endif %}
+
   {% if e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn" title="z. B. nachdem der Lexware-Lieferschein hochgeladen wurde">Lieferschein und Fotodoku neu erzeugen</button></form>{% endif %}
   <form method="post" action="{{ url_for('einsatz_wieder_oeffnen', eid=e.id) }}" style="display:inline" onsubmit="return confirm('Einsatz wieder öffnen? Die Unterschrift bleibt gespeichert.')"><button class="btn">Wieder öffnen</button></form>
   {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>

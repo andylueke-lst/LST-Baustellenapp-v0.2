@@ -1,6 +1,10 @@
 {% extends "basis.html" %}
 {% block titel %}Büro · LST Baustelle{% endblock %}
 {% block inhalt %}
+{% macro versandzeile(v) %}{% if v %}<div class="s" style="display:flex;flex-wrap:wrap;gap:4px 10px">
+  {% for art, name in [('lieferschein','LS'),('fotodoku','Fotodoku'),('fotobericht','Fotobericht')] %}{% set x = v[art] %}
+  <span title="{{ x.an }}">{{ name }} {% if x.stand == 'versendet' %}<b style="color:var(--ok)">✓ versendet</b>{% elif x.stand == 'bestaetigt' %}<b style="color:var(--ok)">✓ bestätigt</b>{% elif x.stand == 'nicht_noetig' %}<span class="muted">– nicht nötig</span>{% elif x.stand == 'wartet' %}<span style="color:var(--warn)">⏳ Postausgang</span>{% elif x.stand == 'erstellt' %}<span class="muted">erstellt</span>{% else %}<span class="muted">offen</span>{% endif %}</span>{% endfor %}
+</div>{% endif %}{% endmacro %}
 <div class="kopfzeile">
   <div><h1>Büro</h1><p class="muted" style="margin:0">{{ datum(heute) }}</p></div>
   <div class="row"><a class="btn pri small" href="{{ url_for('einsatz_neu') }}">＋ Neuer Einsatz</a>
@@ -16,12 +20,13 @@
 <div class="kacheln">
   {% for f in freigaben %}
   <div class="kachel warn">
-    <span class="tag yellow" style="align-self:flex-start">Fotobericht freigeben</span>
+    <span class="tag yellow" style="align-self:flex-start">Fotobericht offen</span>
     <a class="t" href="{{ url_for('einsatz_seite', eid=f.e.id) }}" style="text-decoration:none;color:inherit">{{ jobname(f.e) }}</a>
-    <div class="s">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }}</div>
-    <div class="s">{{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div>
+    <div class="s">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }} · {{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div>
+    {{ versandzeile(f.v) }}
     <div class="unten"><a class="btn small pri" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">Fotos auswählen</a>
-      <form method="post" action="{{ url_for('fotobericht_erledigt', eid=f.e.id) }}"><button class="btn small" title="z. B. weil die Fotodoku schon verschickt ist">Nicht nötig</button></form></div></div>
+      <form method="post" action="{{ url_for('fotobericht_erledigt', eid=f.e.id) }}"><input type="hidden" name="status" value="bestaetigt"><button class="btn small" title="z. B. selbst per Mail oder vom iPad geteilt">Schon verschickt</button></form>
+      <form method="post" action="{{ url_for('fotobericht_erledigt', eid=f.e.id) }}"><input type="hidden" name="status" value="nicht_noetig"><button class="btn small">Kunde braucht keinen</button></form></div></div>
   {% endfor %}
   {% for p in post %}
   <div class="kachel {{ 'rot' if p.status == 'fehler' else 'warn' }}">
@@ -37,12 +42,15 @@
 </div></section>
 {% endif %}
 
+
+
 {% macro einsatz_kachel(k, live=false) %}{% set e = k.e %}
 <a class="kachel{% if live %} live{% endif %}{% if k.ohne_unterschrift %} warn{% endif %}" href="{{ url_for('einsatz_seite', eid=e.id) }}">
   <div class="t">{{ jobname(e) }}</div>
   <div class="s">{{ e.kunde }}{% if e.name and e.einsatzort %} · {{ e.einsatzort }}{% endif %}</div>
   <div class="s">{{ zeitraum(e.von, e.bis) }}{% if e.ls %} · {{ e.ls }}{% endif %}</div>
   {% for j in k.jetzt %}<div class="jetzt">{{ j }}</div>{% endfor %}
+  {{ versandzeile(k.v) }}
   <div class="unten">
     {% if not e.ipad_aus %}{% for n in k.team %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}{% endif %}
     {% if e.status == 'abgeschlossen' %}{% if k.ohne_unterschrift %}<span class="tag yellow">Unterschrift fehlt</span>{% else %}<span class="tag green">unterschrieben</span>{% endif %}{% endif %}
