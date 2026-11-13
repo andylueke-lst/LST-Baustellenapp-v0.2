@@ -50,6 +50,10 @@
   {% if e.status == 'inarbeit' and e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn pri">Mit gespeicherter Unterschrift abschließen</button></form>{% endif %}{% endif %}
 </div>
 
+<form method="post" action="{{ url_for('einsatz_ipad', eid=e.id) }}" class="row" style="margin-top:12px">
+  {% if e.ipad_aus %}<span class="tag yellow">nicht auf den iPads</span><input type="hidden" name="aus" value="0"><button class="btn small">Wieder auf die iPads</button>
+  {% else %}<input type="hidden" name="aus" value="1"><button class="btn small" onclick="return confirm('Job von allen iPads nehmen? Im Büro bleibt alles erhalten, er lässt sich jederzeit wieder auf die iPads bringen.')">📱 Von den iPads nehmen</button>{% endif %}
+</form>
 {% if e.status != 'vorbereitet' and darf('loeschen') %}
 <details style="margin-top:12px"><summary class="small muted" style="cursor:pointer">Einsatz löschen …</summary>
 <form method="post" action="{{ url_for('einsatz_loeschen', eid=e.id) }}" style="margin-top:8px" onsubmit="return confirm('„{{ jobname(e) }}“ mit allen Zeiten, Berichten und Fotos endgültig löschen? Die Dokumente bleiben im Dokumentenordner erhalten.')">

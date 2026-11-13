@@ -1201,6 +1201,12 @@ def api_einsatz_speichern():
     for k in ("unterschrift", "uebernommen_aus_alter_app"):
         if alt.get(k):
             e[k] = alt[k]
+    # Felder, die nur das Büro setzt: ein iPad mit älterer Kopie soll sie nicht verlieren
+    for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name"):
+        if k in alt and k not in e:
+            e[k] = alt[k]
+    if "ipad_aus" in alt:
+        e["ipad_aus"] = alt["ipad_aus"]
     speicher.einsatz_speichern(e)
     if liste is not None:
         speicher.fotos_abgleichen(e["id"], liste)
@@ -1254,6 +1260,8 @@ def api_stand():
     m = ich()
     for e in speicher.einsaetze():
         if not darf_einsatz(e, m):
+            continue
+        if e.get("ipad_aus"):            # im Büro „von den iPads genommen“
             continue
         if e.get("status") == "abgeschlossen" and (e.get("abschluss") or {}).get("datum", "9999") < grenze:
             continue
@@ -1849,6 +1857,19 @@ def unterschrift_aendern(eid):
         return dokumente_neu(eid)
     flash(f"Unterschrift geändert: {e['unterschrift']['name']}, {e['unterschrift']['zeit']}.", "ok")
     return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/einsatz/<eid>/ipad", methods=["POST"])
+@anmeldung(admin=True)
+def einsatz_ipad(eid):
+    """Job von allen iPads nehmen bzw. wieder auf die iPads bringen (Daten bleiben im Büro)."""
+    e = _einsatz_oder_404(eid)
+    e["ipad_aus"] = request.form.get("aus") == "1"
+    speicher.einsatz_speichern(e)
+    speicher.protokoll("ipad_aus" if e["ipad_aus"] else "ipad_an", session.get("uid"), eid)
+    flash(f"„{jobname(e)}“ " + ("wird beim nächsten Abgleich von den iPads genommen. Im Büro bleibt alles erhalten."
+                                if e["ipad_aus"] else "ist wieder auf den iPads."), "ok")
+    return redirect(request.referrer or url_for("einsatz_seite", eid=eid))
 
 
 @app.route("/buero/einsatz/<eid>/wieder-oeffnen", methods=["POST"])

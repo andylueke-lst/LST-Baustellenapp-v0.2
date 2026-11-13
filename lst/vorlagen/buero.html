@@ -42,10 +42,11 @@
   <div class="s">{{ zeitraum(e.von, e.bis) }}{% if e.ls %} · {{ e.ls }}{% endif %}</div>
   {% for j in k.jetzt %}<div class="jetzt">{{ j }}</div>{% endfor %}
   <div class="unten">
-    {% for n in k.team %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}
+    {% if not e.ipad_aus %}{% for n in k.team %}<span class="tag purple">📱 {{ n }}</span>{% endfor %}{% endif %}
     {% if e.status == 'abgeschlossen' %}{% if k.ohne_unterschrift %}<span class="tag yellow">Unterschrift fehlt</span>{% else %}<span class="tag green">unterschrieben</span>{% endif %}{% endif %}
     {% if e.status == 'inarbeit' %}<span class="tag blue">Tag {{ k.tage }}</span>{% endif %}
     {% if e.tour %}<span class="tag blue">🔗 Tour {{ e.tour.nr }}/{{ e.tour.anzahl }}</span>{% endif %}
+    {% if e.ipad_aus %}<span class="tag yellow">nicht auf iPads</span>{% endif %}
   </div></a>
 {% endmacro %}
 
