@@ -79,6 +79,14 @@ def rechte(m: dict | None) -> set:
     return set(m.get("rechte") or [])
 
 
+def stunden_sichtbar(m: dict | None) -> set | None:
+    """Wessen Stunden jemand im Büro sehen darf: None = alle (Admin oder keine Einschränkung)."""
+    if not m or m.get("rolle") == "admin":
+        return None
+    liste = m.get("stunden_von")
+    return set(liste) if liste else None
+
+
 def darf(bereich: str, m: dict | None = None) -> bool:
     return bereich in rechte(m if m is not None else ich())
 
@@ -355,6 +363,7 @@ def mitarbeiter_seite():
             m["funktion"] = (f.get(f"funktion_{i}") or "").strip()
             m["buero"] = bool(f.get(f"buero_{i}"))
             m["rechte"] = [b for b, _ in BEREICHE if f.get(f"recht_{i}_{b}")]
+            m["stunden_von"] = [x for x in f.getlist(f"stunden_von_{i}") if x]
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -1515,8 +1524,9 @@ def stunden_seite():
     """Arbeitszeiten je Mitarbeiter, Export als PDF (Steuerberater) und CSV (Arbeitszeitkonto)."""
     from . import auswertung as aw
     von, bis, schnell = _zeitraum_auswahl()
-    wer = [w for w in request.args.getlist("wer") if w]
-    zeilen = aw.arbeitszeiten(von, bis, wer)
+    sicht = stunden_sichtbar(ich())
+    wer = [w for w in request.args.getlist("wer") if w and (sicht is None or w in sicht)]
+    zeilen = aw.arbeitszeiten(von, bis, wer or (sorted(sicht) if sicht is not None else None))
     from urllib.parse import urlencode
     wq = ("&" + urlencode([("wer", w) for w in wer])) if wer else ""
     kurz = f"{von[2:4]}{von[5:7]}{von[8:]}-{bis[2:4]}{bis[5:7]}{bis[8:]}"
@@ -1530,7 +1540,7 @@ def stunden_seite():
         from .dokumente import stunden as dok_stunden
         return send_file(io.BytesIO(dok_stunden.stundennachweis(gruppen, von, bis)), mimetype="application/pdf",
                          download_name=f"{kurz} LST Stundennachweis{zusatz}.pdf")
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and (sicht is None or m["id"] in sicht)]
     return render_template("stunden.html", von=von, bis=bis, wer=wer, wq=wq, leute=leute, schnell=schnell,
                            gruppen=gruppen, hm=aw.hm, heute=date.today().isoformat())
 
@@ -1549,7 +1559,8 @@ def stunden_eintragen():
     except ValueError:
         flash("Bitte ein Datum wählen.", "fehler")
         return zurueck
-    if f.get("mid") not in leute:
+    sicht = stunden_sichtbar(ich())
+    if f.get("mid") not in leute or (sicht is not None and f.get("mid") not in sicht):
         flash("Bitte einen Mitarbeiter wählen.", "fehler")
         return zurueck
     h = {"id": speicher.neue_id(), "mid": f["mid"], "datum": tag, "taetigkeit": f.get("taetigkeit", "").strip(),
@@ -1582,6 +1593,10 @@ def stunden_eintragen():
 @anmeldung(admin=True)
 def stunden_eintrag_loeschen(hid):
     liste = speicher.stamm("stunden_manuell", [])
+    sicht = stunden_sichtbar(ich())
+    h = next((x for x in liste if x.get("id") == hid), None)
+    if h and sicht is not None and h.get("mid") not in sicht:
+        abort(403)
     speicher.stamm_setzen("stunden_manuell", [h for h in liste if h.get("id") != hid])
     speicher.protokoll("stunden_geloescht", session.get("uid"), eintrag=hid)
     flash("Eintrag gelöscht.", "ok")
