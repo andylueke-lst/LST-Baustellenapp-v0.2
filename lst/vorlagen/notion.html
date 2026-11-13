@@ -20,7 +20,7 @@
       {% if p.url %}<a class="btn small" href="{{ p.url }}" target="_blank" rel="noopener">In Notion</a>{% endif %}
       {% if p.kandidaten %}
       <form method="post" action="{{ url_for('notion_verknuepfen', pid=p.id) }}" class="row"><input type="hidden" name="eid" value="{{ p.kandidaten[0].id }}">
-        <button class="btn small pri" title="Kein neuer Einsatz, sondern dem vorhandenen zuordnen">Gehört zu „{{ p.kandidaten[0].einsatzort }}“ ({{ zeitraum(p.kandidaten[0].von, p.kandidaten[0].bis) }})</button></form>
+        <button class="btn small pri" title="Kein neuer Einsatz, sondern dem vorhandenen zuordnen">Gehört zu „{{ jobname(p.kandidaten[0]) }}“ ({{ zeitraum(p.kandidaten[0].von, p.kandidaten[0].bis) }})</button></form>
       <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small">Doch neu anlegen</button></form>
       {% elif not p.einsatz or p.einsatz.status == 'vorbereitet' %}
       <form method="post" action="{{ url_for('notion_uebernehmen', pid=p.id) }}"><button class="btn small {{ '' if p.einsatz else 'pri' }}">{{ 'Aktualisieren' if p.einsatz else 'Übernehmen' }}</button></form>

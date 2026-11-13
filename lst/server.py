@@ -78,9 +78,15 @@ def anmeldung(admin=False):
     return deko
 
 
+def jobname(e: dict | None) -> str:
+    """Anzeigename eines Jobs: Projektname aus Notion (Kunde Einsatzort Tätigkeit Jahr), sonst Einsatzort."""
+    e = e or {}
+    return e.get("name") or (e.get("notion") or {}).get("projektname") or e.get("einsatzort") or e.get("kunde") or ""
+
+
 @app.context_processor
 def vorlagen_helfer():
-    return {"ich": ich(), "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
+    return {"ich": ich(), "jobname": jobname, "datum": basis.datum, "zeitraum": basis.zeitraum, "voller_name": voller_name,
             "mail_eingerichtet": mail.eingerichtet(),
             "zeitpunkt": lambda ts: time.strftime("%d.%m.%Y, %H:%M Uhr", time.localtime(ts)) if ts else ""}
 
@@ -361,7 +367,7 @@ def einsatz_neu(eid=None):
         f = request.form
         if not e["id"]:
             e["id"] = speicher.neue_id()
-        e.update({"einsatzort": f["einsatzort"].strip(), "kunde": f["kunde"].strip(), "adresse": f.get("adresse", "").strip(),
+        e.update({"name": f.get("name", "").strip(), "einsatzort": f["einsatzort"].strip(), "kunde": f["kunde"].strip(), "adresse": f.get("adresse", "").strip(),
                   "apOrt": {"name": f.get("ort_name", "").strip(), "tel": f.get("ort_tel", "").strip(),
                             "mail": f.get("ort_mail", "").strip()},
                   "apKunde": {"name": f.get("k_name", "").strip(), "mail": f.get("k_mail", "").strip(),
@@ -380,7 +386,7 @@ def einsatz_neu(eid=None):
             return render_template("einsatz_form.html", e=e, **_auswahl())
         speicher.einsatz_speichern(e)
         speicher.protokoll("einsatz_gespeichert", session.get("uid"), e["id"])
-        flash(f"Einsatz {e['einsatzort']} gespeichert. Er erscheint auf dem iPad unter „Vorbereitet“.", "ok")
+        flash(f"Einsatz {jobname(e)} gespeichert. Er erscheint auf dem iPad unter „Vorbereitet“.", "ok")
         return redirect(url_for("einsatz_seite", eid=e["id"]))
     return render_template("einsatz_form.html", e=e, **_auswahl())
 
@@ -422,6 +428,9 @@ def notion_seite():
             for p in notion.projekte_abfragen():
                 k = notion.kurzinfo(p)
                 k["einsatz"] = vorhanden.get(p["id"])
+                if k["einsatz"] and not k["einsatz"].get("name") and (k["einsatz"].get("notion") or {}).get("id") == p["id"]:
+                    k["einsatz"]["name"] = k["name"]           # ältere Einsätze: Projektname als Jobname
+                    speicher.einsatz_speichern(k["einsatz"])
                 if not k["einsatz"]:
                     k["kandidaten"] = _passende_einsaetze(k, alle_e)
                 (ausgeblendet if p["id"] in weg else liste).append(k)
@@ -574,7 +583,7 @@ def _passende_einsaetze(k: dict, alle: list[dict]) -> list[dict]:
             ev, eb = date.fromisoformat(e.get("von", "")), date.fromisoformat(e.get("bis") or e.get("von", ""))
         except ValueError:
             continue
-        gemeinsam = pw & woerter(f"{e.get('einsatzort', '')} {e.get('kunde', '')} {(e.get('notion') or {}).get('name', '')}")
+        gemeinsam = pw & woerter(f"{e.get('name', '')} {e.get('einsatzort', '')} {e.get('kunde', '')}")
         if ev <= bis and eb >= von and gemeinsam:
             aus.append(e)
     return aus
@@ -591,7 +600,7 @@ def notion_verknuepfen(pid):
         e["notion"] = {**(e.get("notion") or {}), "id": pid}
     speicher.einsatz_speichern(e)
     speicher.protokoll("notion_verknuepft", session.get("uid"), e["id"], notion=pid)
-    flash(f"Notion-Projekt mit „{e.get('einsatzort')}“ verknüpft.", "ok")
+    flash(f"Notion-Projekt mit „{jobname(e)}“ verknüpft.", "ok")
     return redirect(url_for("notion_seite"))
 
 
@@ -615,7 +624,7 @@ def notion_uebernehmen(pid):
     except notion.NotionFehler as ex:
         flash(str(ex), "fehler")
         return redirect(url_for("notion_seite"))
-    flash(f"{e['einsatzort']} übernommen. {hinweis} Bitte Anlagen prüfen.", "ok")
+    flash(f"{jobname(e)} übernommen. {hinweis} Bitte Anlagen prüfen.", "ok")
     return redirect(url_for("einsatz_seite", eid=e["id"]))
 
 

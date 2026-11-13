@@ -1,6 +1,6 @@
 {% extends "basis.html" %}
 {% block titel %}{{ 'Einsatz bearbeiten' if e.id else 'Neuer Einsatz' }} · LST Baustelle{% endblock %}
-{% block pfad %}<span>/</span><span style="padding:6px 4px">{{ e.einsatzort or 'Neuer Einsatz' }}</span>{% endblock %}
+{% block pfad %}<span>/</span><span style="padding:6px 4px">{{ jobname(e) or 'Neuer Einsatz' }}</span>{% endblock %}
 {% block inhalt %}
 <div class="icon">📋</div>
 <h1>{{ 'Einsatz bearbeiten' if e.id else 'Neuer Einsatz' }}</h1>
@@ -9,6 +9,7 @@
 <form method="post">
   <h2>Kunde und Einsatzort</h2>
   <div class="grid2">
+    <div class="field" style="grid-column:1/-1"><label for="name">Jobname <span class="small muted">(wie in Notion: Kunde Einsatzort Tätigkeit Ausführungsjahr)</span></label><input class="inp" id="name" name="name" value="{{ e.name or '' }}" placeholder="z. B. Schweitzer Vantage FRA21 Raunheim Bodenreinigung 2026"></div>
     <div class="field"><label for="einsatzort">Einsatzort *</label><input class="inp" id="einsatzort" name="einsatzort" value="{{ e.einsatzort }}" required placeholder="z. B. Aldi Ebersbach"></div>
     <div class="field"><label for="kunde">Kunde (Auftraggeber) *</label><input class="inp" id="kunde" name="kunde" value="{{ e.kunde }}" required placeholder="z. B. Epta Deutschland GmbH"></div>
   </div>

@@ -1,9 +1,9 @@
 {% extends "basis.html" %}
-{% block titel %}{{ e.einsatzort }} · LST Baustelle{% endblock %}
-{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ e.einsatzort }}</a>{% endblock %}
+{% block titel %}{{ jobname(e) }} · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ jobname(e) }}</a>{% endblock %}
 {% block inhalt %}
 <div class="icon">❄️</div>
-<h1>{{ e.einsatzort }}</h1>
+<h1>{{ jobname(e) }}</h1>
 <div class="props">
   <div class="k">Kunde</div><div>{{ e.kunde }}</div>
   <div class="k">Status</div><div>{% if e.status == 'abgeschlossen' %}<span class="tag green">Abgeschlossen</span>{% elif e.status == 'inarbeit' %}<span class="tag blue">In Arbeit</span>{% else %}<span class="tag">Vorbereitet</span>{% endif %}</div>

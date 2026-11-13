@@ -1,9 +1,9 @@
 {% extends "basis.html" %}
-{% block titel %}Fotobericht {{ e.einsatzort }} · LST Baustelle{% endblock %}
-{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ e.einsatzort }}</a><span>/</span><span style="padding:6px 4px">Fotobericht</span>{% endblock %}
+{% block titel %}Fotobericht {{ jobname(e) }} · LST Baustelle{% endblock %}
+{% block pfad %}<span>/</span><a href="{{ url_for('einsatz_seite', eid=e.id) }}">{{ jobname(e) }}</a><span>/</span><span style="padding:6px 4px">Fotobericht</span>{% endblock %}
 {% block inhalt %}
 <div class="icon">🖼️</div>
-<h1>Fotobericht {{ e.einsatzort }}</h1>
+<h1>Fotobericht {{ jobname(e) }}</h1>
 <p class="muted">{{ e.kunde }} · {{ zeitraum(e.von, e.bis) }} · {{ e.ls or 'Lieferschein folgt' }}. Antippen wählt ein Foto aus oder ab. <b>Verschieben</b> ändert die Reihenfolge, auch zwischen Vorher und Nachher oder in eine andere Anlage (am iPad: Foto kurz gedrückt halten, dann ziehen).</p>
 {% if umgeordnet %}<form method="post" action="{{ url_for('fotobericht_ordnung_zuruecksetzen', eid=e.id) }}" class="small" style="margin-bottom:8px">Reihenfolge im Büro geändert · <button class="btn small" onclick="return confirm('Reihenfolge und Zuordnung wieder wie vom iPad?')">Zurücksetzen</button></form>{% endif %}
 

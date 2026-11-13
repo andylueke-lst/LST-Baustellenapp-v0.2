@@ -143,10 +143,10 @@ def arbeitszeiten(von: str, bis: str, wer: str | list[str] | None = None) -> lis
                     continue
                 c = berechnen(z or {})
                 zeilen.append({"datum": t["datum"], "mid": mid, "name": namen.get(mid, mid), "art": "Einsatz",
-                               "wo": e.get("einsatzort") or e.get("kunde") or "", "eid": e["id"],
+                               "wo": e.get("name") or e.get("einsatzort") or e.get("kunde") or "", "eid": e["id"],
                                "start_hotel": z.get("start") == "hotel", "ende_hotel": z.get("ende") == "hotel",
                                "offen": not t.get("fertig"), **c})
-    einsatz_ort = {e["id"]: e.get("einsatzort", "") for e in speicher.einsaetze()}
+    einsatz_ort = {e["id"]: e.get("name") or e.get("einsatzort", "") for e in speicher.einsaetze()}
     arten = {"anreise": "Anreise", "abreise": "Abreise", "wechsel": "Reise zwischen Jobs"}
     for r in speicher.stamm("reisetage", []):
         if not isinstance(r, dict) or not _im_zeitraum(r.get("datum"), von, bis):
@@ -228,7 +228,7 @@ def geraete_je_einsatz(von: str, bis: str) -> list[dict]:
                 return round(float(b) - float(a), 1)
             except (TypeError, ValueError):
                 return None
-        aus.append({"eid": e["id"], "wo": e.get("einsatzort", ""), "k_id": "k:" + k["id"] if k else None,
+        aus.append({"eid": e["id"], "wo": e.get("name") or e.get("einsatzort", ""), "k_id": "k:" + k["id"] if k else None,
                     "f_id": "f:" + f["id"] if f else None, "von": anfang, "bis": ende,
                     "status": e.get("status"),
                     "kompressor": f"{k.get('kz', '')} {'' if k.get('eigen') else '(Miete)'}".strip() if k else "",
@@ -258,7 +258,7 @@ def tankvorgaenge(von: str, bis: str) -> list[dict]:
               for f in speicher.stamm("fahrzeuge", [])}
     geraet.update({"k:" + k["id"]: (f"{k.get('kz', '')} {'Kompressor' if k.get('eigen') else 'Mietkompressor'}", "h")
                    for k in speicher.stamm("kompressoren", [])})
-    orte = {e["id"]: e.get("einsatzort", "") for e in speicher.einsaetze()}
+    orte = {e["id"]: e.get("name") or e.get("einsatzort", "") for e in speicher.einsaetze()}
     aus = []
     alle = []
     for t in speicher.stamm("tanken", []):

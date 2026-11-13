@@ -67,7 +67,7 @@
   <div class="field"><label for="t-w">Wer</label><select class="inp" id="t-w" name="wer">
     {% for m in leute %}<option value="{{ m.id }}"{% if m.id == ich.id %} selected{% endif %}>{{ m.vorname }}</option>{% endfor %}</select></div>
   <div class="field"><label for="t-e">Einsatz (optional)</label><select class="inp" id="t-e" name="einsatz"><option value="">–</option>
-    {% for e in einsaetze %}<option value="{{ e.id }}">{{ e.einsatzort }} ({{ datum(e.von) if e.von else '' }})</option>{% endfor %}</select></div>
+    {% for e in einsaetze %}<option value="{{ e.id }}">{{ jobname(e) }} ({{ datum(e.von) if e.von else '' }})</option>{% endfor %}</select></div>
   <button class="btn pri">Speichern</button>
 </form>
 <p class="small muted">Von Liter, Betrag und €/Liter reichen zwei, das dritte rechnet sich. Nur Öl geprüft oder nachgefüllt? Dann Diesel leer lassen. Ein höherer Stand wird als aktueller Stand des Geräts übernommen.</p>

@@ -456,6 +456,7 @@ const vollName=id=>{const m=ma(id);return m?[m.name,m.nachname].filter(Boolean).
 const E=id=>S.einsaetze.find(e=>e.id===id);
 const fz=id=>S.fahrzeuge.find(f=>f.id===id);
 const kp=id=>S.kompressoren.find(k=>k.id===id);
+const jn=e=>e.name||(e.notion&&e.notion.projektname)||e.einsatzort||e.kunde||'';
 const sg=id=>S.strahlgeraete.find(s=>s.id===id);
 const curTag=e=>e.tage[e.tage.length-1];
 const offenerTag=e=>{const t=curTag(e);return t&&!t.fertig?t:null};
@@ -542,7 +543,7 @@ function render(){
   if(V.name==='abschluss'&&ui.wiz===4)initSign();
 }
 function top(){const e=V.id?E(V.id):null;const i=V.name==='intern'?S.intern.find(x=>x.id===V.id):null;
-  return `<div class="top"><nav class="crumb" aria-label="Pfad"><button data-a="home">🏠 Einsätze</button>${e?`<span>/</span><button data-a="open" data-id="${e.id}">${esc(e.einsatzort)}</button>`:''}${V.name==='abschluss'?'<span>/</span><span style="padding:6px 4px">Abschließen</span>':''}${i?`<span>/</span><span style="padding:6px 4px">${esc(i.titel)}</span>`:''}${V.name==='maengel'?'<span>/</span><span style="padding:6px 4px">Mängel</span>':''}</nav>
+  return `<div class="top"><nav class="crumb" aria-label="Pfad"><button data-a="home">🏠 Einsätze</button>${e?`<span>/</span><button data-a="open" data-id="${e.id}">${esc(jn(e))}</button>`:''}${V.name==='abschluss'?'<span>/</span><span style="padding:6px 4px">Abschließen</span>':''}${i?`<span>/</span><span style="padding:6px 4px">${esc(i.titel)}</span>`:''}${V.name==='maengel'?'<span>/</span><span style="padding:6px 4px">Mängel</span>':''}</nav>
   <button class="btn small" data-a="notiz" title="Notiz zum Ablauf an dieser Stelle">💬 Notiz</button>
   <button class="chip" id="sync" data-a="sync" title=""><span class="dot"></span><span class="lbl">…</span></button>
   <button class="btn small ghost" data-a="logout">${esc(me().name)}<span class="who"> · Abmelden</span></button></div>`}
@@ -569,7 +570,7 @@ function cardE(e){const tg=[];const nr=S.reisetage.filter(r=>r.einsatz===e.id).l
   if(e.status==='abgeschlossen'){const lt=curTag(e);if(lt&&homeOpen(e,lt)&&Object.values(lt.zeiten).some(z=>calc(z).missing.length))tg.push('<span class="tag red">Heimfahrt eintragen</span>')}
   if(e.status==='abgeschlossen')tg.push(e.ergebnis==='unterschrieben'?'<span class="tag green">Unterschrieben</span>':'<span class="tag yellow">Unterschrift ausstehend</span>');
   const zeit=e.von===e.bis?fD(e.von):`${fD(e.von)} – ${fD(e.bis)}`;
-  return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(e.einsatzort)}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
+  return `<button class="card${e.status==='inarbeit'?' live':''}" data-a="open" data-id="${e.id}"><b>${esc(jn(e))}</b><div class="meta">${e.kunde!==e.einsatzort?esc(e.kunde)+' · ':''}${zeit}</div><div class="meta">${e.anlagen.length} Anlagen · ${esc(e.reinigungsart)}</div><div class="tags">${tg.join('')}</div></button>`}
 function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="col"><h3>${t} <span class="tag">${list.length}</span></h3>${list.join('')||`<div class="empty">${empty}</div>`}</section>`;
   const es=st=>S.einsaetze.filter(e=>e.status===st).sort((a,b)=>st==='abgeschlossen'?b.von.localeCompare(a.von):a.von.localeCompare(b.von));
   const intern=S.intern.filter(i=>i.status==='offen'&&(i.zust===null||i.zust===meId||isAdmin())).sort(internSort).map(i=>`<button class="card" data-a="intern" data-id="${i.id}"><b>${esc(i.titel)}</b><div class="meta"${i.datum&&i.datum<today()?' style="color:var(--danger)"':''}>${esc(internMeta(i))}</div><div class="tags">${i.zust?`<span class="tag purple">📱 ${esc(ma(i.zust)?.name)}</span>`:'<span class="tag">📱 alle</span>'}</div></button>`);
@@ -582,7 +583,7 @@ function vStart(){const meId=S.user;const col=(t,list,empty)=>`<section class="c
 /* ---------- Einsatz ---------- */
 function vEinsatz(){const e=E(V.id);if(!e)return vStart();
   const t=ui.tab;
-  const head=`<div class="page"><div class="icon">❄️</div><h1>${esc(e.einsatzort)}</h1>
+  const head=`<div class="page"><div class="icon">❄️</div><h1>${esc(jn(e))}</h1>
   <div class="props">
     <div class="k">Kunde</div><div>${esc(e.kunde)}</div>
     <div class="k">Status</div><div>${e.status==='vorbereitet'?'<span class="tag">Vorbereitet</span>':e.status==='inarbeit'?'<span class="tag blue">In Arbeit</span>':'<span class="tag green">Abgeschlossen</span>'}</div>
@@ -1004,7 +1005,7 @@ function reiseList(e){const rs=S.reisetage.filter(r=>r.einsatz===e.id).sort((a,b
   return `<div class="box" style="margin-bottom:16px"><h3 style="margin-bottom:6px">🚐 Reisetage</h3>${rs.map(r=>{const d=toMin(r.an)-toMin(r.ab);return `<div class="check"><div><b>${fD(r.datum)} · ${ARTEN[r.art]}</b><div class="small muted">${r.ab}–${r.an} Uhr · ${fMin(d)} h Fahrt · ${r.ma.map(id=>esc(ma(id)?.name)).join(', ')}${r.notiz?' · '+esc(r.notiz):''}</div></div><button class="btn small" data-a="reiseedit" data-id="${r.id}">Ändern</button></div>`}).join('')}</div>`}
 function reiseSheet(r){const jobs=S.einsaetze.filter(e=>e.status!=='abgeschlossen'||(e.abschluss&&e.abschluss.datum>=addDays(today(),-14))).sort((a,b)=>a.von.localeCompare(b.von));
   sheet(`<h2>${r.id?'Reisetag ändern':'Reisetag erfassen'}</h2><div class="stack">
-  <div class="field"><label>Zu welchem Job? <span style="color:var(--danger)">*</span></label><div class="stack" style="gap:6px">${jobs.map(e=>`<button type="button" class="pick${r.einsatz===e.id?' on':''}" data-rj="${e.id}" style="text-align:left;height:auto;padding:8px 12px"><b>${esc(e.einsatzort)}</b> <span class="small">${e.von===e.bis?fD(e.von):fD(e.von)+' – '+fD(e.bis)} · ${e.status==='vorbereitet'?'vorbereitet':e.status==='inarbeit'?'in Arbeit':'abgeschlossen'}</span></button>`).join('')}</div></div>
+  <div class="field"><label>Zu welchem Job? <span style="color:var(--danger)">*</span></label><div class="stack" style="gap:6px">${jobs.map(e=>`<button type="button" class="pick${r.einsatz===e.id?' on':''}" data-rj="${e.id}" style="text-align:left;height:auto;padding:8px 12px"><b>${esc(jn(e))}</b> <span class="small">${e.von===e.bis?fD(e.von):fD(e.von)+' – '+fD(e.bis)} · ${e.status==='vorbereitet'?'vorbereitet':e.status==='inarbeit'?'in Arbeit':'abgeschlossen'}</span></button>`).join('')}</div></div>
   <div class="field"><label>Art</label><div class="pickrow">${Object.entries(ARTEN).map(([k,l])=>`<button type="button" class="pick${r.art===k?' on':''}" data-ra="${k}">${l}</button>`).join('')}</div></div>
   <div class="field"><label for="rt-d">Datum</label><input class="inp" id="rt-d" type="date" value="${r.datum}"></div>
   <div class="field"><label>Wer reist?</label><div class="pickrow">${S.mitarbeiter.map(m=>`<button type="button" class="pick${r.ma.includes(m.id)?' on':''}" data-rm="${m.id}">${esc(m.name)}</button>`).join('')}</div></div>

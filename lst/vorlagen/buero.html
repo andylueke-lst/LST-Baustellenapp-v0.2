@@ -17,7 +17,7 @@
   {% for f in freigaben %}
   <a class="kachel warn" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">
     <span class="tag yellow" style="align-self:flex-start">Fotobericht freigeben</span>
-    <div class="t">{{ f.e.einsatzort }}</div>
+    <div class="t">{{ jobname(f.e) }}</div>
     <div class="s">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }}</div>
     <div class="unten s">{{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div></a>
   {% endfor %}
@@ -37,8 +37,8 @@
 
 {% macro einsatz_kachel(k, live=false) %}{% set e = k.e %}
 <a class="kachel{% if live %} live{% endif %}{% if k.ohne_unterschrift %} warn{% endif %}" href="{{ url_for('einsatz_seite', eid=e.id) }}">
-  <div class="t">{{ e.einsatzort or e.kunde }}</div>
-  <div class="s">{{ e.kunde }}</div>
+  <div class="t">{{ jobname(e) }}</div>
+  <div class="s">{{ e.kunde }}{% if e.name and e.einsatzort %} · {{ e.einsatzort }}{% endif %}</div>
   <div class="s">{{ zeitraum(e.von, e.bis) }}{% if e.ls %} · {{ e.ls }}{% endif %}</div>
   {% for j in k.jetzt %}<div class="jetzt">{{ j }}</div>{% endfor %}
   <div class="unten">
