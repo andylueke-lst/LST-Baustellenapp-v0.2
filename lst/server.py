@@ -257,6 +257,36 @@ def versand_setzen(e: dict, art: str, st: str, uid) -> None:
     e["versand_status"] = vs
 
 
+# Notion-Status, ab dem ein abgeschlossener Job berechnet ist und von der Büro-Startseite verschwindet
+STATUS_BERECHNET = ("17 Zahlungseingang prüfen", "18 bezahlt", "9 Abgesagt")
+
+
+def berechnet(e: dict) -> bool:
+    st = ((e.get("notion") or {}).get("status") or "").strip()
+    return st in STATUS_BERECHNET or st.startswith("72")      # 72x Projekt 20xx = Ablage
+
+
+def notion_status_holen() -> int:
+    """Notion-Status der abgeschlossenen, noch nicht berechneten Jobs nachladen. Gibt die Zahl der
+    Jobs zurück, die jetzt als berechnet gelten."""
+    if not notion.eingerichtet():
+        return 0
+    neu = 0
+    for e in speicher.einsaetze("abgeschlossen"):
+        pid = (e.get("notion") or {}).get("id")
+        if not pid or berechnet(e):
+            continue
+        try:
+            st = notion.eig(notion.seite(pid), "LST Status externe Projekte")
+        except notion.NotionFehler:
+            continue
+        if st and st != e["notion"].get("status"):
+            e["notion"]["status"] = st
+            speicher.einsatz_speichern(e)
+            neu += berechnet(e)
+    return neu
+
+
 def _offene_freigaben() -> list[dict]:
     aus = []
     for e in speicher.einsaetze("abgeschlossen"):
@@ -272,14 +302,18 @@ def buero():
     alle = speicher.einsaetze()
     namen = {m["id"]: m.get("vorname", "") for m in speicher.stamm("mitarbeiter", [])}
     kachel = lambda e: _kachel(e, namen)
-    fertig = sorted((e for e in alle if e.get("status") == "abgeschlossen"),
+    archiv = request.args.get("archiv") == "1"
+    alle_fertig = [e for e in alle if e.get("status") == "abgeschlossen"]
+    n_berechnet = sum(1 for e in alle_fertig if berechnet(e))
+    fertig = sorted((e for e in alle_fertig if archiv or not berechnet(e)),
                     key=lambda e: (e.get("abschluss") or {}).get("datum") or e.get("bis") or "", reverse=True)
     aufgaben = _aufgaben_liste(namen)
     return render_template("buero.html", freigaben=_offene_freigaben(),
                            laufend=[kachel(e) for e in alle if e.get("status") == "inarbeit"],
                            geplant=[kachel(e) for e in sorted((e for e in alle if e.get("status") == "vorbereitet"),
                                                                key=lambda e: e.get("von", ""))],
-                           fertig=[kachel(e) for e in fertig[:12]], fertig_mehr=max(0, len(fertig) - 12),
+                           fertig=[kachel(e) for e in (fertig if archiv else fertig[:12])],
+                           fertig_mehr=0 if archiv else max(0, len(fertig) - 12), archiv=archiv, n_berechnet=n_berechnet,
                            aufgaben=[a for a in aufgaben if a["status"] != "erledigt"][:8],
                            aufgaben_offen=sum(1 for a in aufgaben if a["status"] != "erledigt"),
                            post=mail.postausgang(nur_offen=True), heute=date.today().isoformat())
@@ -630,6 +664,11 @@ def _aufgaben_takt():
             aufgaben_holen()
         except Exception as ex:   # der Takt darf nie stehen bleiben
             AUFGABEN_STAND["fehler"] = f"Unerwarteter Fehler: {ex}"
+        if runde % 3 == 0:                              # Status der abgeschlossenen Jobs alle 15 Minuten
+            try:
+                notion_status_holen()
+            except Exception:
+                pass
         if runde % 12 == 0 and notion.eingerichtet():   # Kontakte stündlich
             try:
                 notion.kontakte_abgleichen()
@@ -966,6 +1005,7 @@ def notion_abgleichen():
         elif any(e.get(k) != alt.get(k) for k in felder):
             geaendert.append(jobname(e))
     n_rt = _reisetage_zu(aktualisiert) if aktualisiert else 0
+    n_ber = notion_status_holen()
     aufgaben_holen()
     teile = [f"{len(aktualisiert)} Einsätze mit Notion abgeglichen."]
     if neue_ls:
@@ -976,6 +1016,8 @@ def notion_abgleichen():
         teile.append("Keine Änderungen.")
     if n_rt:
         teile.append(f"{n_rt} Reisetag(e) dazu.")
+    if n_ber:
+        teile.append(f"{n_ber} abgeschlossene(r) Job(s) in Notion berechnet, ab jetzt im Archiv.")
     flash(" ".join(teile), "ok")
     if fehler:
         flash("Nicht abgeglichen: " + "; ".join(fehler), "fehler")
@@ -1308,6 +1350,8 @@ def api_einsatz_speichern():
     for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name"):
         if k in alt and k not in e:
             e[k] = alt[k]
+    if alt.get("notion"):                     # Notion-Stand (z. B. Status „berechnet“) kommt nur vom Server
+        e["notion"] = alt["notion"]
     # Versandstand von Hand: immer der Stand vom Server (das iPad setzt ihn über eine eigene Adresse)
     for k in ("versand_status", "fotobericht_erledigt", "fotobericht_status", "fotobericht_bestaetigt_am",
               "fotobericht_bestaetigt_von"):

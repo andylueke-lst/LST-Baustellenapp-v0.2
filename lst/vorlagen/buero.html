@@ -60,6 +60,7 @@
     {% if e.status == 'inarbeit' %}<span class="tag blue">Tag {{ k.tage }}</span>{% endif %}
     {% if e.tour %}<span class="tag blue">🔗 Tour {{ e.tour.nr }}/{{ e.tour.anzahl }}</span>{% endif %}
     {% if e.ipad_aus %}<span class="tag yellow">nicht auf iPads</span>{% endif %}
+    {% if e.status == 'abgeschlossen' and e.notion and e.notion.status %}<span class="tag{% if e.notion.status.startswith('16') %} purple{% endif %}" title="Status in Notion">{{ e.notion.status }}</span>{% endif %}
   </div></a>
 {% endmacro %}
 
@@ -83,8 +84,11 @@
 {% endfor %}</div>
 {% else %}<div class="leer">Keine offenen Aufgaben.</div>{% endif %}</section>
 
-<section class="bereich"><h2>Abgeschlossen</h2>
+<section class="bereich" id="abgeschlossen"><h2>Abgeschlossen{% if archiv %} – mit Archiv{% endif %}</h2>
 {% if fertig %}<div class="kacheln">{% for k in fertig %}{{ einsatz_kachel(k) }}{% endfor %}</div>
 {% if fertig_mehr %}<p class="small muted">… und {{ fertig_mehr }} ältere.</p>{% endif %}
-{% else %}<div class="leer">Noch nichts abgeschlossen.</div>{% endif %}</section>
+{% else %}<div class="leer">{% if n_berechnet %}Alle abgeschlossenen Jobs sind in Notion berechnet.{% else %}Noch nichts abgeschlossen.{% endif %}</div>{% endif %}
+{% if archiv %}<p class="small"><a href="{{ url_for('buero') }}#abgeschlossen">Berechnete wieder ausblenden</a></p>
+{% elif n_berechnet %}<p class="small"><a href="{{ url_for('buero', archiv=1) }}#abgeschlossen">Archiv: {{ n_berechnet }} berechnete Jobs anzeigen</a></p>{% endif %}
+</section>
 {% endblock %}
