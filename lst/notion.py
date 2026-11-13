@@ -480,17 +480,61 @@ def aufgaben_abfragen() -> list[dict]:
         cursor = d.get("next_cursor")
 
 
+TEXT_ARTEN = ("paragraph", "bulleted_list_item", "numbered_list_item", "to_do", "quote", "callout",
+              "heading_1", "heading_2", "heading_3", "toggle")
+# Abschnitte der Aufgaben-Vorlage, die nicht in die Arbeitsanweisung gehören
+AUFGABE_OHNE = ("projektinfos", "bilder", "kaufmännisch")
+
+
+def _zeilen(blocks: list[dict], tiefe: int, aus: list[str], nur_gefuellt: bool = False):
+    """Text aus Blöcken, aufgeklappte Toggles samt Inhalt. „Vorlage“-Toggles werden übersprungen.
+    nur_gefuellt: bei Formularzeilen wie „Treffpunkt:“ nur die mit Eintrag (Technische Daten)."""
+    for b in blocks:
+        typ = b.get("type")
+        if typ not in TEXT_ARTEN:
+            continue
+        t = _block_text(b).strip()
+        if t.lower() == "vorlage":
+            continue
+        if t:
+            zeilen = t.split("\n")
+            if nur_gefuellt:
+                zeilen = [z for z in zeilen if not z.rstrip().endswith(":") and z.strip()]
+            vorn = "  " * tiefe + ("☐ " if typ == "to_do" else "• " if "list" in typ else "")
+            aus += [vorn + z for z in zeilen]
+        if b.get("has_children") and tiefe < 3 and typ != "to_do":
+            _zeilen(kinder(b["id"]), tiefe + 1, aus, nur_gefuellt)
+
+
 def _aufgabe_text(pid: str) -> str:
-    """Text der Aufgabenseite (oberste Ebene, ohne synchronisierte Blöcke und Unterseiten), gekürzt."""
-    zeilen = []
+    """Arbeitsanweisung der Aufgabenseite: der Inhalt unter „Ereignisse“ (auch in Toggles, ohne „Vorlage“),
+    ausgefüllte Technische Daten und freier Text auf oberster Ebene. Projektinfos und Bilder bleiben weg."""
+    zeilen: list[str] = []
     for b in kinder(pid):
-        if b.get("type") in ("paragraph", "bulleted_list_item", "numbered_list_item", "to_do", "quote", "callout",
-                             "heading_1", "heading_2", "heading_3"):
-            t = _block_text(b).strip()
-            if t:
-                zeilen.append(("☐ " if b["type"] == "to_do" else "• " if "list" in b["type"] else "") + t)
-    text = "\n".join(zeilen)
-    return text[:1500] + (" …" if len(text) > 1500 else "")
+        typ = b.get("type")
+        t = _block_text(b).strip()
+        tl = t.lower()
+        if typ not in TEXT_ARTEN or any(tl.startswith(x) for x in AUFGABE_OHNE):
+            continue
+        if b.get("has_children") and tl in ("ereignisse", "technische daten"):
+            unter: list[str] = []
+            _zeilen(kinder(b["id"]), 0, unter, nur_gefuellt=(tl == "technische daten"))
+            if tl == "technische daten":   # nur Überschriften ohne Inhalt? dann weglassen
+                unter = [z for z in unter if not z.strip().lower().startswith("technische daten")]
+                if unter:
+                    zeilen += ["Technische Daten:"] + unter
+            else:
+                zeilen += unter
+            continue
+        if t:
+            zeilen.append(("☐ " if typ == "to_do" else "• " if "list" in typ else "") + t)
+        if b.get("has_children") and typ == "toggle":
+            _zeilen(kinder(b["id"]), 1, zeilen)
+    text = "\n".join(zeilen).strip()
+    return text[:3000] + (" …" if len(text) > 3000 else "")
+
+
+TEXT_STAND = 2   # erhöhen, wenn sich _aufgabe_text ändert: dann werden alle Texte neu geholt
 
 
 def aufgaben_abgleichen() -> dict:
@@ -525,7 +569,7 @@ def aufgaben_abgleichen() -> dict:
         aid = "n-" + p["id"].replace("-", "")
         vorher = alt.get(aid) or {}
         geaendert = p.get("last_edited_time")
-        if (vorher.get("notion") or {}).get("geaendert") == geaendert:
+        if (vorher.get("notion") or {}).get("geaendert") == geaendert and (vorher.get("notion") or {}).get("text") == TEXT_STAND:
             text, projekt = vorher.get("beschreibung", ""), vorher.get("projekt", "")
         else:
             try:
@@ -546,7 +590,7 @@ def aufgaben_abgleichen() -> dict:
              "status": "offen", "nstatus": status, "rang": AUFGABEN_STATUS[status],
              "prio": eig(p, "Priorität") or "", "projekt": projekt, "fuer": fuer_ids if (len(fuer_ids) > 1 or gemeinsam) else [],
              "gemeinsam": gemeinsam,
-             "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert}}
+             "notion": {"id": p["id"], "url": p.get("url", ""), "geaendert": geaendert, "text": TEXT_STAND}}
         if vorher.get("status") == "erledigt":
             a["status"] = "erledigt"
         for k in ("notiz", "zeit", "zeiten", "material", "fotos", "erledigt_am", "erledigt_von"):   # Arbeitsbericht vom iPad

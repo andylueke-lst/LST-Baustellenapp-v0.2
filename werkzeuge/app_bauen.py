@@ -112,7 +112,7 @@ function vIntern() {const i=S.intern.find(x=>x.id===V.id);if(!i)return vStart();
   ${i.projekt?`<div class="k">Projekt</div><div>${esc(i.projekt)}</div>`:''}
   <div class="k">Zuständig</div><div>${gem?`${(i.fuer||[]).map(m=>`<span class="tag purple">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="tag blue">gemeinsam</span>`:i.zust?`<span class="tag purple">${esc(ma(i.zust)?.name)}</span>`:(i.fuer||[]).length?`${i.fuer.map(m=>`<span class="tag">${esc(ma(m)?.name||m)}</span>`).join(' ')} <span class="small muted">einer übernimmt</span>`:'<span class="tag">offen für alle</span>'}</div>
   <div class="k">Status</div><div>${offen?'<span class="tag yellow">Offen</span>':`<span class="tag green">Erledigt${i.erledigt_am?' am '+fDY(i.erledigt_am):''}</span>`}</div></div>
-  ${i.beschreibung?`<div class="hr"></div><p style="white-space:pre-line">${esc(i.beschreibung)}</p>`:''}
+  ${i.beschreibung?`<div class="hr"></div><div class="small muted" style="margin-bottom:4px">Arbeitsanweisung</div><p style="white-space:pre-wrap;margin-top:0">${esc(i.beschreibung)}</p>`:''}
   <div class="hr"></div><h2>Arbeitsbericht</h2>
   <div class="field"><label for="ib-t">Was wurde gemacht? <span class="small muted">(nötig zum Abhaken)</span></label><textarea class="inp" id="ib-t" data-ib="notiz" placeholder="z. B. Kupplung getauscht, neue bestellt"${ro}>${esc(i.notiz||'')}</textarea></div>
   <div class="row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
