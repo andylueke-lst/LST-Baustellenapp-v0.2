@@ -303,6 +303,7 @@ def mitarbeiter_seite():
             m["aktiv"] = bool(f.get(f"aktiv_{i}"))
             m["ipad"] = bool(f.get(f"ipad_{i}"))
             m["minijob"] = bool(f.get(f"minijob_{i}"))
+            m["baustelle"] = bool(f.get(f"baustelle_{i}"))
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -318,7 +319,7 @@ def mitarbeiter_seite():
             neu = {"id": f"m{n}", "vorname": f["vorname_neu"].strip(), "nachname": f.get("nachname_neu", "").strip(),
                    "rolle": f.get("rolle_neu", "mitarbeiter"), "team": f.get("team_neu", "Facharbeiter"),
                    "mail": f.get("mail_neu", "").strip(), "aktiv": True, "ipad": bool(f.get("ipad_neu")),
-                   "minijob": bool(f.get("minijob_neu"))}
+                   "minijob": bool(f.get("minijob_neu")), "baustelle": bool(f.get("baustelle_neu"))}
             pin = f.get("pin_neu", "").strip()
             if pin.isdigit() and 4 <= len(pin) <= 6:
                 neu["pin_hash"] = generate_password_hash(pin)
@@ -395,7 +396,7 @@ def einsatz_neu(eid=None):
 
 
 def _auswahl():
-    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)],
+    return {"leute": [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("baustelle", True)],
             "fahrzeuge": [f for f in speicher.stamm("fahrzeuge", []) if f.get("aktiv", True)],
             "kompressoren": [k for k in speicher.stamm("kompressoren", []) if k.get("aktiv", True)],
             "strahlgeraete": [g for g in speicher.stamm("strahlgeraete", []) if g.get("aktiv", True)]}
@@ -1198,7 +1199,7 @@ def api_stand():
         e["docs"] = _docs_fuer_app(e["id"])
         es.append(e)
     # alle aktiven: auch wer kein eigenes iPad-Login hat, kann im Team sein (z. B. Faro am iPad von Matthias)
-    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True)]
+    leute = [m for m in speicher.stamm("mitarbeiter", []) if m.get("aktiv", True) and m.get("baustelle", True)]
     aus = {"ich": _fuer_app(ich()), "mitarbeiter": [_fuer_app(m) for m in leute], "einsaetze": es,
            "strahlgeraete": speicher.stamm("strahlgeraete", []), "typen": speicher.stamm("geraetetypen", {}),
            "strahlmittel": speicher.stamm("strahlmittel", {}), "checkliste": speicher.stamm("checkliste", [])}
