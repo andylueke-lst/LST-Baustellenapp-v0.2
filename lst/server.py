@@ -204,8 +204,12 @@ def _fotos_von(eid: str) -> list[dict]:
 def _offene_freigaben() -> list[dict]:
     aus = []
     for e in speicher.einsaetze("abgeschlossen"):
+        if e.get("fotobericht_erledigt"):
+            continue
         docs = speicher.dokumente(e["id"])
-        if not any(d["art"] == "fotobericht" and d["status"] in ("versendet", "wartet") for d in docs):
+        # erledigt, wenn ein Fotobericht erstellt ist oder die Fotodoku schon an den Kunden ging
+        if not any((d["art"] == "fotobericht" and d["status"] in ("versendet", "wartet"))
+                   or (d["art"] == "fotodoku" and d["status"] == "versendet") for d in docs):
             aus.append({"e": e, "fotos": len(_fotos_von(e["id"]))})
     return aus
 
@@ -1204,7 +1208,7 @@ def api_einsatz_speichern():
         if alt.get(k):
             e[k] = alt[k]
     # Felder, die nur das Büro setzt: ein iPad mit älterer Kopie soll sie nicht verlieren
-    for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name"):
+    for k in ("ipad_aus", "notion_weitere", "tour", "team_manuell", "name", "fotobericht_erledigt"):
         if k in alt and k not in e:
             e[k] = alt[k]
     if "ipad_aus" in alt:
@@ -1859,6 +1863,17 @@ def unterschrift_aendern(eid):
         return dokumente_neu(eid)
     flash(f"Unterschrift geändert: {e['unterschrift']['name']}, {e['unterschrift']['zeit']}.", "ok")
     return redirect(url_for("einsatz_seite", eid=eid))
+
+
+@app.route("/buero/einsatz/<eid>/fotobericht-erledigt", methods=["POST"])
+@anmeldung(admin=True)
+def fotobericht_erledigt(eid):
+    e = _einsatz_oder_404(eid)
+    e["fotobericht_erledigt"] = request.form.get("zurueck") != "1"
+    speicher.einsatz_speichern(e)
+    flash(f"„{jobname(e)}“: " + ("kein Fotobericht nötig – erscheint nicht mehr unter „Braucht dich“."
+                                 if e["fotobericht_erledigt"] else "Fotobericht wieder offen."), "ok")
+    return redirect(request.referrer or url_for("buero"))
 
 
 @app.route("/buero/einsatz/<eid>/ipad", methods=["POST"])

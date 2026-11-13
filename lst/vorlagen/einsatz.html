@@ -44,6 +44,7 @@
 
 <div class="row" style="margin-top:16px">
   {% if e.status == 'abgeschlossen' %}<a class="btn pri" href="{{ url_for('fotobericht_seite', eid=e.id) }}">Fotobericht vorbereiten</a>
+  {% if e.fotobericht_erledigt %}<form method="post" action="{{ url_for('fotobericht_erledigt', eid=e.id) }}" style="display:inline"><input type="hidden" name="zurueck" value="1"><button class="btn small" title="steht dann wieder unter „Braucht dich“">Fotobericht doch noch offen</button></form>{% endif %}
   {% if e.unterschrift %}<form method="post" action="{{ url_for('dokumente_neu', eid=e.id) }}" style="display:inline"><button class="btn" title="z. B. nachdem der Lexware-Lieferschein hochgeladen wurde">Lieferschein und Fotodoku neu erzeugen</button></form>{% endif %}
   <form method="post" action="{{ url_for('einsatz_wieder_oeffnen', eid=e.id) }}" style="display:inline" onsubmit="return confirm('Einsatz wieder öffnen? Die Unterschrift bleibt gespeichert.')"><button class="btn">Wieder öffnen</button></form>
   {% else %}<a class="btn" href="{{ url_for('einsatz_neu', eid=e.id) }}">Bearbeiten</a>

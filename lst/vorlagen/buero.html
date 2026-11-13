@@ -15,11 +15,13 @@
 <section class="bereich"><h2>Braucht dich <span class="tag yellow">{{ freigaben|length + post|length }}</span></h2>
 <div class="kacheln">
   {% for f in freigaben %}
-  <a class="kachel warn" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">
+  <div class="kachel warn">
     <span class="tag yellow" style="align-self:flex-start">Fotobericht freigeben</span>
-    <div class="t">{{ jobname(f.e) }}</div>
+    <a class="t" href="{{ url_for('einsatz_seite', eid=f.e.id) }}" style="text-decoration:none;color:inherit">{{ jobname(f.e) }}</a>
     <div class="s">{{ f.e.kunde }} · {{ zeitraum(f.e.von, f.e.bis) }}</div>
-    <div class="unten s">{{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div></a>
+    <div class="s">{{ f.fotos }} Fotos · {{ f.e.ls or 'LS folgt' }}</div>
+    <div class="unten"><a class="btn small pri" href="{{ url_for('fotobericht_seite', eid=f.e.id) }}">Fotos auswählen</a>
+      <form method="post" action="{{ url_for('fotobericht_erledigt', eid=f.e.id) }}"><button class="btn small" title="z. B. weil die Fotodoku schon verschickt ist">Nicht nötig</button></form></div></div>
   {% endfor %}
   {% for p in post %}
   <div class="kachel {{ 'rot' if p.status == 'fehler' else 'warn' }}">
