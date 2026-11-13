@@ -9,13 +9,14 @@
 <form method="post">
 <div style="overflow-x:auto">
 <table class="tab">
-  <thead><tr><th>Vorname</th><th>Nachname</th><th>Rolle</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
+  <thead><tr><th>Vorname</th><th>Nachname</th><th>Funktion</th><th>Rechte in der App</th><th>Im Team meist</th><th>E-Mail (für Hinweise)</th><th>Neue PIN</th><th>Anmeldung am iPad</th><th>Auf Baustellen</th><th>Minijob</th><th>Aktiv</th></tr></thead>
   <tbody>
   {% for m in leute %}
   <tr>
     <td><input class="inp" name="vorname_{{ m.id }}" value="{{ m.vorname }}" required aria-label="Vorname"></td>
     <td><input class="inp" name="nachname_{{ m.id }}" value="{{ m.nachname }}" aria-label="Nachname"></td>
-    <td><select class="inp" name="rolle_{{ m.id }}" aria-label="Rolle">
+    <td><input class="inp" name="funktion_{{ m.id }}" value="{{ m.funktion or '' }}" list="funktionen" aria-label="Funktion" style="min-width:150px"></td>
+    <td><select class="inp" name="rolle_{{ m.id }}" aria-label="Rechte in der App">
       {% for r, l in [('admin','Admin'),('technik','Technik'),('mitarbeiter','Mitarbeiter')] %}<option value="{{ r }}"{% if m.rolle == r %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></td>
     <td><select class="inp" name="team_{{ m.id }}" aria-label="Im Team meist">
       {% for t in ['Vorarbeiter','Facharbeiter'] %}<option{% if (m.team or 'Facharbeiter') == t %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></td>
@@ -31,7 +32,8 @@
   <tr>
     <td><input class="inp" name="vorname_neu" placeholder="Neu: Vorname" aria-label="Vorname neuer Mitarbeiter"></td>
     <td><input class="inp" name="nachname_neu" placeholder="Nachname" aria-label="Nachname neuer Mitarbeiter"></td>
-    <td><select class="inp" name="rolle_neu" aria-label="Rolle"><option value="mitarbeiter">Mitarbeiter</option><option value="technik">Technik</option><option value="admin">Admin</option></select></td>
+    <td><input class="inp" name="funktion_neu" list="funktionen" placeholder="Funktion" aria-label="Funktion" style="min-width:150px"></td>
+    <td><select class="inp" name="rolle_neu" aria-label="Rechte in der App"><option value="mitarbeiter">Mitarbeiter</option><option value="technik">Technik</option><option value="admin">Admin</option></select></td>
     <td><select class="inp" name="team_neu" aria-label="Im Team meist"><option>Facharbeiter</option><option>Vorarbeiter</option></select></td>
     <td><input class="inp" type="email" name="mail_neu" aria-label="E-Mail"></td>
     <td><input class="inp" name="pin_neu" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" placeholder="PIN" aria-label="PIN"></td>
@@ -43,7 +45,8 @@
   </tbody>
 </table>
 </div>
-<p class="small muted">PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<p class="small muted">Funktion: frei wählbar (Geschäftsführer, Vertrieb, Administration …), ändert keine Rechte. Rechte in der App: Admin sieht alles im Büro und alle Jobs, Technik zusätzlich die Mängelliste, Mitarbeiter nur die eigenen Jobs. PIN: 4 bis 6 Ziffern. Ein leeres Feld lässt die bisherige PIN unverändert. „Anmeldung am iPad“ steuert nur, wer sich an einem iPad anmelden kann. Ins Team eines Jobs lassen sich alle nehmen, die „Auf Baustellen“ haben, auch ohne eigene Anmeldung (z. B. Faro am iPad von Matthias). Wer gar nicht mit dem iPad arbeitet (z. B. Minijob), dessen Stunden trägst du unter „Stunden“ von Hand ein. Admins bekommen an ihre E-Mail den Hinweis, wenn ein Fotobericht zur Freigabe bereitliegt.</p>
+<datalist id="funktionen">{% for f in ['Geschäftsführer','Vertrieb','Administration','Technik','Vorarbeiter','Facharbeiter','Aushilfe'] %}<option value="{{ f }}">{% endfor %}</datalist>
 <button class="btn pri">Speichern</button>
 </form>
 {% endblock %}

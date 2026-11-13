@@ -304,6 +304,7 @@ def mitarbeiter_seite():
             m["ipad"] = bool(f.get(f"ipad_{i}"))
             m["minijob"] = bool(f.get(f"minijob_{i}"))
             m["baustelle"] = bool(f.get(f"baustelle_{i}"))
+            m["funktion"] = (f.get(f"funktion_{i}") or "").strip()
             pin = f.get(f"pin_{i}", "").strip()
             if pin:
                 if pin.isdigit() and 4 <= len(pin) <= 6:
@@ -319,7 +320,8 @@ def mitarbeiter_seite():
             neu = {"id": f"m{n}", "vorname": f["vorname_neu"].strip(), "nachname": f.get("nachname_neu", "").strip(),
                    "rolle": f.get("rolle_neu", "mitarbeiter"), "team": f.get("team_neu", "Facharbeiter"),
                    "mail": f.get("mail_neu", "").strip(), "aktiv": True, "ipad": bool(f.get("ipad_neu")),
-                   "minijob": bool(f.get("minijob_neu")), "baustelle": bool(f.get("baustelle_neu"))}
+                   "minijob": bool(f.get("minijob_neu")), "baustelle": bool(f.get("baustelle_neu")),
+                   "funktion": (f.get("funktion_neu") or "").strip()}
             pin = f.get("pin_neu", "").strip()
             if pin.isdigit() and 4 <= len(pin) <= 6:
                 neu["pin_hash"] = generate_password_hash(pin)
